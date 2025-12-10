@@ -10,6 +10,7 @@ export async function createClientRecord(data: {
   email?: string
   phone?: string
   status?: ClientStatus
+  client_type?: 'presales' | 'customer'
   source?: string
   notes_summary?: string
 }) {
@@ -22,13 +23,20 @@ export async function createClientRecord(data: {
     throw new Error('Not authenticated')
   }
 
+  const insertData: any = {
+    ...data,
+    owner_id: user.id,
+    status: data.status || 'new',
+  }
+  
+  // Only include client_type if the column exists (handles migration period)
+  if (data.client_type) {
+    insertData.client_type = data.client_type
+  }
+
   const { data: client, error } = await supabase
     .from('clients')
-    .insert({
-      ...data,
-      owner_id: user.id,
-      status: data.status || 'new',
-    })
+    .insert(insertData)
     .select()
     .single()
 

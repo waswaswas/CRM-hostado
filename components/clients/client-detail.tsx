@@ -53,6 +53,15 @@ export function ClientDetail({ client: initialClient }: ClientDetailProps) {
   const [showReminderDialog, setShowReminderDialog] = useState(false)
   const [showNoteDialog, setShowNoteDialog] = useState(false)
   const [editingStatus, setEditingStatus] = useState(false)
+  const [editingField, setEditingField] = useState<string | null>(null)
+  const [editValues, setEditValues] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    company: '',
+    source: '',
+    notes_summary: '',
+  })
 
   useEffect(() => {
     loadData()
@@ -98,18 +107,61 @@ export function ClientDetail({ client: initialClient }: ClientDetailProps) {
     setEditingStatus(false)
   }
 
+  function startEditing(field: string) {
+    setEditingField(field)
+    setEditValues({
+      name: client.name,
+      email: client.email || '',
+      phone: client.phone || '',
+      company: client.company || '',
+      source: client.source || '',
+      notes_summary: client.notes_summary || '',
+    })
+  }
+
+  async function saveField(field: string) {
+    try {
+      const updateData: any = {}
+      updateData[field] = editValues[field as keyof typeof editValues]
+      
+      const updated = await updateClient(client.id, updateData)
+      setClient(updated)
+      setEditingField(null)
+      toast({
+        title: 'Success',
+        description: 'Field updated',
+      })
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to update field',
+        variant: 'destructive',
+      })
+    }
+  }
+
+  function cancelEditing() {
+    setEditingField(null)
+  }
+
   const getStatusColor = (status: ClientStatus) => {
     switch (status) {
       case 'new':
-        return 'bg-blue-100 text-blue-800'
+      case 'to_be_contacted':
+        return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
       case 'contacted':
-        return 'bg-yellow-100 text-yellow-800'
+      case 'waiting_for_response':
+        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
       case 'in_progress':
-        return 'bg-purple-100 text-purple-800'
+      case 'waiting_for_offer':
+        return 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200'
       case 'won':
-        return 'bg-green-100 text-green-800'
+        return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
       case 'lost':
-        return 'bg-red-100 text-red-800'
+      case 'abandoned':
+        return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+      default:
+        return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200'
     }
   }
 
@@ -129,10 +181,44 @@ export function ClientDetail({ client: initialClient }: ClientDetailProps) {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">{client.name}</h1>
-          {client.company && (
-            <p className="mt-1 text-lg text-muted-foreground">{client.company}</p>
+        <div className="flex-1">
+          {editingField === 'name' ? (
+            <div className="flex items-center gap-2">
+              <Input
+                value={editValues.name}
+                onChange={(e) => setEditValues({ ...editValues, name: e.target.value })}
+                className="text-3xl font-bold"
+                autoFocus
+              />
+              <Button size="sm" onClick={() => saveField('name')}>Save</Button>
+              <Button size="sm" variant="ghost" onClick={cancelEditing}>Cancel</Button>
+            </div>
+          ) : (
+            <h1 
+              className="text-3xl font-bold cursor-pointer hover:underline"
+              onClick={() => startEditing('name')}
+            >
+              {client.name}
+            </h1>
+          )}
+          {editingField === 'company' ? (
+            <div className="flex items-center gap-2 mt-1">
+              <Input
+                value={editValues.company}
+                onChange={(e) => setEditValues({ ...editValues, company: e.target.value })}
+                placeholder="Company"
+                autoFocus
+              />
+              <Button size="sm" onClick={() => saveField('company')}>Save</Button>
+              <Button size="sm" variant="ghost" onClick={cancelEditing}>Cancel</Button>
+            </div>
+          ) : (
+            <p 
+              className="mt-1 text-lg text-muted-foreground cursor-pointer hover:underline"
+              onClick={() => startEditing('company')}
+            >
+              {client.company || 'Click to add company'}
+            </p>
           )}
         </div>
         <div className="flex items-center gap-2">
@@ -140,8 +226,12 @@ export function ClientDetail({ client: initialClient }: ClientDetailProps) {
             <Select
               value={client.status}
               onChange={(e) => handleStatusChange(e.target.value as ClientStatus)}
-              className="w-40"
+              className="w-48"
             >
+              <option value="to_be_contacted">To be contacted</option>
+              <option value="waiting_for_response">Waiting for response</option>
+              <option value="waiting_for_offer">Waiting for offer</option>
+              <option value="abandoned">Abandoned</option>
               <option value="new">New</option>
               <option value="contacted">Contacted</option>
               <option value="in_progress">In Progress</option>
@@ -151,7 +241,7 @@ export function ClientDetail({ client: initialClient }: ClientDetailProps) {
           ) : (
             <>
               <Badge className={getStatusColor(client.status)}>
-                {client.status.replace('_', ' ')}
+                {client.status.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())}
               </Badge>
               <Button
                 variant="ghost"
@@ -172,124 +262,107 @@ export function ClientDetail({ client: initialClient }: ClientDetailProps) {
               <CardTitle>Contact Information</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {client.email && (
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">Email</p>
-                  <p className="text-sm">{client.email}</p>
-                </div>
-              )}
-              {client.phone && (
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">Phone</p>
-                  <p className="text-sm">{client.phone}</p>
-                </div>
-              )}
-              {client.source && (
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">Source</p>
-                  <p className="text-sm">{client.source}</p>
-                </div>
-              )}
-              {client.notes_summary && (
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">Summary</p>
-                  <p className="text-sm">{client.notes_summary}</p>
-                </div>
-              )}
+              <div>
+                <p className="text-sm font-medium text-muted-foreground mb-1">Email</p>
+                {editingField === 'email' ? (
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="email"
+                      value={editValues.email}
+                      onChange={(e) => setEditValues({ ...editValues, email: e.target.value })}
+                      autoFocus
+                    />
+                    <Button size="sm" onClick={() => saveField('email')}>Save</Button>
+                    <Button size="sm" variant="ghost" onClick={cancelEditing}>Cancel</Button>
+                  </div>
+                ) : (
+                  <p 
+                    className="text-sm cursor-pointer hover:underline"
+                    onClick={() => startEditing('email')}
+                  >
+                    {client.email || 'Click to add email'}
+                  </p>
+                )}
+              </div>
+              <div>
+                <p className="text-sm font-medium text-muted-foreground mb-1">Phone</p>
+                {editingField === 'phone' ? (
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="tel"
+                      value={editValues.phone}
+                      onChange={(e) => setEditValues({ ...editValues, phone: e.target.value })}
+                      autoFocus
+                    />
+                    <Button size="sm" onClick={() => saveField('phone')}>Save</Button>
+                    <Button size="sm" variant="ghost" onClick={cancelEditing}>Cancel</Button>
+                  </div>
+                ) : (
+                  <p 
+                    className="text-sm cursor-pointer hover:underline"
+                    onClick={() => startEditing('phone')}
+                  >
+                    {client.phone || 'Click to add phone'}
+                  </p>
+                )}
+              </div>
+              <div>
+                <p className="text-sm font-medium text-muted-foreground mb-1">Source</p>
+                {editingField === 'source' ? (
+                  <div className="flex items-center gap-2">
+                    <Input
+                      value={editValues.source}
+                      onChange={(e) => setEditValues({ ...editValues, source: e.target.value })}
+                      placeholder="Source"
+                      autoFocus
+                    />
+                    <Button size="sm" onClick={() => saveField('source')}>Save</Button>
+                    <Button size="sm" variant="ghost" onClick={cancelEditing}>Cancel</Button>
+                  </div>
+                ) : (
+                  <p 
+                    className="text-sm cursor-pointer hover:underline"
+                    onClick={() => startEditing('source')}
+                  >
+                    {client.source || 'Click to add source'}
+                  </p>
+                )}
+              </div>
+              <div>
+                <p className="text-sm font-medium text-muted-foreground mb-1">Summary</p>
+                {editingField === 'notes_summary' ? (
+                  <div className="space-y-2">
+                    <Textarea
+                      value={editValues.notes_summary}
+                      onChange={(e) => setEditValues({ ...editValues, notes_summary: e.target.value })}
+                      rows={3}
+                      autoFocus
+                    />
+                    <div className="flex gap-2">
+                      <Button size="sm" onClick={() => saveField('notes_summary')}>Save</Button>
+                      <Button size="sm" variant="ghost" onClick={cancelEditing}>Cancel</Button>
+                    </div>
+                  </div>
+                ) : (
+                  <p 
+                    className="text-sm cursor-pointer hover:underline whitespace-pre-wrap"
+                    onClick={() => startEditing('notes_summary')}
+                  >
+                    {client.notes_summary || 'Click to add summary'}
+                  </p>
+                )}
+              </div>
             </CardContent>
           </Card>
         </div>
 
         <div className="lg:col-span-2">
-          <Tabs defaultValue="timeline" className="w-full">
+          <Tabs defaultValue="notes" className="w-full">
             <TabsList>
-              <TabsTrigger value="timeline">Timeline</TabsTrigger>
               <TabsTrigger value="notes">Notes</TabsTrigger>
               <TabsTrigger value="reminders">Reminders</TabsTrigger>
+              <TabsTrigger value="timeline">Timeline</TabsTrigger>
             </TabsList>
-
-            <TabsContent value="timeline" className="space-y-4">
-              <div className="flex justify-end">
-                <Button onClick={() => setShowInteractionDialog(true)}>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add Interaction
-                </Button>
-              </div>
-
-              {loading ? (
-                <p className="text-muted-foreground">Loading...</p>
-              ) : interactions.length > 0 ? (
-                <div className="space-y-4">
-                  {interactions.map((interaction) => (
-                    <Card key={interaction.id}>
-                      <CardContent className="p-4">
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2">
-                              {getInteractionIcon(interaction.type)}
-                              <span className="font-medium capitalize">
-                                {interaction.type}
-                              </span>
-                              {interaction.direction && (
-                                <Badge variant="outline" className="text-xs">
-                                  {interaction.direction}
-                                </Badge>
-                              )}
-                            </div>
-                            <p className="mt-1 font-semibold">{interaction.subject}</p>
-                            {interaction.notes && (
-                              <p className="mt-1 text-sm text-muted-foreground">
-                                {interaction.notes}
-                              </p>
-                            )}
-                            <div className="mt-2 flex gap-4 text-xs text-muted-foreground">
-                              <span>
-                                {format(new Date(interaction.date), 'MMM d, yyyy HH:mm')}
-                              </span>
-                              {interaction.duration_minutes && (
-                                <span>{interaction.duration_minutes} min</span>
-                              )}
-                            </div>
-                          </div>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={async () => {
-                              if (confirm('Delete this interaction?')) {
-                                try {
-                                  await deleteInteraction(interaction.id, client.id)
-                                  setInteractions((prev) =>
-                                    prev.filter((i) => i.id !== interaction.id)
-                                  )
-                                  toast({
-                                    title: 'Success',
-                                    description: 'Interaction deleted',
-                                  })
-                                } catch (error) {
-                                  toast({
-                                    title: 'Error',
-                                    description: 'Failed to delete interaction',
-                                    variant: 'destructive',
-                                  })
-                                }
-                              }
-                            }}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              ) : (
-                <Card>
-                  <CardContent className="p-8 text-center">
-                    <p className="text-muted-foreground">No interactions yet.</p>
-                  </CardContent>
-                </Card>
-              )}
-            </TabsContent>
 
             <TabsContent value="notes" className="space-y-4">
               <div className="flex justify-end">
@@ -484,6 +557,89 @@ export function ClientDetail({ client: initialClient }: ClientDetailProps) {
                 <Card>
                   <CardContent className="p-8 text-center">
                     <p className="text-muted-foreground">No reminders yet.</p>
+                  </CardContent>
+                </Card>
+              )}
+            </TabsContent>
+
+            <TabsContent value="timeline" className="space-y-4">
+              <div className="flex justify-end">
+                <Button onClick={() => setShowInteractionDialog(true)}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add Interaction
+                </Button>
+              </div>
+
+              {loading ? (
+                <p className="text-muted-foreground">Loading...</p>
+              ) : interactions.length > 0 ? (
+                <div className="space-y-4">
+                  {interactions.map((interaction) => (
+                    <Card key={interaction.id}>
+                      <CardContent className="p-4">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              {getInteractionIcon(interaction.type)}
+                              <span className="font-medium capitalize">
+                                {interaction.type}
+                              </span>
+                              {interaction.direction && (
+                                <Badge variant="outline" className="text-xs">
+                                  {interaction.direction}
+                                </Badge>
+                              )}
+                            </div>
+                            <p className="mt-1 font-semibold">{interaction.subject}</p>
+                            {interaction.notes && (
+                              <p className="mt-1 text-sm text-muted-foreground">
+                                {interaction.notes}
+                              </p>
+                            )}
+                            <div className="mt-2 flex gap-4 text-xs text-muted-foreground">
+                              <span>
+                                {format(new Date(interaction.date), 'MMM d, yyyy HH:mm')}
+                              </span>
+                              {interaction.duration_minutes && (
+                                <span>{interaction.duration_minutes} min</span>
+                              )}
+                            </div>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={async () => {
+                              if (confirm('Delete this interaction?')) {
+                                try {
+                                  await deleteInteraction(interaction.id, client.id)
+                                  setInteractions((prev) =>
+                                    prev.filter((i) => i.id !== interaction.id)
+                                  )
+                                  toast({
+                                    title: 'Success',
+                                    description: 'Interaction deleted',
+                                  })
+                                } catch (error) {
+                                  toast({
+                                    title: 'Error',
+                                    description: 'Failed to delete interaction',
+                                    variant: 'destructive',
+                                  })
+                                }
+                              }
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              ) : (
+                <Card>
+                  <CardContent className="p-8 text-center">
+                    <p className="text-muted-foreground">No interactions yet.</p>
                   </CardContent>
                 </Card>
               )}

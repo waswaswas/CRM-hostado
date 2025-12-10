@@ -1,4 +1,5 @@
-export type ClientStatus = 'new' | 'contacted' | 'in_progress' | 'won' | 'lost'
+export type ClientStatus = 'new' | 'contacted' | 'in_progress' | 'won' | 'lost' | 'to_be_contacted' | 'waiting_for_response' | 'waiting_for_offer' | 'abandoned'
+export type ClientType = 'presales' | 'customer'
 export type InteractionType = 'call' | 'email' | 'meeting' | 'other'
 export type InteractionDirection = 'inbound' | 'outbound'
 
@@ -11,6 +12,7 @@ export interface Client {
   email: string | null
   phone: string | null
   status: ClientStatus
+  client_type: ClientType | null
   source: string | null
   notes_summary: string | null
 }

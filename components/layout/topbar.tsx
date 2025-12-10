@@ -3,6 +3,7 @@
 import { Button } from '@/components/ui/button'
 import { signOut } from '@/app/actions/auth'
 import { LogOut, User } from 'lucide-react'
+import { ThemeToggle } from '@/components/theme-toggle'
 
 export function Topbar({ userName }: { userName?: string }) {
   return (
@@ -13,12 +14,15 @@ export function Topbar({ userName }: { userName?: string }) {
           {userName || 'User'}
         </span>
       </div>
-      <form action={signOut}>
-        <Button type="submit" variant="ghost" size="sm">
-          <LogOut className="mr-2 h-4 w-4" />
-          Logout
-        </Button>
-      </form>
+      <div className="flex items-center gap-2">
+        <ThemeToggle />
+        <form action={signOut}>
+          <Button type="submit" variant="ghost" size="sm">
+            <LogOut className="mr-2 h-4 w-4" />
+            Logout
+          </Button>
+        </form>
+      </div>
     </div>
   )
 }

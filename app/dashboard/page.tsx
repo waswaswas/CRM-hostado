@@ -88,9 +88,8 @@ export default async function DashboardPage() {
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold">Dashboard</h1>
           <Link href="/clients/new">
-            <Button>
-              <Plus className="mr-2 h-4 w-4" />
-              New Client
+            <Button size="lg" className="h-12 w-12 rounded-full p-0">
+              <Plus className="h-6 w-6" />
             </Button>
           </Link>
         </div>
