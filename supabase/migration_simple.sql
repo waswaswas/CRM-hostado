@@ -11,3 +11,5 @@ ALTER TABLE clients ADD CONSTRAINT clients_client_type_check
 
 -- That's it! The status enum already exists, so we don't need to modify it.
 -- The app will work with the existing status values.
+
+

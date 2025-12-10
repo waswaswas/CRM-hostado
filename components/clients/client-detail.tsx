@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { Client, Interaction, Reminder, ClientNote, ClientStatus } from '@/types/database'
+import { getStatusesForType, getStatusColor, formatStatus, STATUS_DESCRIPTIONS } from '@/lib/status-utils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -144,26 +145,6 @@ export function ClientDetail({ client: initialClient }: ClientDetailProps) {
     setEditingField(null)
   }
 
-  const getStatusColor = (status: ClientStatus) => {
-    switch (status) {
-      case 'new':
-      case 'to_be_contacted':
-        return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
-      case 'contacted':
-      case 'waiting_for_response':
-        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
-      case 'in_progress':
-      case 'waiting_for_offer':
-        return 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200'
-      case 'won':
-        return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-      case 'lost':
-      case 'abandoned':
-        return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
-      default:
-        return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200'
-    }
-  }
 
   const getInteractionIcon = (type: string) => {
     switch (type) {
@@ -223,34 +204,46 @@ export function ClientDetail({ client: initialClient }: ClientDetailProps) {
         </div>
         <div className="flex items-center gap-2">
           {editingStatus ? (
-            <Select
-              value={client.status}
-              onChange={(e) => handleStatusChange(e.target.value as ClientStatus)}
-              className="w-48"
-            >
-              <option value="to_be_contacted">To be contacted</option>
-              <option value="waiting_for_response">Waiting for response</option>
-              <option value="waiting_for_offer">Waiting for offer</option>
-              <option value="abandoned">Abandoned</option>
-              <option value="new">New</option>
-              <option value="contacted">Contacted</option>
-              <option value="in_progress">In Progress</option>
-              <option value="won">Won</option>
-              <option value="lost">Lost</option>
-            </Select>
+            <div className="space-y-1">
+              <Select
+                value={client.status}
+                onChange={(e) => handleStatusChange(e.target.value as ClientStatus)}
+                className="w-56"
+              >
+                {getStatusesForType(client.client_type).map((status) => (
+                  <option key={status} value={status} title={STATUS_DESCRIPTIONS[status]}>
+                    {formatStatus(status)}
+                  </option>
+                ))}
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                {STATUS_DESCRIPTIONS[client.status]}
+              </p>
+            </div>
           ) : (
-            <>
-              <Badge className={getStatusColor(client.status)}>
-                {client.status.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())}
-              </Badge>
+            <div className="flex items-center gap-2">
+              <div className="group relative">
+                <Badge 
+                  className={getStatusColor(client.status, client.client_type)}
+                  title={STATUS_DESCRIPTIONS[client.status]}
+                >
+                  {formatStatus(client.status)}
+                </Badge>
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block z-10">
+                  <div className="bg-popover text-popover-foreground text-xs rounded-md px-2 py-1 shadow-md border whitespace-nowrap">
+                    {STATUS_DESCRIPTIONS[client.status]}
+                  </div>
+                </div>
+              </div>
               <Button
                 variant="ghost"
                 size="icon"
                 onClick={() => setEditingStatus(true)}
+                title="Edit status"
               >
                 <Edit className="h-4 w-4" />
               </Button>
-            </>
+            </div>
           )}
         </div>
       </div>
@@ -985,3 +978,5 @@ function NoteForm({
     </form>
   )
 }
+
+

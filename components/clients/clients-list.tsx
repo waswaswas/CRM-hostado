@@ -8,20 +8,27 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Select } from '@/components/ui/select'
 import { Client, ClientStatus, ClientType } from '@/types/database'
 import Link from 'next/link'
-import { Plus, Search } from 'lucide-react'
-import { format, subDays, isAfter } from 'date-fns'
+import { Plus, Search, Trash2, Calendar } from 'lucide-react'
+import { format, subDays, isAfter, startOfDay, endOfDay } from 'date-fns'
+import { getStatusesForType, getStatusColor, formatStatus, STATUS_DESCRIPTIONS, isClientNew } from '@/lib/status-utils'
+import { deleteClient, updateClient } from '@/app/actions/clients'
+import { useToast } from '@/components/ui/toaster'
 
 interface ClientsListProps {
   initialClients: Client[]
 }
 
 export function ClientsList({ initialClients }: ClientsListProps) {
+  const { toast } = useToast()
   const [clients, setClients] = useState<Client[]>(initialClients)
   const [filteredClients, setFilteredClients] = useState<Client[]>(initialClients)
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState<ClientType | 'all'>('all')
   const [statusFilter, setStatusFilter] = useState<ClientStatus | 'all'>('all')
   const [newFilter, setNewFilter] = useState<'all' | 'new'>('all')
+  const [dateFilter, setDateFilter] = useState<{ from: string; to: string }>({ from: '', to: '' })
+  const [showNewToggle, setShowNewToggle] = useState(false)
+  const [editingClient, setEditingClient] = useState<{ id: string; field: 'status' | 'type' } | null>(null)
 
   useEffect(() => {
     let filtered = clients
@@ -51,43 +58,99 @@ export function ClientsList({ initialClients }: ClientsListProps) {
       filtered = filtered.filter((client) => client.status === statusFilter)
     }
 
-    // New filter (Presales added within 14 days)
+    // New filter (Presales added within 14 days - "New" is now a tag, not a status)
     if (newFilter === 'new') {
-      const fourteenDaysAgo = subDays(new Date(), 14)
       filtered = filtered.filter((client) => {
-        // Only show presales clients
+        // Only show presales clients that are "new" (within 14 days)
         if (!client.client_type || client.client_type !== 'presales') return false
-        const createdAt = new Date(client.created_at)
-        return isAfter(createdAt, fourteenDaysAgo)
+        return isClientNew(client.created_at)
+      })
+    }
+
+    // Date range filter
+    if (dateFilter.from) {
+      const fromDate = startOfDay(new Date(dateFilter.from))
+      filtered = filtered.filter((client) => {
+        const createdDate = new Date(client.created_at)
+        return createdDate >= fromDate
+      })
+    }
+    if (dateFilter.to) {
+      const toDate = endOfDay(new Date(dateFilter.to))
+      filtered = filtered.filter((client) => {
+        const createdDate = new Date(client.created_at)
+        return createdDate <= toDate
       })
     }
 
     setFilteredClients(filtered)
-  }, [search, typeFilter, statusFilter, newFilter, clients])
+  }, [search, typeFilter, statusFilter, newFilter, dateFilter, clients])
 
-  const getStatusColor = (status: ClientStatus) => {
-    switch (status) {
-      case 'new':
-      case 'to_be_contacted':
-        return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
-      case 'contacted':
-      case 'waiting_for_response':
-        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
-      case 'in_progress':
-      case 'waiting_for_offer':
-        return 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200'
-      case 'won':
-        return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-      case 'lost':
-      case 'abandoned':
-        return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
-      default:
-        return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200'
+  async function handleDeleteClient(clientId: string, clientName: string, e: React.MouseEvent) {
+    e.preventDefault()
+    e.stopPropagation()
+    
+    if (!confirm(`Are you sure you want to delete "${clientName}"? This action cannot be undone.`)) {
+      return
+    }
+
+    try {
+      await deleteClient(clientId)
+      setClients((prev) => prev.filter((c) => c.id !== clientId))
+      toast({
+        title: 'Success',
+        description: 'Client deleted successfully',
+      })
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to delete client',
+        variant: 'destructive',
+      })
     }
   }
 
-  const formatStatus = (status: ClientStatus) => {
-    return status.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())
+  async function handleStatusChange(clientId: string, newStatus: ClientStatus) {
+    try {
+      const updated = await updateClient(clientId, { status: newStatus })
+      setClients((prev) => prev.map((c) => (c.id === clientId ? updated : c)))
+      setEditingClient(null)
+      toast({
+        title: 'Success',
+        description: 'Status updated',
+      })
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to update status',
+        variant: 'destructive',
+      })
+    }
+  }
+
+  async function handleTypeChange(clientId: string, newType: ClientType, currentStatus: ClientStatus) {
+    try {
+      // When changing type, also update status to first valid status for new type
+      const validStatuses = getStatusesForType(newType)
+      const newStatus = validStatuses.includes(currentStatus) ? currentStatus : validStatuses[0]
+      
+      const updated = await updateClient(clientId, { 
+        client_type: newType,
+        status: newStatus 
+      })
+      setClients((prev) => prev.map((c) => (c.id === clientId ? updated : c)))
+      setEditingClient(null)
+      toast({
+        title: 'Success',
+        description: 'Client type updated',
+      })
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to update client type',
+        variant: 'destructive',
+      })
+    }
   }
 
   return (
@@ -133,27 +196,60 @@ export function ClientsList({ initialClients }: ClientsListProps) {
               onChange={(e) => setStatusFilter(e.target.value as ClientStatus | 'all')}
             >
               <option value="all">All Statuses</option>
-              <option value="to_be_contacted">To be contacted</option>
-              <option value="waiting_for_response">Waiting for response</option>
-              <option value="waiting_for_offer">Waiting for offer</option>
-              <option value="abandoned">Abandoned</option>
-              <option value="new">New</option>
-              <option value="contacted">Contacted</option>
-              <option value="in_progress">In Progress</option>
-              <option value="won">Won</option>
-              <option value="lost">Lost</option>
+              {getStatusesForType(typeFilter === 'all' ? null : typeFilter).map((status) => (
+                <option key={status} value={status} title={STATUS_DESCRIPTIONS[status]}>
+                  {formatStatus(status)}
+                </option>
+              ))}
             </Select>
           </div>
 
           <div className="space-y-2">
             <label className="text-sm font-medium">Time Filter</label>
-            <Select
-              value={newFilter}
-              onChange={(e) => setNewFilter(e.target.value as 'all' | 'new')}
-            >
-              <option value="all">All</option>
-              <option value="new">New (Last 14 days)</option>
-            </Select>
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="new-toggle"
+                  checked={newFilter === 'new'}
+                  onChange={(e) => setNewFilter(e.target.checked ? 'new' : 'all')}
+                  className="h-4 w-4 rounded border-gray-300"
+                />
+                <label htmlFor="new-toggle" className="text-sm cursor-pointer">
+                  New only (within 14 days)
+                </label>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1 block">From</label>
+                  <Input
+                    type="date"
+                    value={dateFilter.from}
+                    onChange={(e) => setDateFilter({ ...dateFilter, from: e.target.value })}
+                    className="text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1 block">To</label>
+                  <Input
+                    type="date"
+                    value={dateFilter.to}
+                    onChange={(e) => setDateFilter({ ...dateFilter, to: e.target.value })}
+                    className="text-sm"
+                  />
+                </div>
+              </div>
+              {(dateFilter.from || dateFilter.to) && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setDateFilter({ from: '', to: '' })}
+                  className="w-full text-xs"
+                >
+                  Clear dates
+                </Button>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -161,46 +257,112 @@ export function ClientsList({ initialClients }: ClientsListProps) {
       {filteredClients.length > 0 ? (
         <div className="grid gap-4">
           {filteredClients.map((client) => (
-            <Link key={client.id} href={`/clients/${client.id}`}>
-              <Card className="transition-colors hover:bg-accent">
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3">
-                        <h3 className="text-lg font-semibold">{client.name}</h3>
-                        {client.client_type && (
-                          <Badge variant="outline" className="text-xs">
-                            {client.client_type === 'presales' ? 'Presales' : 'Customer'}
-                          </Badge>
-                        )}
-                        <Badge className={getStatusColor(client.status)}>
+            <Card key={client.id} className="transition-colors hover:bg-accent">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <Link href={`/clients/${client.id}`} className="text-lg font-semibold hover:underline">
+                        {client.name}
+                      </Link>
+                      {/* "New" tag - separate, non-editable, auto-removed after 14 days */}
+                      {client.client_type === 'presales' && isClientNew(client.created_at) && (
+                        <Badge 
+                          className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
+                          title="Added within the last 14 days"
+                        >
+                          New
+                        </Badge>
+                      )}
+                      {editingClient?.id === client.id && editingClient.field === 'type' ? (
+                        <Select
+                          value={client.client_type || 'presales'}
+                          onChange={(e) => {
+                            handleTypeChange(client.id, e.target.value as ClientType, client.status)
+                          }}
+                          onBlur={() => setEditingClient(null)}
+                          className="w-32 text-xs"
+                          autoFocus
+                        >
+                          <option value="presales">Presales</option>
+                          <option value="customer">Customer</option>
+                        </Select>
+                      ) : (
+                        <Badge 
+                          variant="outline" 
+                          className="text-xs cursor-pointer hover:bg-accent"
+                          onClick={(e) => {
+                            e.preventDefault()
+                            e.stopPropagation()
+                            setEditingClient({ id: client.id, field: 'type' })
+                          }}
+                          title="Click to change client type"
+                        >
+                          {client.client_type === 'presales' ? 'Presales' : client.client_type === 'customer' ? 'Customer' : 'Unknown'}
+                        </Badge>
+                      )}
+                      {editingClient?.id === client.id && editingClient.field === 'status' ? (
+                        <Select
+                          value={client.status}
+                          onChange={(e) => {
+                            handleStatusChange(client.id, e.target.value as ClientStatus)
+                          }}
+                          onBlur={() => setEditingClient(null)}
+                          className="w-40 text-xs"
+                          autoFocus
+                        >
+                          {getStatusesForType(client.client_type).map((status) => (
+                            <option key={status} value={status}>
+                              {formatStatus(status)}
+                            </option>
+                          ))}
+                        </Select>
+                      ) : (
+                        <Badge 
+                          className={`${getStatusColor(client.status, client.client_type)} cursor-pointer hover:opacity-80`}
+                          title={STATUS_DESCRIPTIONS[client.status]}
+                          onClick={(e) => {
+                            e.preventDefault()
+                            e.stopPropagation()
+                            setEditingClient({ id: client.id, field: 'status' })
+                          }}
+                        >
                           {formatStatus(client.status)}
                         </Badge>
-                      </div>
-                      {client.company && (
-                        <p className="mt-1 text-sm text-muted-foreground">
-                          {client.company}
-                        </p>
                       )}
-                      <div className="mt-2 flex gap-4 text-sm text-muted-foreground">
-                        {client.email && <span>{client.email}</span>}
-                        {client.phone && <span>{client.phone}</span>}
-                      </div>
                     </div>
+                    {client.company && (
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {client.company}
+                      </p>
+                    )}
+                    <div className="mt-2 flex gap-4 text-sm text-muted-foreground">
+                      {client.email && <span>{client.email}</span>}
+                      {client.phone && <span>{client.phone}</span>}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
                     <div className="text-right text-sm text-muted-foreground">
                       <p>Added {format(new Date(client.created_at), 'MMM d, yyyy')}</p>
                     </div>
+                    <button
+                      onClick={(e) => handleDeleteClient(client.id, client.name, e)}
+                      className="p-2 text-muted-foreground hover:text-destructive transition-colors"
+                      title="Delete client"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
                   </div>
-                </CardContent>
-              </Card>
-            </Link>
+                </div>
+              </CardContent>
+            </Card>
           ))}
         </div>
       ) : (
         <Card>
           <CardContent className="p-8 text-center">
             <p className="text-muted-foreground">
-              {search || typeFilter !== 'all' || statusFilter !== 'all' || newFilter !== 'all'
+              {search || typeFilter !== 'all' || statusFilter !== 'all' || newFilter !== 'all' || dateFilter.from || dateFilter.to
                 ? 'No clients match your filters.'
                 : 'No clients yet. Create your first client to get started.'}
             </p>
@@ -210,3 +372,5 @@ export function ClientsList({ initialClients }: ClientsListProps) {
     </div>
   )
 }
+
+

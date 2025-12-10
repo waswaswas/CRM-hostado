@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { AppLayoutClient } from '@/components/layout/app-layout-client'
 import { Button } from '@/components/ui/button'
@@ -11,6 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { createClientRecord } from '@/app/actions/clients'
 import { useToast } from '@/components/ui/toaster'
 import { ClientStatus } from '@/types/database'
+import { getStatusesForType, formatStatus, STATUS_DESCRIPTIONS } from '@/lib/status-utils'
 import { ArrowLeft, User, Building2 } from 'lucide-react'
 
 type ClientType = 'presales' | 'customer' | null
@@ -25,10 +26,20 @@ export default function NewClientPage() {
     company: '',
     email: '',
     phone: '',
-    status: 'new' as ClientStatus,
+    status: 'contacted' as ClientStatus, // Default to 'contacted' since 'new' is now a tag
     source: '',
     notes_summary: '',
   })
+
+  // Update status when client type changes
+  useEffect(() => {
+    if (clientType) {
+      const statuses = getStatusesForType(clientType)
+      if (!statuses.includes(formData.status)) {
+        setFormData((prev) => ({ ...prev, status: statuses[0] }))
+      }
+    }
+  }, [clientType])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -273,12 +284,17 @@ export default function NewClientPage() {
                     }
                     disabled={loading}
                   >
-                    <option value="new">New</option>
-                    <option value="contacted">Contacted</option>
-                    <option value="in_progress">In Progress</option>
-                    <option value="won">Won</option>
-                    <option value="lost">Lost</option>
+                    {getStatusesForType(clientType).map((status) => (
+                      <option key={status} value={status} title={STATUS_DESCRIPTIONS[status]}>
+                        {formatStatus(status)}
+                      </option>
+                    ))}
                   </Select>
+                  {formData.status && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {STATUS_DESCRIPTIONS[formData.status]}
+                    </p>
+                  )}
                 </div>
 
                 <div className="space-y-2">
@@ -331,3 +347,5 @@ export default function NewClientPage() {
     </AppLayoutClient>
   )
 }
+
+

@@ -26,7 +26,7 @@ export async function createClientRecord(data: {
   const insertData: any = {
     ...data,
     owner_id: user.id,
-    status: data.status || 'new',
+    status: data.status || (data.client_type === 'customer' ? 'active' : 'contacted'), // Default status based on type
   }
   
   // Only include client_type if the column exists (handles migration period)
@@ -62,6 +62,14 @@ export async function updateClient(
     throw new Error('Not authenticated')
   }
 
+  // Get current client to check for status change
+  const { data: currentClient } = await supabase
+    .from('clients')
+    .select('status')
+    .eq('id', id)
+    .eq('owner_id', user.id)
+    .single()
+
   const { data: client, error } = await supabase
     .from('clients')
     .update(data)
@@ -72,6 +80,17 @@ export async function updateClient(
 
   if (error) {
     throw new Error(error.message)
+  }
+
+  // Log status change if status was updated
+  if (data.status && currentClient && currentClient.status !== data.status) {
+    try {
+      const { logStatusChange } = await import('@/app/actions/settings')
+      await logStatusChange(id, currentClient.status, data.status, 'manual')
+    } catch (err) {
+      // Don't fail if logging fails
+      console.error('Failed to log status change:', err)
+    }
   }
 
   revalidatePath(`/clients/${id}`)
@@ -129,7 +148,14 @@ export async function getClients() {
       throw new Error(error.message)
     }
 
-    return data || []
+    const clients = data || []
+    
+    // Note: "New" is now a tag that automatically disappears after 14 days
+    // No need to update status - the tag visibility is handled client-side
+    // If a presales client has been "new" for 14+ days and status is still default,
+    // we could auto-update to "attention_needed", but for now we'll just let the tag disappear
+
+    return clients
   } catch (error) {
     // Re-throw with better message if it's our custom error
     if (error instanceof Error && error.message.includes('Database tables not found')) {
@@ -163,3 +189,5 @@ export async function getClient(id: string) {
 
   return data
 }
+
+

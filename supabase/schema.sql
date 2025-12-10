@@ -209,3 +209,5 @@ CREATE INDEX idx_reminders_due_at ON reminders(due_at);
 CREATE INDEX idx_reminders_done ON reminders(done);
 CREATE INDEX idx_client_notes_client_id ON client_notes(client_id);
 CREATE INDEX idx_client_notes_pinned ON client_notes(pinned);
+
+

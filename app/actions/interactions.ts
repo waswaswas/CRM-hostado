@@ -107,3 +107,5 @@ export async function deleteInteraction(id: string, clientId: string) {
 
   revalidatePath(`/clients/${clientId}`)
 }
+
+

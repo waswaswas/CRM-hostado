@@ -1,4 +1,9 @@
-export type ClientStatus = 'new' | 'contacted' | 'in_progress' | 'won' | 'lost' | 'to_be_contacted' | 'waiting_for_response' | 'waiting_for_offer' | 'abandoned'
+// Presales statuses (Note: "new" is now a separate tag, not a status)
+export type PresalesStatus = 'contacted' | 'attention_needed' | 'follow_up_required' | 'waits_for_offer' | 'on_hold' | 'abandoned'
+// Customer statuses
+export type CustomerStatus = 'active' | 'inactive'
+// Combined type
+export type ClientStatus = PresalesStatus | CustomerStatus
 export type ClientType = 'presales' | 'customer'
 export type InteractionType = 'call' | 'email' | 'meeting' | 'other'
 export type InteractionDirection = 'inbound' | 'outbound'
@@ -52,3 +57,5 @@ export interface ClientWithRelations extends Client {
   reminders?: Reminder[]
   notes?: ClientNote[]
 }
+
+
