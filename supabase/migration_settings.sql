@@ -66,3 +66,4 @@ CREATE INDEX IF NOT EXISTS idx_status_history_client_id ON status_change_history
 CREATE INDEX IF NOT EXISTS idx_status_history_created_at ON status_change_history(created_at);
 CREATE INDEX IF NOT EXISTS idx_status_history_change_type ON status_change_history(change_type);
 
+

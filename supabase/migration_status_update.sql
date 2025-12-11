@@ -81,3 +81,4 @@ ALTER TABLE clients ADD CONSTRAINT clients_status_customer_check
 -- Note: The old client_status enum type will remain but won't be used.
 -- You can drop it later if needed: DROP TYPE IF EXISTS client_status;
 
+

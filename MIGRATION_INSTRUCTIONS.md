@@ -92,3 +92,4 @@ ALTER TABLE clients ADD CONSTRAINT clients_status_customer_check
 **Note:** The app will work with or without the new status values. The client_type column is the critical one that needs to be added first.
 
 
+

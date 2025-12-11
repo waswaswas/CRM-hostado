@@ -13,3 +13,4 @@ ALTER TABLE clients ADD CONSTRAINT clients_client_type_check
 -- The app will work with the existing status values.
 
 
+

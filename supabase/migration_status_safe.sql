@@ -56,3 +56,4 @@ ALTER TABLE clients ADD CONSTRAINT clients_status_customer_check
     status IN ('active', 'inactive')
   );
 
+

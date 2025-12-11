@@ -12,3 +12,4 @@ export type Settings = {
   custom_statuses: StatusConfig[]
 }
 
+

@@ -53,3 +53,4 @@ WHERE table_name = 'clients'
 AND column_name IN ('client_type', 'status');
 
 
+
