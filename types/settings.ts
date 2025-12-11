@@ -10,6 +10,7 @@ export type StatusConfig = {
 export type Settings = {
   new_tag_days: number
   custom_statuses: StatusConfig[]
+  timezone?: string
 }
 
 

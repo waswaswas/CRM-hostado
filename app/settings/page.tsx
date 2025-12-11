@@ -59,12 +59,18 @@ export default function SettingsPage() {
   async function loadStatusHistory() {
     try {
       const history = await getStatusChangeHistory(undefined, 100)
-      setStatusHistory(history)
+      setStatusHistory(history || [])
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to load status history'
       console.error('Failed to load status history:', errorMessage)
-      // Don't show toast for missing table - it's expected if migration hasn't been run
-      if (!errorMessage.includes('Could not find the table') && !errorMessage.includes('does not exist')) {
+      // Show a helpful message if table doesn't exist
+      if (errorMessage.includes('Could not find the table') || errorMessage.includes('does not exist') || errorMessage.includes('relation')) {
+        toast({
+          title: 'Status History Not Available',
+          description: 'Please run the migration: supabase/SETUP_SETTINGS_TABLES.sql in your Supabase SQL Editor',
+          variant: 'destructive',
+        })
+      } else {
         toast({
           title: 'Error',
           description: errorMessage,
@@ -323,11 +329,17 @@ export default function SettingsPage() {
                         {' → '}
                         <span className="font-mono font-semibold">{entry.new_status}</span>
                       </div>
-                      {entry.changed_by_user && (
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Changed by: {entry.changed_by_user.email}
-                        </p>
-                      )}
+                      <div className="text-xs text-muted-foreground mt-1">
+                        {entry.change_type === 'automatic' ? (
+                          <span className="font-medium">Changed by: <span className="text-blue-600 dark:text-blue-400">System</span> (automatic)</span>
+                        ) : entry.changed_by_email ? (
+                          <span className="font-medium">Changed by: <span className="text-green-600 dark:text-green-400">{entry.changed_by_email}</span></span>
+                        ) : entry.changed_by ? (
+                          <span className="font-medium">Changed by: User (ID: {entry.changed_by.substring(0, 8)}...)</span>
+                        ) : (
+                          <span className="font-medium">Changed by: Unknown</span>
+                        )}
+                      </div>
                       {entry.notes && (
                         <p className="text-xs text-muted-foreground mt-1 italic">{entry.notes}</p>
                       )}

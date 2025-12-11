@@ -38,6 +38,7 @@ export async function getSettings() {
   return {
     new_tag_days: data.new_tag_days || 14,
     custom_statuses: (data.custom_statuses as StatusConfig[]) || [],
+    timezone: (data as any).timezone || 'Europe/Sofia', // Default to Sofia, Bulgaria
   }
 }
 
@@ -73,6 +74,10 @@ export async function updateSettings(settings: Partial<Settings>) {
 
   if (settings.custom_statuses !== undefined) {
     updateData.custom_statuses = settings.custom_statuses
+  }
+
+  if ((settings as any).timezone !== undefined) {
+    updateData.timezone = (settings as any).timezone
   }
 
   if (existing && !checkError) {
@@ -113,19 +118,10 @@ export async function getStatusChangeHistory(clientId?: string, limit: number = 
     throw new Error('Not authenticated')
   }
 
+  // First, get the history entries
   let query = supabase
     .from('status_change_history')
-    .select(`
-      *,
-      clients:client_id (
-        id,
-        name
-      ),
-      changed_by_user:changed_by (
-        id,
-        email
-      )
-    `)
+    .select('*')
     .order('created_at', { ascending: false })
     .limit(limit)
 
@@ -133,18 +129,58 @@ export async function getStatusChangeHistory(clientId?: string, limit: number = 
     query = query.eq('client_id', clientId)
   }
 
-  const { data, error } = await query
+  const { data: historyData, error } = await query
 
   if (error) {
     if (error.message.includes('Could not find the table') || error.message.includes('relation') || error.message.includes('does not exist')) {
-      // Table doesn't exist yet - return empty array instead of error
       console.warn('status_change_history table does not exist. Please run the migration: supabase/SETUP_SETTINGS_TABLES.sql')
       return []
     }
     throw new Error(error.message)
   }
 
-  return data || []
+  if (!historyData || historyData.length === 0) {
+    return []
+  }
+
+  // Get client names
+  const clientIds = [...new Set(historyData.map(h => h.client_id))]
+  const { data: clientsData } = await supabase
+    .from('clients')
+    .select('id, name')
+    .in('id', clientIds)
+
+  const clientsMap = new Map(clientsData?.map(c => [c.id, c]) || [])
+
+  // Get user emails for changed_by from user_profiles table
+  const userIds = [...new Set(historyData.map(h => h.changed_by).filter(Boolean) as string[])]
+  const userEmailsMap = new Map<string, string>()
+
+  if (userIds.length > 0) {
+    // Try to fetch from user_profiles table (if it exists)
+    try {
+      const { data: profilesData, error: profilesError } = await supabase
+        .from('user_profiles')
+        .select('id, email')
+        .in('id', userIds)
+
+      if (!profilesError && profilesData) {
+        profilesData.forEach(profile => {
+          userEmailsMap.set(profile.id, profile.email)
+        })
+      }
+    } catch (error) {
+      // Table might not exist, continue without user emails
+      console.warn('Could not fetch user profiles:', error)
+    }
+  }
+
+  // Combine the data
+  return historyData.map(entry => ({
+    ...entry,
+    clients: clientsMap.get(entry.client_id) || null,
+    changed_by_email: entry.changed_by ? (userEmailsMap.get(entry.changed_by) || null) : null,
+  }))
 }
 
 export async function logStatusChange(
@@ -164,6 +200,19 @@ export async function logStatusChange(
     return
   }
 
+  // Check if table exists first
+  const { error: checkError } = await supabase
+    .from('status_change_history')
+    .select('id')
+    .limit(1)
+
+  if (checkError) {
+    if (checkError.message.includes('Could not find the table') || checkError.message.includes('relation') || checkError.message.includes('does not exist')) {
+      console.warn('status_change_history table does not exist. Please run: supabase/SETUP_SETTINGS_TABLES.sql')
+      return
+    }
+  }
+
   const { error } = await supabase
     .from('status_change_history')
     .insert({
@@ -172,12 +221,16 @@ export async function logStatusChange(
       old_status: oldStatus,
       new_status: newStatus,
       change_type: changeType,
-      notes: notes,
+      notes: notes || null,
     })
 
   if (error) {
-    // Don't throw - logging failures shouldn't break the app
+    // Log the error but don't throw - logging failures shouldn't break the app
     console.error('Failed to log status change:', error)
+    // If it's an RLS policy issue, provide helpful message
+    if (error.message.includes('policy') || error.message.includes('permission')) {
+      console.error('RLS policy issue. Make sure status_change_history table has proper RLS policies.')
+    }
   }
 }
 

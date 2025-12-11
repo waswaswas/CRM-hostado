@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { signOut } from '@/app/actions/auth'
 import { LogOut, User } from 'lucide-react'
 import { ThemeToggle } from '@/components/theme-toggle'
+import { TimezoneSelector } from '@/components/timezone-selector'
 
 export function Topbar({ userName }: { userName?: string }) {
   return (
@@ -15,6 +16,7 @@ export function Topbar({ userName }: { userName?: string }) {
         </span>
       </div>
       <div className="flex items-center gap-2">
+        <TimezoneSelector />
         <ThemeToggle />
         <form action={signOut}>
           <Button type="submit" variant="ghost" size="sm">

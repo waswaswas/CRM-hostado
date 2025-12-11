@@ -44,6 +44,17 @@ export async function createClientRecord(data: {
     throw new Error(error.message)
   }
 
+  // Log initial status when creating a client
+  if (client && client.status) {
+    try {
+      const { logStatusChange } = await import('@/app/actions/settings')
+      await logStatusChange(client.id, null, client.status, 'manual', 'Initial status on client creation')
+    } catch (err) {
+      // Don't fail if logging fails
+      console.error('Failed to log initial status change:', err)
+    }
+  }
+
   revalidatePath('/clients')
   revalidatePath('/dashboard')
   return client
@@ -86,10 +97,15 @@ export async function updateClient(
   if (data.status && currentClient && currentClient.status !== data.status) {
     try {
       const { logStatusChange } = await import('@/app/actions/settings')
-      await logStatusChange(id, currentClient.status, data.status, 'manual')
+      await logStatusChange(id, currentClient.status, data.status, 'manual', `Status changed from ${currentClient.status} to ${data.status}`)
     } catch (err) {
-      // Don't fail if logging fails
-      console.error('Failed to log status change:', err)
+      // Don't fail if logging fails, but log the error
+      const errorMessage = err instanceof Error ? err.message : String(err)
+      console.error('Failed to log status change:', errorMessage)
+      // Check if it's a table missing error
+      if (errorMessage.includes('Could not find the table') || errorMessage.includes('relation') || errorMessage.includes('does not exist')) {
+        console.warn('status_change_history table does not exist. Please run: supabase/SETUP_SETTINGS_TABLES.sql')
+      }
     }
   }
 

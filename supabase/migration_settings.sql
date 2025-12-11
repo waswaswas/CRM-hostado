@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS settings (
   owner_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE UNIQUE,
   new_tag_days INTEGER NOT NULL DEFAULT 14,
   custom_statuses JSONB DEFAULT '[]'::jsonb,
+  timezone TEXT,
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW()) NOT NULL
 );
 

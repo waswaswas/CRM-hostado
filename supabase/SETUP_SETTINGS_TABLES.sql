@@ -8,8 +8,12 @@ CREATE TABLE IF NOT EXISTS settings (
   owner_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE UNIQUE,
   new_tag_days INTEGER NOT NULL DEFAULT 14,
   custom_statuses JSONB DEFAULT '[]'::jsonb,
+  timezone TEXT,
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW()) NOT NULL
 );
+
+-- Add timezone column if it doesn't exist (for existing installations)
+ALTER TABLE settings ADD COLUMN IF NOT EXISTS timezone TEXT;
 
 -- Table: status_change_history (track all status changes)
 CREATE TABLE IF NOT EXISTS status_change_history (
@@ -71,3 +75,6 @@ CREATE INDEX IF NOT EXISTS idx_settings_owner_id ON settings(owner_id);
 CREATE INDEX IF NOT EXISTS idx_status_history_client_id ON status_change_history(client_id);
 CREATE INDEX IF NOT EXISTS idx_status_history_created_at ON status_change_history(created_at);
 CREATE INDEX IF NOT EXISTS idx_status_history_change_type ON status_change_history(change_type);
+
+-- Add timezone column to settings if it doesn't exist
+ALTER TABLE settings ADD COLUMN IF NOT EXISTS timezone TEXT;

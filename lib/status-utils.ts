@@ -33,10 +33,10 @@ export function getStatusesForType(clientType: ClientType | null, customStatuses
   return defaultStatuses
 }
 
-export function isClientNew(createdAt: string): boolean {
+export function isClientNew(createdAt: string, newTagDays: number = 14): boolean {
   const createdDate = new Date(createdAt)
-  const fourteenDaysAgo = subDays(new Date(), 14)
-  return isAfter(createdDate, fourteenDaysAgo)
+  const daysAgo = subDays(new Date(), newTagDays)
+  return isAfter(createdDate, daysAgo)
 }
 
 export function getStatusColor(status: ClientStatus, clientType: ClientType | null) {
