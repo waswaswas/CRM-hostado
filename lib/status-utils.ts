@@ -14,12 +14,23 @@ export const STATUS_DESCRIPTIONS: Record<ClientStatus, string> = {
   inactive: 'Inactive customer',
 }
 
-export function getStatusesForType(clientType: ClientType | null): ClientStatus[] {
+export function getStatusesForType(clientType: ClientType | null, customStatuses?: Array<{ key: string; label: string; order: number }>): ClientStatus[] {
   if (clientType === 'customer') {
     return ['active', 'inactive']
   }
   // Presales or null (default to presales) - "new" is now a separate tag, not a status
-  return ['contacted', 'attention_needed', 'follow_up_required', 'waits_for_offer', 'on_hold', 'abandoned']
+  const defaultStatuses: ClientStatus[] = ['contacted', 'attention_needed', 'follow_up_required', 'waits_for_offer', 'on_hold', 'abandoned']
+  
+  // Merge custom statuses if provided
+  if (customStatuses && customStatuses.length > 0) {
+    // Sort custom statuses by order
+    const sortedCustom = [...customStatuses].sort((a, b) => a.order - b.order)
+    // Add custom status keys to the list
+    const customKeys = sortedCustom.map(s => s.key as ClientStatus)
+    return [...defaultStatuses, ...customKeys]
+  }
+  
+  return defaultStatuses
 }
 
 export function isClientNew(createdAt: string): boolean {
@@ -59,7 +70,16 @@ export function getStatusColor(status: ClientStatus, clientType: ClientType | nu
   }
 }
 
-export function formatStatus(status: ClientStatus): string {
+export function formatStatus(status: ClientStatus, customStatuses?: Array<{ key: string; label: string }>): string {
+  // Check if it's a custom status
+  if (customStatuses) {
+    const customStatus = customStatuses.find(s => s.key === status)
+    if (customStatus) {
+      return customStatus.label
+    }
+  }
+  
+  // Default formatting for built-in statuses
   return status
     .split('_')
     .map(word => word.charAt(0).toUpperCase() + word.slice(1))

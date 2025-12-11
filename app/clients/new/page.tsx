@@ -12,6 +12,8 @@ import { createClientRecord } from '@/app/actions/clients'
 import { useToast } from '@/components/ui/toaster'
 import { ClientStatus } from '@/types/database'
 import { getStatusesForType, formatStatus, STATUS_DESCRIPTIONS } from '@/lib/status-utils'
+import { getSettings } from '@/app/actions/settings'
+import type { StatusConfig } from '@/types/settings'
 import { ArrowLeft, User, Building2 } from 'lucide-react'
 
 type ClientType = 'presales' | 'customer' | null
@@ -21,6 +23,7 @@ export default function NewClientPage() {
   const { toast } = useToast()
   const [clientType, setClientType] = useState<ClientType>(null)
   const [loading, setLoading] = useState(false)
+  const [customStatuses, setCustomStatuses] = useState<StatusConfig[]>([])
   const [formData, setFormData] = useState({
     name: '',
     company: '',
@@ -31,15 +34,28 @@ export default function NewClientPage() {
     notes_summary: '',
   })
 
+  // Load custom statuses on mount
+  useEffect(() => {
+    async function loadCustomStatuses() {
+      try {
+        const settings = await getSettings()
+        setCustomStatuses(settings.custom_statuses || [])
+      } catch (error) {
+        console.warn('Failed to load custom statuses:', error)
+      }
+    }
+    loadCustomStatuses()
+  }, [])
+
   // Update status when client type changes
   useEffect(() => {
     if (clientType) {
-      const statuses = getStatusesForType(clientType)
+      const statuses = getStatusesForType(clientType, customStatuses)
       if (!statuses.includes(formData.status)) {
         setFormData((prev) => ({ ...prev, status: statuses[0] }))
       }
     }
-  }, [clientType])
+  }, [clientType, customStatuses])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -284,15 +300,15 @@ export default function NewClientPage() {
                     }
                     disabled={loading}
                   >
-                    {getStatusesForType(clientType).map((status) => (
-                      <option key={status} value={status} title={STATUS_DESCRIPTIONS[status]}>
-                        {formatStatus(status)}
+                    {getStatusesForType(clientType, customStatuses).map((status) => (
+                      <option key={status} value={status} title={STATUS_DESCRIPTIONS[status as keyof typeof STATUS_DESCRIPTIONS] || ''}>
+                        {formatStatus(status, customStatuses)}
                       </option>
                     ))}
                   </Select>
                   {formData.status && (
                     <p className="text-xs text-muted-foreground mt-1">
-                      {STATUS_DESCRIPTIONS[formData.status]}
+                      {STATUS_DESCRIPTIONS[formData.status as keyof typeof STATUS_DESCRIPTIONS] || 'Custom status'}
                     </p>
                   )}
                 </div>

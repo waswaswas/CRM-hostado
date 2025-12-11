@@ -22,7 +22,11 @@ export async function getSettings() {
 
   if (error) {
     // If settings don't exist, return defaults
-    if (error.code === 'PGRST116') {
+    if (error.code === 'PGRST116' || error.message.includes('Could not find the table') || error.message.includes('relation') || error.message.includes('does not exist')) {
+      // Table doesn't exist or no settings found - return defaults
+      if (error.message.includes('Could not find the table') || error.message.includes('relation') || error.message.includes('does not exist')) {
+        console.warn('settings table does not exist. Please run the migration: supabase/SETUP_SETTINGS_TABLES.sql')
+      }
       return {
         new_tag_days: 14,
         custom_statuses: [],
@@ -48,11 +52,16 @@ export async function updateSettings(settings: Partial<Settings>) {
   }
 
   // Check if settings exist
-  const { data: existing } = await supabase
+  const { data: existing, error: checkError } = await supabase
     .from('settings')
     .select('id')
     .eq('owner_id', user.id)
     .single()
+
+  // If table doesn't exist, throw a helpful error
+  if (checkError && (checkError.message.includes('Could not find the table') || checkError.message.includes('relation') || checkError.message.includes('does not exist'))) {
+    throw new Error('Settings table does not exist. Please run the migration: supabase/SETUP_SETTINGS_TABLES.sql in your Supabase SQL Editor.')
+  }
 
   const updateData: any = {
     updated_at: new Date().toISOString(),
@@ -66,7 +75,7 @@ export async function updateSettings(settings: Partial<Settings>) {
     updateData.custom_statuses = settings.custom_statuses
   }
 
-  if (existing) {
+  if (existing && !checkError) {
     // Update existing
     const { error } = await supabase
       .from('settings')
@@ -128,6 +137,8 @@ export async function getStatusChangeHistory(clientId?: string, limit: number = 
 
   if (error) {
     if (error.message.includes('Could not find the table') || error.message.includes('relation') || error.message.includes('does not exist')) {
+      // Table doesn't exist yet - return empty array instead of error
+      console.warn('status_change_history table does not exist. Please run the migration: supabase/SETUP_SETTINGS_TABLES.sql')
       return []
     }
     throw new Error(error.message)

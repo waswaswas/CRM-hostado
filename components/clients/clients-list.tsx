@@ -13,6 +13,8 @@ import { format, subDays, isAfter, startOfDay, endOfDay } from 'date-fns'
 import { getStatusesForType, getStatusColor, formatStatus, STATUS_DESCRIPTIONS, isClientNew } from '@/lib/status-utils'
 import { deleteClient, updateClient } from '@/app/actions/clients'
 import { useToast } from '@/components/ui/toaster'
+import { getSettings } from '@/app/actions/settings'
+import type { StatusConfig } from '@/types/settings'
 
 interface ClientsListProps {
   initialClients: Client[]
@@ -29,6 +31,21 @@ export function ClientsList({ initialClients }: ClientsListProps) {
   const [dateFilter, setDateFilter] = useState<{ from: string; to: string }>({ from: '', to: '' })
   const [showNewToggle, setShowNewToggle] = useState(false)
   const [editingClient, setEditingClient] = useState<{ id: string; field: 'status' | 'type' } | null>(null)
+  const [customStatuses, setCustomStatuses] = useState<StatusConfig[]>([])
+
+  // Load custom statuses on mount
+  useEffect(() => {
+    async function loadCustomStatuses() {
+      try {
+        const settings = await getSettings()
+        setCustomStatuses(settings.custom_statuses || [])
+      } catch (error) {
+        // Silently fail - custom statuses are optional
+        console.warn('Failed to load custom statuses:', error)
+      }
+    }
+    loadCustomStatuses()
+  }, [])
 
   useEffect(() => {
     let filtered = clients
@@ -120,18 +137,23 @@ export function ClientsList({ initialClients }: ClientsListProps) {
         description: 'Status updated',
       })
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to update status'
       toast({
         title: 'Error',
-        description: 'Failed to update status',
+        description: errorMessage,
         variant: 'destructive',
       })
+      // If it's a constraint violation, provide helpful message
+      if (errorMessage.includes('check constraint') || errorMessage.includes('violates check constraint')) {
+        console.error('Database constraint error. Please run: supabase/ALLOW_CUSTOM_STATUSES.sql')
+      }
     }
   }
 
   async function handleTypeChange(clientId: string, newType: ClientType, currentStatus: ClientStatus) {
     try {
       // When changing type, also update status to first valid status for new type
-      const validStatuses = getStatusesForType(newType)
+      const validStatuses = getStatusesForType(newType, customStatuses)
       const newStatus = validStatuses.includes(currentStatus) ? currentStatus : validStatuses[0]
       
       const updated = await updateClient(clientId, { 
@@ -196,9 +218,9 @@ export function ClientsList({ initialClients }: ClientsListProps) {
               onChange={(e) => setStatusFilter(e.target.value as ClientStatus | 'all')}
             >
               <option value="all">All Statuses</option>
-              {getStatusesForType(typeFilter === 'all' ? null : typeFilter).map((status) => (
-                <option key={status} value={status} title={STATUS_DESCRIPTIONS[status]}>
-                  {formatStatus(status)}
+              {getStatusesForType(typeFilter === 'all' ? null : typeFilter, customStatuses).map((status) => (
+                <option key={status} value={status} title={STATUS_DESCRIPTIONS[status as keyof typeof STATUS_DESCRIPTIONS] || ''}>
+                  {formatStatus(status, customStatuses)}
                 </option>
               ))}
             </Select>
@@ -311,23 +333,23 @@ export function ClientsList({ initialClients }: ClientsListProps) {
                           className="w-40 text-xs"
                           autoFocus
                         >
-                          {getStatusesForType(client.client_type).map((status) => (
+                          {getStatusesForType(client.client_type, customStatuses).map((status) => (
                             <option key={status} value={status}>
-                              {formatStatus(status)}
+                              {formatStatus(status, customStatuses)}
                             </option>
                           ))}
                         </Select>
                       ) : (
                         <Badge 
                           className={`${getStatusColor(client.status, client.client_type)} cursor-pointer hover:opacity-80`}
-                          title={STATUS_DESCRIPTIONS[client.status]}
+                          title={STATUS_DESCRIPTIONS[client.status as keyof typeof STATUS_DESCRIPTIONS] || ''}
                           onClick={(e) => {
                             e.preventDefault()
                             e.stopPropagation()
                             setEditingClient({ id: client.id, field: 'status' })
                           }}
                         >
-                          {formatStatus(client.status)}
+                          {formatStatus(client.status, customStatuses)}
                         </Badge>
                       )}
                     </div>

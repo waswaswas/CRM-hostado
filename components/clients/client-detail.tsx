@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react'
 import { Client, Interaction, Reminder, ClientNote, ClientStatus } from '@/types/database'
 import { getStatusesForType, getStatusColor, formatStatus, STATUS_DESCRIPTIONS } from '@/lib/status-utils'
+import { getSettings } from '@/app/actions/settings'
+import type { StatusConfig } from '@/types/settings'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -63,6 +65,20 @@ export function ClientDetail({ client: initialClient }: ClientDetailProps) {
     source: '',
     notes_summary: '',
   })
+  const [customStatuses, setCustomStatuses] = useState<StatusConfig[]>([])
+
+  // Load custom statuses on mount
+  useEffect(() => {
+    async function loadCustomStatuses() {
+      try {
+        const settings = await getSettings()
+        setCustomStatuses(settings.custom_statuses || [])
+      } catch (error) {
+        console.warn('Failed to load custom statuses:', error)
+      }
+    }
+    loadCustomStatuses()
+  }, [])
 
   useEffect(() => {
     loadData()
@@ -99,11 +115,16 @@ export function ClientDetail({ client: initialClient }: ClientDetailProps) {
         description: 'Status updated',
       })
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to update status'
       toast({
         title: 'Error',
-        description: 'Failed to update status',
+        description: errorMessage,
         variant: 'destructive',
       })
+      // If it's a constraint violation, provide helpful message
+      if (errorMessage.includes('check constraint') || errorMessage.includes('violates check constraint')) {
+        console.error('Database constraint error. Please run: supabase/ALLOW_CUSTOM_STATUSES.sql')
+      }
     }
     setEditingStatus(false)
   }
@@ -210,14 +231,14 @@ export function ClientDetail({ client: initialClient }: ClientDetailProps) {
                 onChange={(e) => handleStatusChange(e.target.value as ClientStatus)}
                 className="w-56"
               >
-                {getStatusesForType(client.client_type).map((status) => (
-                  <option key={status} value={status} title={STATUS_DESCRIPTIONS[status]}>
-                    {formatStatus(status)}
+                {getStatusesForType(client.client_type, customStatuses).map((status) => (
+                  <option key={status} value={status} title={STATUS_DESCRIPTIONS[status as keyof typeof STATUS_DESCRIPTIONS] || ''}>
+                    {formatStatus(status, customStatuses)}
                   </option>
                 ))}
               </Select>
               <p className="text-xs text-muted-foreground">
-                {STATUS_DESCRIPTIONS[client.status]}
+                {STATUS_DESCRIPTIONS[client.status as keyof typeof STATUS_DESCRIPTIONS] || 'Custom status'}
               </p>
             </div>
           ) : (
@@ -225,13 +246,13 @@ export function ClientDetail({ client: initialClient }: ClientDetailProps) {
               <div className="group relative">
                 <Badge 
                   className={getStatusColor(client.status, client.client_type)}
-                  title={STATUS_DESCRIPTIONS[client.status]}
+                  title={STATUS_DESCRIPTIONS[client.status as keyof typeof STATUS_DESCRIPTIONS] || 'Custom status'}
                 >
-                  {formatStatus(client.status)}
+                  {formatStatus(client.status, customStatuses)}
                 </Badge>
                 <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block z-10">
                   <div className="bg-popover text-popover-foreground text-xs rounded-md px-2 py-1 shadow-md border whitespace-nowrap">
-                    {STATUS_DESCRIPTIONS[client.status]}
+                    {STATUS_DESCRIPTIONS[client.status as keyof typeof STATUS_DESCRIPTIONS] || 'Custom status'}
                   </div>
                 </div>
               </div>

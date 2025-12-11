@@ -41,11 +41,16 @@ export default function SettingsPage() {
       setNewTagDays(settings.new_tag_days)
       setCustomStatuses(settings.custom_statuses || [])
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to load settings'
       toast({
         title: 'Error',
-        description: error instanceof Error ? error.message : 'Failed to load settings',
+        description: errorMessage,
         variant: 'destructive',
       })
+      // If it's a table missing error, show a more helpful message
+      if (errorMessage.includes('Could not find the table') || errorMessage.includes('does not exist')) {
+        console.error('Database tables missing. Please run: supabase/SETUP_SETTINGS_TABLES.sql')
+      }
     } finally {
       setLoading(false)
     }
@@ -56,7 +61,16 @@ export default function SettingsPage() {
       const history = await getStatusChangeHistory(undefined, 100)
       setStatusHistory(history)
     } catch (error) {
-      console.error('Failed to load status history:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Failed to load status history'
+      console.error('Failed to load status history:', errorMessage)
+      // Don't show toast for missing table - it's expected if migration hasn't been run
+      if (!errorMessage.includes('Could not find the table') && !errorMessage.includes('does not exist')) {
+        toast({
+          title: 'Error',
+          description: errorMessage,
+          variant: 'destructive',
+        })
+      }
     }
   }
 
