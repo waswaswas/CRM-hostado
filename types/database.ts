@@ -58,5 +58,50 @@ export interface ClientWithRelations extends Client {
   notes?: ClientNote[]
 }
 
+// Offers
+export type OfferStatus = 'draft' | 'sent' | 'accepted' | 'rejected' | 'expired' | 'paid' | 'pending_payment'
+export type PaymentStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'refunded'
+export type PaymentProvider = 'stripe' | 'epay' | 'paypal' | 'manual'
+
+export interface Offer {
+  id: string
+  created_at: string
+  updated_at: string
+  owner_id: string
+  client_id: string
+  title: string
+  description: string | null
+  amount: number
+  currency: string
+  status: OfferStatus
+  valid_until: string | null
+  notes: string | null
+  document_url: string | null
+  payment_enabled: boolean
+  payment_link: string | null
+  payment_token: string | null
+  payment_provider: PaymentProvider | null
+  payment_status: PaymentStatus | null
+  payment_id: string | null
+  paid_at: string | null
+  payment_method: string | null
+}
+
+export interface Payment {
+  id: string
+  created_at: string
+  offer_id: string
+  amount: number
+  currency: string
+  status: PaymentStatus
+  payment_provider: PaymentProvider
+  payment_id: string | null
+  payment_method: string | null
+  client_email: string | null
+  client_name: string | null
+  metadata: Record<string, any> | null
+  paid_at: string | null
+}
+
 
 

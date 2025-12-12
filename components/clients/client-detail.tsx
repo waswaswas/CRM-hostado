@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Client, Interaction, Reminder, ClientNote, ClientStatus } from '@/types/database'
+import { Client, Interaction, Reminder, ClientNote, ClientStatus, Offer } from '@/types/database'
 import { getStatusesForType, getStatusColor, formatStatus, STATUS_DESCRIPTIONS } from '@/lib/status-utils'
 import { getSettings } from '@/app/actions/settings'
 import type { StatusConfig } from '@/types/settings'
@@ -25,9 +25,11 @@ import {
   deleteReminder,
 } from '@/app/actions/reminders'
 import { getNotesForClient, createNote, toggleNotePin, deleteNote } from '@/app/actions/notes'
+import { getOffersForClient } from '@/app/actions/offers'
 import { updateClient } from '@/app/actions/clients'
 import { useToast } from '@/components/ui/toaster'
 import { format } from 'date-fns'
+import Link from 'next/link'
 import {
   Phone,
   Mail,
@@ -51,6 +53,7 @@ export function ClientDetail({ client: initialClient }: ClientDetailProps) {
   const [interactions, setInteractions] = useState<Interaction[]>([])
   const [reminders, setReminders] = useState<Reminder[]>([])
   const [notes, setNotes] = useState<ClientNote[]>([])
+  const [offers, setOffers] = useState<Offer[]>([])
   const [loading, setLoading] = useState(true)
   const [showInteractionDialog, setShowInteractionDialog] = useState(false)
   const [showReminderDialog, setShowReminderDialog] = useState(false)
@@ -87,18 +90,45 @@ export function ClientDetail({ client: initialClient }: ClientDetailProps) {
   async function loadData() {
     setLoading(true)
     try {
-      const [interactionsData, remindersData, notesData] = await Promise.all([
+      const [interactionsData, remindersData, notesData, offersData] = await Promise.allSettled([
         getInteractionsForClient(client.id),
         getRemindersForClient(client.id),
         getNotesForClient(client.id),
+        getOffersForClient(client.id),
       ])
-      setInteractions(interactionsData)
-      setReminders(remindersData)
-      setNotes(notesData)
+      
+      if (interactionsData.status === 'fulfilled') {
+        setInteractions(interactionsData.value)
+      } else {
+        console.error('Failed to load interactions:', interactionsData.reason)
+        setInteractions([])
+      }
+      
+      if (remindersData.status === 'fulfilled') {
+        setReminders(remindersData.value)
+      } else {
+        console.error('Failed to load reminders:', remindersData.reason)
+        setReminders([])
+      }
+      
+      if (notesData.status === 'fulfilled') {
+        setNotes(notesData.value)
+      } else {
+        console.error('Failed to load notes:', notesData.reason)
+        setNotes([])
+      }
+      
+      if (offersData.status === 'fulfilled') {
+        setOffers(offersData.value)
+      } else {
+        console.error('Failed to load offers:', offersData.reason)
+        setOffers([])
+      }
     } catch (error) {
+      console.error('Unexpected error loading client data:', error)
       toast({
         title: 'Error',
-        description: 'Failed to load client data',
+        description: 'Failed to load some client data. Please check the browser console.',
         variant: 'destructive',
       })
     } finally {
@@ -375,6 +405,7 @@ export function ClientDetail({ client: initialClient }: ClientDetailProps) {
             <TabsList>
               <TabsTrigger value="notes">Notes</TabsTrigger>
               <TabsTrigger value="reminders">Reminders</TabsTrigger>
+              <TabsTrigger value="offers">Offers</TabsTrigger>
               <TabsTrigger value="timeline">Timeline</TabsTrigger>
             </TabsList>
 
@@ -654,6 +685,66 @@ export function ClientDetail({ client: initialClient }: ClientDetailProps) {
                 <Card>
                   <CardContent className="p-8 text-center">
                     <p className="text-muted-foreground">No interactions yet.</p>
+                  </CardContent>
+                </Card>
+              )}
+            </TabsContent>
+
+            <TabsContent value="offers" className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold">Offers</h3>
+                <Link href={`/offers/new?client_id=${client.id}`}>
+                  <Button size="sm">
+                    <Plus className="mr-2 h-4 w-4" />
+                    New Offer
+                  </Button>
+                </Link>
+              </div>
+              {loading && offers.length === 0 ? (
+                <Card>
+                  <CardContent className="p-8 text-center">
+                    <p className="text-muted-foreground">Loading...</p>
+                  </CardContent>
+                </Card>
+              ) : offers.length > 0 ? (
+                <div className="space-y-2">
+                  {offers.map((offer) => (
+                    <Card key={offer.id}>
+                      <CardContent className="p-4">
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1">
+                            <Link href={`/offers/${offer.id}`} className="font-semibold hover:underline">
+                              {offer.title}
+                            </Link>
+                            <p className="text-sm text-muted-foreground mt-1">
+                              {offer.amount} {offer.currency} • {offer.status}
+                            </p>
+                            {offer.description && (
+                              <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
+                                {offer.description}
+                              </p>
+                            )}
+                          </div>
+                          <Link href={`/offers/${offer.id}`}>
+                            <Button variant="ghost" size="sm">
+                              View
+                            </Button>
+                          </Link>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              ) : (
+                <Card>
+                  <CardContent className="p-8 text-center">
+                    <p className="text-muted-foreground mb-2">No offers found</p>
+                    <Link href={`/offers/new?client_id=${client.id}`}>
+                      <Button className="mt-4">
+                        <Plus className="mr-2 h-4 w-4" />
+                        Create Offer
+                      </Button>
+                    </Link>
                   </CardContent>
                 </Card>
               )}
