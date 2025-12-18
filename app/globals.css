@@ -58,5 +58,43 @@
   }
 }
 
+/* Email signature preview styles */
+.email-signature-preview {
+  font-family: Arial, sans-serif;
+  font-size: 10pt;
+}
+
+.email-signature-preview table {
+  background: transparent !important;
+}
+
+.email-signature-preview img {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Email body preview styles - ensures HTML renders visually */
+.email-body-preview {
+  font-family: Arial, sans-serif;
+}
+
+.email-body-preview table {
+  background: transparent !important;
+}
+
+.email-body-preview img {
+  max-width: 100%;
+  height: auto;
+}
+
+.email-body-preview a {
+  color: #1297f0;
+  text-decoration: none;
+}
+
+.email-body-preview a:hover {
+  text-decoration: underline;
+}
+
 
 

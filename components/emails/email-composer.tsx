@@ -8,9 +8,10 @@ import { Textarea } from '@/components/ui/textarea'
 import { Select } from '@/components/ui/select'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { createEmail, sendEmailNow, scheduleEmail } from '@/app/actions/emails'
 import { getClients as getClientsList } from '@/app/actions/clients'
-import { getSignatures } from '@/app/actions/email-signatures'
+import { getSignatures, createDefaultHostadoSignature } from '@/app/actions/email-signatures'
 import { getTemplates } from '@/app/actions/email-templates'
 import { renderTemplate } from '@/lib/email-template-utils'
 import { useToast } from '@/components/ui/toaster'
@@ -40,6 +41,8 @@ export function EmailComposer({ clientId, initialSubject, initialBody, templateI
   const [showSchedule, setShowSchedule] = useState(false)
   const [scheduledDate, setScheduledDate] = useState('')
   const [scheduledTime, setScheduledTime] = useState('')
+  const [previewHtml, setPreviewHtml] = useState<string>('')
+  const [activeTab, setActiveTab] = useState<string>('edit')
   const [formData, setFormData] = useState({
     subject: initialSubject || '',
     body_html: initialBody || '',
@@ -65,12 +68,39 @@ export function EmailComposer({ clientId, initialSubject, initialBody, templateI
         const defaultSignature = signaturesData.find((s) => s.is_default)
         if (defaultSignature) {
           setSelectedSignature(defaultSignature.id)
+        } else if (signaturesData.length > 0) {
+          // If no default but signatures exist, select first one
+          setSelectedSignature(signaturesData[0].id)
+        } else {
+          // If no signatures, try to create default
+          try {
+            const { createDefaultHostadoSignature } = await import('@/app/actions/email-signatures')
+            const defaultSig = await createDefaultHostadoSignature()
+            setSignatures([defaultSig])
+            setSelectedSignature(defaultSig.id)
+            toast({
+              title: 'Success',
+              description: 'Krasimir signature created and selected',
+            })
+          } catch (createError) {
+            console.error('Failed to auto-create signature:', createError)
+            // Don't show error toast - user can create manually
+          }
         }
       } catch (error) {
         console.error('Failed to load data:', error)
+        const errorMessage = error instanceof Error ? error.message : 'Failed to load email data'
+        toast({
+          title: 'Error',
+          description: errorMessage.includes('relation') || errorMessage.includes('does not exist')
+            ? 'Email tables not set up. Please run supabase/SETUP_EMAILS.sql'
+            : errorMessage,
+          variant: 'destructive',
+        })
       }
     }
     loadData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
@@ -125,6 +155,58 @@ export function EmailComposer({ clientId, initialSubject, initialBody, templateI
       setFormData((prev) => ({ ...prev, body_html: initialBody }))
     }
   }, [initialSubject, initialBody])
+
+  // Automatically add signature to body_html when signature is selected
+  useEffect(() => {
+    if (!selectedSignature || signatures.length === 0) return
+
+    const signature = signatures.find((s) => s.id === selectedSignature)
+    if (!signature || !signature.html_content) return
+
+    // Check if this signature is already in body_html
+    const currentBody = formData.body_html
+    const signatureInBody = currentBody.includes(signature.html_content)
+    
+    if (!signatureInBody) {
+      // Add signature to body_html
+      const bodyText = currentBody.trim()
+      const signatureHtml = signature.html_content
+      
+      // Only add if body doesn't already contain this signature
+      if (bodyText) {
+        setFormData((prev) => ({ 
+          ...prev, 
+          body_html: `${bodyText}<br><br>${signatureHtml}` 
+        }))
+      } else {
+        // If body is empty, just set the signature
+        setFormData((prev) => ({ 
+          ...prev, 
+          body_html: signatureHtml 
+        }))
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedSignature, signatures]) // Only run when signature selection or signatures list changes
+
+  // Update preview when body or signature changes
+  useEffect(() => {
+    let bodyWithSignature = formData.body_html || ''
+    
+    if (selectedSignature) {
+      const signature = signatures.find((s) => s.id === selectedSignature)
+      if (signature && signature.html_content) {
+        // Ensure signature is in preview even if not in body_html yet
+        if (!bodyWithSignature.includes(signature.html_content)) {
+          bodyWithSignature = bodyWithSignature 
+            ? `${bodyWithSignature}<br><br>${signature.html_content}`
+            : signature.html_content
+        }
+      }
+    }
+    
+    setPreviewHtml(bodyWithSignature)
+  }, [formData.body_html, selectedSignature, signatures])
 
   async function handleSend() {
     if (!selectedClient) {
@@ -355,34 +437,125 @@ export function EmailComposer({ clientId, initialSubject, initialBody, templateI
             </div>
 
             <div>
-              <label className="text-sm font-medium">Signature</label>
-              <Select
-                value={selectedSignature}
-                onChange={(e) => setSelectedSignature(e.target.value)}
-                className="mt-1"
-              >
-                <option value="">No signature</option>
-                {signatures.map((signature) => (
-                  <option key={signature.id} value={signature.id}>
-                    {signature.name} {signature.is_default && '(Default)'}
-                  </option>
-                ))}
-              </Select>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-sm font-medium">Signature</label>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={async () => {
+                    try {
+                      const signaturesData = await getSignatures()
+                      setSignatures(signaturesData)
+                      const defaultSig = signaturesData.find((s) => s.is_default)
+                      if (defaultSig) {
+                        setSelectedSignature(defaultSig.id)
+                      }
+                      toast({
+                        title: 'Success',
+                        description: 'Signatures refreshed',
+                      })
+                    } catch (error) {
+                      toast({
+                        title: 'Error',
+                        description: 'Failed to refresh signatures',
+                        variant: 'destructive',
+                      })
+                    }
+                  }}
+                  className="h-6 text-xs"
+                >
+                  Refresh
+                </Button>
+              </div>
+              <div className="space-y-2">
+                <Select
+                  value={selectedSignature}
+                  onChange={(e) => {
+                    setSelectedSignature(e.target.value)
+                    // The useEffect will handle adding the signature to body_html
+                  }}
+                  className="mt-1"
+                >
+                  <option value="">No signature</option>
+                  {signatures.length === 0 ? (
+                    <option value="" disabled>No signatures available</option>
+                  ) : (
+                    signatures.map((signature) => (
+                      <option key={signature.id} value={signature.id}>
+                        {signature.name} {signature.is_default && '(Default)'}
+                      </option>
+                    ))
+                  )}
+                </Select>
+                {signatures.length === 0 && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={async () => {
+                      try {
+                        await createDefaultHostadoSignature()
+                        const signaturesData = await getSignatures()
+                        setSignatures(signaturesData)
+                        const defaultSig = signaturesData.find((s) => s.is_default)
+                        if (defaultSig) {
+                          setSelectedSignature(defaultSig.id)
+                        }
+                        toast({
+                          title: 'Success',
+                          description: 'Krasimir signature created',
+                        })
+                      } catch (error) {
+                        toast({
+                          title: 'Error',
+                          description: error instanceof Error ? error.message : 'Failed to create signature',
+                          variant: 'destructive',
+                        })
+                      }
+                    }}
+                    className="w-full text-xs"
+                  >
+                    Create Krasimir Signature
+                  </Button>
+                )}
+              </div>
             </div>
           </div>
 
           <div>
-            <label className="text-sm font-medium">Body (HTML)</label>
-            <Textarea
-              value={formData.body_html}
-              onChange={(e) => setFormData({ ...formData, body_html: e.target.value })}
-              placeholder="Email body (HTML supported)"
-              rows={12}
-              className="mt-1 font-mono text-sm"
-            />
-            <p className="text-xs text-muted-foreground mt-1">
-              HTML is supported. Use &lt;br&gt; for line breaks, &lt;strong&gt; for bold, etc.
-            </p>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-sm font-medium">Body (HTML)</label>
+            </div>
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+              <TabsList>
+                <TabsTrigger value="edit">Edit</TabsTrigger>
+                <TabsTrigger value="preview">Preview</TabsTrigger>
+              </TabsList>
+              <TabsContent value="edit">
+                <Textarea
+                  value={formData.body_html}
+                  onChange={(e) => setFormData({ ...formData, body_html: e.target.value })}
+                  placeholder="Email body (HTML supported)"
+                  rows={12}
+                  className="mt-1 font-mono text-sm"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  HTML is supported. Use &lt;br&gt; for line breaks, &lt;strong&gt; for bold, etc.
+                </p>
+              </TabsContent>
+              <TabsContent value="preview">
+                <div
+                  className="mt-1 p-4 border rounded-lg bg-white dark:bg-gray-900 email-body-preview min-h-[300px]"
+                  dangerouslySetInnerHTML={{ __html: previewHtml || '<p class="text-muted-foreground">No content to preview</p>' }}
+                />
+                {selectedSignature && (
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Signature "{signatures.find((s) => s.id === selectedSignature)?.name || 'selected'}" is included in preview
+                  </p>
+                )}
+              </TabsContent>
+            </Tabs>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
