@@ -1,0 +1,33 @@
+import type { Metadata } from 'next'
+import { Inter } from 'next/font/google'
+import './globals.css'
+import { ToasterProvider } from '@/components/ui/toaster'
+import { ThemeProvider } from '@/components/theme-provider'
+
+const inter = Inter({ subsets: ['latin'] })
+
+export const metadata: Metadata = {
+  title: 'Pre-Sales CRM',
+  description: 'Simple, intuitive pre-sales CRM platform',
+}
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  return (
+    <html lang="en" suppressHydrationWarning>
+      <body className={inter.className}>
+        <ThemeProvider defaultTheme="system" storageKey="crm-theme">
+          <ToasterProvider>
+            {children}
+          </ToasterProvider>
+        </ThemeProvider>
+      </body>
+    </html>
+  )
+}
+
+
+
