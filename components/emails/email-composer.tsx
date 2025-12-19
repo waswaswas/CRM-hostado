@@ -280,10 +280,19 @@ export function EmailComposer({ clientId, initialSubject, initialBody, templateI
       return
     }
 
-    if (!scheduledDate || !scheduledTime) {
+    if (!scheduledDate) {
       toast({
         title: 'Error',
-        description: 'Please select date and time',
+        description: 'Please select a date',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    if (!scheduledTime) {
+      toast({
+        title: 'Error',
+        description: 'Please select a time',
         variant: 'destructive',
       })
       return
