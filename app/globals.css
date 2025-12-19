@@ -127,5 +127,14 @@
   padding-left: 1.5em;
 }
 
+/* Ensure proper spacing in email body preview */
+.email-body-preview p {
+  margin: 0 0 1em 0;
+}
+
+.email-body-preview p:last-child {
+  margin-bottom: 0;
+}
+
 
 

@@ -161,33 +161,38 @@ export function EmailComposer({ clientId, initialSubject, initialBody, templateI
   useEffect(() => {
     let bodyWithSignature = formData.body_html || ''
     
-    // Convert newlines to HTML tags for proper formatting in preview
-    if (bodyWithSignature && !bodyWithSignature.trim().startsWith('<')) {
-      // Only convert if it's plain text (doesn't start with HTML tag)
-      // Handle double newlines (paragraph breaks) first
-      bodyWithSignature = bodyWithSignature
-        .split(/\n\n+/) // Split by double or more newlines
+    // Check if body contains HTML tags (from rich text editor)
+    const hasHtmlTags = bodyWithSignature && /<[a-z][\s\S]*>/i.test(bodyWithSignature)
+    
+    if (bodyWithSignature && !hasHtmlTags) {
+      // Only convert if it's plain text (doesn't contain HTML tags)
+      // Split by double newlines to create paragraphs
+      const paragraphs = bodyWithSignature.split(/\n\n+/)
         .map(para => para.trim())
         .filter(para => para.length > 0)
-        .map(para => {
-          // Convert single newlines within paragraph to <br>
-          const withBreaks = para.replace(/\n/g, '<br>')
-          return `<p style="margin: 0 0 1em 0;">${withBreaks}</p>`
-        })
-        .join('')
       
-      // If no paragraphs were created, wrap the whole thing
-      if (!bodyWithSignature.trim().startsWith('<p')) {
+      if (paragraphs.length > 0) {
+        bodyWithSignature = paragraphs
+          .map(para => {
+            // Convert single newlines within paragraph to <br>
+            const withBreaks = para.replace(/\n/g, '<br>')
+            return `<p style="margin: 0 0 1em 0;">${withBreaks}</p>`
+          })
+          .join('')
+      } else {
+        // If no paragraphs, convert all newlines to <br>
         const withBreaks = bodyWithSignature.replace(/\n/g, '<br>')
-        bodyWithSignature = `<p style="margin: 0;">${withBreaks}</p>`
+        bodyWithSignature = `<p style="margin: 0 0 1em 0;">${withBreaks}</p>`
       }
     }
     
+    // Add signature with proper spacing
     if (selectedSignature) {
       const signature = signatures.find((s) => s.id === selectedSignature)
       if (signature && signature.html_content) {
-        // Ensure signature is in preview even if not in body_html yet
+        // Only add if not already in body
         if (!bodyWithSignature.includes(signature.html_content)) {
+          // Add single <br> before signature for spacing
           bodyWithSignature = bodyWithSignature 
             ? `${bodyWithSignature}<br>${signature.html_content}`
             : signature.html_content
@@ -219,14 +224,32 @@ export function EmailComposer({ clientId, initialSubject, initialBody, templateI
 
     setLoading(true)
     try {
-      // Convert newlines to <br> tags for proper formatting
-      let formattedBody = formData.body_html
-        .replace(/\n\n/g, '</p><p>') // Double newlines become paragraphs
-        .replace(/\n/g, '<br>') // Single newlines become line breaks
+      // Format body - preserve existing HTML from rich text editor
+      let formattedBody = formData.body_html || ''
       
-      // Wrap in <p> tags if not already wrapped
-      if (!formattedBody.trim().startsWith('<')) {
-        formattedBody = `<p>${formattedBody}</p>`
+      // Check if body contains HTML tags (from rich text editor)
+      const hasHtmlTags = formattedBody && /<[a-z][\s\S]*>/i.test(formattedBody)
+      
+      // Only convert if it's plain text (doesn't contain HTML tags)
+      if (!hasHtmlTags && formattedBody.trim()) {
+        // Split by double newlines to create paragraphs
+        const paragraphs = formattedBody.split(/\n\n+/)
+          .map(para => para.trim())
+          .filter(para => para.length > 0)
+        
+        if (paragraphs.length > 0) {
+          formattedBody = paragraphs
+            .map(para => {
+              // Convert single newlines within paragraph to <br>
+              const withBreaks = para.replace(/\n/g, '<br>')
+              return `<p style="margin: 0 0 1em 0;">${withBreaks}</p>`
+            })
+            .join('')
+        } else {
+          // If no paragraphs, convert all newlines to <br>
+          const withBreaks = formattedBody.replace(/\n/g, '<br>')
+          formattedBody = `<p style="margin: 0 0 1em 0;">${withBreaks}</p>`
+        }
       }
 
       const email = await createEmail({
@@ -302,27 +325,31 @@ export function EmailComposer({ clientId, initialSubject, initialBody, templateI
     try {
       const scheduledAt = new Date(`${scheduledDate}T${scheduledTime}`).toISOString()
 
-      // Format body - preserve existing HTML or convert plain text
-      let formattedBody = formData.body_html
+      // Format body - preserve existing HTML from rich text editor
+      let formattedBody = formData.body_html || ''
       
-      // If it's plain text (doesn't start with HTML tag), convert newlines
-      if (!formattedBody.trim().startsWith('<')) {
-        // Handle double newlines (paragraph breaks) first
-        formattedBody = formattedBody
-          .split(/\n\n+/) // Split by double or more newlines
+      // Check if body contains HTML tags (from rich text editor)
+      const hasHtmlTags = formattedBody && /<[a-z][\s\S]*>/i.test(formattedBody)
+      
+      // Only convert if it's plain text (doesn't contain HTML tags)
+      if (!hasHtmlTags && formattedBody.trim()) {
+        // Split by double newlines to create paragraphs
+        const paragraphs = formattedBody.split(/\n\n+/)
           .map(para => para.trim())
           .filter(para => para.length > 0)
-          .map(para => {
-            // Convert single newlines within paragraph to <br>
-            const withBreaks = para.replace(/\n/g, '<br>')
-            return `<p style="margin: 0 0 1em 0;">${withBreaks}</p>`
-          })
-          .join('')
         
-        // If no paragraphs were created, wrap the whole thing
-        if (!formattedBody.trim().startsWith('<p')) {
+        if (paragraphs.length > 0) {
+          formattedBody = paragraphs
+            .map(para => {
+              // Convert single newlines within paragraph to <br>
+              const withBreaks = para.replace(/\n/g, '<br>')
+              return `<p style="margin: 0 0 1em 0;">${withBreaks}</p>`
+            })
+            .join('')
+        } else {
+          // If no paragraphs, convert all newlines to <br>
           const withBreaks = formattedBody.replace(/\n/g, '<br>')
-          formattedBody = `<p style="margin: 0;">${withBreaks}</p>`
+          formattedBody = `<p style="margin: 0 0 1em 0;">${withBreaks}</p>`
         }
       }
 
@@ -369,25 +396,31 @@ export function EmailComposer({ clientId, initialSubject, initialBody, templateI
 
     setLoading(true)
     try {
-      // Format body - preserve existing HTML or convert plain text
+      // Format body - preserve existing HTML from rich text editor
       let formattedBody = formData.body_html || ''
-      if (formattedBody && !formattedBody.trim().startsWith('<')) {
-        // Handle double newlines (paragraph breaks) first
-        formattedBody = formattedBody
-          .split(/\n\n+/) // Split by double or more newlines
+      
+      // Check if body contains HTML tags (from rich text editor)
+      const hasHtmlTags = formattedBody && /<[a-z][\s\S]*>/i.test(formattedBody)
+      
+      // Only convert if it's plain text (doesn't contain HTML tags)
+      if (!hasHtmlTags && formattedBody.trim()) {
+        // Split by double newlines to create paragraphs
+        const paragraphs = formattedBody.split(/\n\n+/)
           .map(para => para.trim())
           .filter(para => para.length > 0)
-          .map(para => {
-            // Convert single newlines within paragraph to <br>
-            const withBreaks = para.replace(/\n/g, '<br>')
-            return `<p style="margin: 0 0 1em 0;">${withBreaks}</p>`
-          })
-          .join('')
         
-        // If no paragraphs were created, wrap the whole thing
-        if (!formattedBody.trim().startsWith('<p')) {
+        if (paragraphs.length > 0) {
+          formattedBody = paragraphs
+            .map(para => {
+              // Convert single newlines within paragraph to <br>
+              const withBreaks = para.replace(/\n/g, '<br>')
+              return `<p style="margin: 0 0 1em 0;">${withBreaks}</p>`
+            })
+            .join('')
+        } else {
+          // If no paragraphs, convert all newlines to <br>
           const withBreaks = formattedBody.replace(/\n/g, '<br>')
-          formattedBody = `<p style="margin: 0;">${withBreaks}</p>`
+          formattedBody = `<p style="margin: 0 0 1em 0;">${withBreaks}</p>`
         }
       }
 

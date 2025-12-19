@@ -30,9 +30,37 @@ export function RichTextEditor({ value, onChange, placeholder }: RichTextEditorP
     }
   }, [value])
 
+  const normalizeHTML = (html: string): string => {
+    if (!html) return ''
+    
+    // Convert <div> tags to <p> tags for better email compatibility
+    html = html.replace(/<div>/gi, '<p>').replace(/<\/div>/gi, '</p>')
+    
+    // Remove empty paragraphs (they will be handled by spacing)
+    html = html.replace(/<p>\s*<\/p>/gi, '')
+    
+    // Normalize <p> tags - if they don't have style, add it
+    html = html.replace(/<p(?![^>]*style)/gi, '<p style="margin: 0 0 1em 0;"')
+    
+    // Clean up multiple consecutive <br> tags - keep only one
+    html = html.replace(/(<br\s*\/?>){2,}/gi, '<br>')
+    
+    // Remove <br> tags that are immediately after closing </p> tags (spacing is handled by margin)
+    html = html.replace(/<\/p>\s*<br\s*\/?>/gi, '</p>')
+    
+    // Remove <br> tags that are immediately before opening <p> tags
+    html = html.replace(/<br\s*\/?>\s*<p>/gi, '<p>')
+    
+    // Clean up any remaining empty tags
+    html = html.replace(/<p[^>]*>\s*<\/p>/gi, '')
+    
+    return html.trim()
+  }
+
   const handleInput = () => {
     if (editorRef.current) {
-      onChange(editorRef.current.innerHTML)
+      const html = normalizeHTML(editorRef.current.innerHTML)
+      onChange(html)
     }
   }
 
@@ -40,7 +68,7 @@ export function RichTextEditor({ value, onChange, placeholder }: RichTextEditorP
     document.execCommand(command, false, value as string)
     if (editorRef.current) {
       editorRef.current.focus()
-      onChange(editorRef.current.innerHTML)
+      handleInput()
     }
   }
 
@@ -136,6 +164,7 @@ export function RichTextEditor({ value, onChange, placeholder }: RichTextEditorP
           e.preventDefault()
           const text = e.clipboardData.getData('text/plain')
           document.execCommand('insertText', false, text)
+          handleInput()
         }}
         className="min-h-[300px] p-4 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 bg-background"
         style={{
