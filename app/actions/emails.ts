@@ -72,7 +72,7 @@ export async function createEmail(input: CreateEmailInput): Promise<Email> {
     }
   }
 
-  // Get signature HTML if exists
+  // Get signature HTML if exists (only add if not already in body_html)
   let bodyHtml = input.body_html
   if (signatureId) {
     const { data: signature } = await supabase
@@ -81,8 +81,11 @@ export async function createEmail(input: CreateEmailInput): Promise<Email> {
       .eq('id', signatureId)
       .single()
 
-    if (signature) {
-      bodyHtml = `${input.body_html}<br><br>${signature.html_content}`
+    if (signature && signature.html_content) {
+      // Only add signature if it's not already in the body_html
+      if (!bodyHtml.includes(signature.html_content)) {
+        bodyHtml = `${bodyHtml}<br><br>${signature.html_content}`
+      }
     }
   }
 
@@ -380,3 +383,5 @@ export async function getEmail(emailId: string): Promise<Email> {
 
   return data as Email
 }
+
+

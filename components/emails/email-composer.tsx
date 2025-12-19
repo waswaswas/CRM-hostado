@@ -9,6 +9,7 @@ import { Select } from '@/components/ui/select'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import { RichTextEditor } from './rich-text-editor'
 import { createEmail, sendEmailNow, scheduleEmail } from '@/app/actions/emails'
 import { getClients as getClientsList } from '@/app/actions/clients'
 import { getSignatures, createDefaultHostadoSignature } from '@/app/actions/email-signatures'
@@ -156,42 +157,31 @@ export function EmailComposer({ clientId, initialSubject, initialBody, templateI
     }
   }, [initialSubject, initialBody])
 
-  // Automatically add signature to body_html when signature is selected
-  useEffect(() => {
-    if (!selectedSignature || signatures.length === 0) return
-
-    const signature = signatures.find((s) => s.id === selectedSignature)
-    if (!signature || !signature.html_content) return
-
-    // Check if this signature is already in body_html
-    const currentBody = formData.body_html
-    const signatureInBody = currentBody.includes(signature.html_content)
-    
-    if (!signatureInBody) {
-      // Add signature to body_html
-      const bodyText = currentBody.trim()
-      const signatureHtml = signature.html_content
-      
-      // Only add if body doesn't already contain this signature
-      if (bodyText) {
-        setFormData((prev) => ({ 
-          ...prev, 
-          body_html: `${bodyText}<br><br>${signatureHtml}` 
-        }))
-      } else {
-        // If body is empty, just set the signature
-        setFormData((prev) => ({ 
-          ...prev, 
-          body_html: signatureHtml 
-        }))
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedSignature, signatures]) // Only run when signature selection or signatures list changes
-
-  // Update preview when body or signature changes
+  // Update preview when body or signature changes (signature is NOT added to body_html in Edit mode)
   useEffect(() => {
     let bodyWithSignature = formData.body_html || ''
+    
+    // Convert newlines to HTML tags for proper formatting in preview
+    if (bodyWithSignature && !bodyWithSignature.trim().startsWith('<')) {
+      // Only convert if it's plain text (doesn't start with HTML tag)
+      // Handle double newlines (paragraph breaks) first
+      bodyWithSignature = bodyWithSignature
+        .split(/\n\n+/) // Split by double or more newlines
+        .map(para => para.trim())
+        .filter(para => para.length > 0)
+        .map(para => {
+          // Convert single newlines within paragraph to <br>
+          const withBreaks = para.replace(/\n/g, '<br>')
+          return `<p style="margin: 0 0 1em 0;">${withBreaks}</p>`
+        })
+        .join('')
+      
+      // If no paragraphs were created, wrap the whole thing
+      if (!bodyWithSignature.trim().startsWith('<p')) {
+        const withBreaks = bodyWithSignature.replace(/\n/g, '<br>')
+        bodyWithSignature = `<p style="margin: 0;">${withBreaks}</p>`
+      }
+    }
     
     if (selectedSignature) {
       const signature = signatures.find((s) => s.id === selectedSignature)
@@ -229,11 +219,21 @@ export function EmailComposer({ clientId, initialSubject, initialBody, templateI
 
     setLoading(true)
     try {
+      // Convert newlines to <br> tags for proper formatting
+      let formattedBody = formData.body_html
+        .replace(/\n\n/g, '</p><p>') // Double newlines become paragraphs
+        .replace(/\n/g, '<br>') // Single newlines become line breaks
+      
+      // Wrap in <p> tags if not already wrapped
+      if (!formattedBody.trim().startsWith('<')) {
+        formattedBody = `<p>${formattedBody}</p>`
+      }
+
       const email = await createEmail({
         client_id: selectedClient,
         subject: formData.subject,
-        body_html: formData.body_html,
-        body_text: formData.body_html.replace(/<[^>]*>/g, ''),
+        body_html: formattedBody,
+        body_text: formattedBody.replace(/<[^>]*>/g, ''),
         to_email: formData.to_email,
         to_name: formData.to_name,
         cc_emails: formData.cc_emails ? formData.cc_emails.split(',').map((e) => e.trim()) : undefined,
@@ -293,11 +293,35 @@ export function EmailComposer({ clientId, initialSubject, initialBody, templateI
     try {
       const scheduledAt = new Date(`${scheduledDate}T${scheduledTime}`).toISOString()
 
+      // Format body - preserve existing HTML or convert plain text
+      let formattedBody = formData.body_html
+      
+      // If it's plain text (doesn't start with HTML tag), convert newlines
+      if (!formattedBody.trim().startsWith('<')) {
+        // Handle double newlines (paragraph breaks) first
+        formattedBody = formattedBody
+          .split(/\n\n+/) // Split by double or more newlines
+          .map(para => para.trim())
+          .filter(para => para.length > 0)
+          .map(para => {
+            // Convert single newlines within paragraph to <br>
+            const withBreaks = para.replace(/\n/g, '<br>')
+            return `<p style="margin: 0 0 1em 0;">${withBreaks}</p>`
+          })
+          .join('')
+        
+        // If no paragraphs were created, wrap the whole thing
+        if (!formattedBody.trim().startsWith('<p')) {
+          const withBreaks = formattedBody.replace(/\n/g, '<br>')
+          formattedBody = `<p style="margin: 0;">${withBreaks}</p>`
+        }
+      }
+
       const email = await createEmail({
         client_id: selectedClient,
         subject: formData.subject,
-        body_html: formData.body_html,
-        body_text: formData.body_html.replace(/<[^>]*>/g, ''),
+        body_html: formattedBody,
+        body_text: formattedBody.replace(/<[^>]*>/g, ''),
         to_email: formData.to_email,
         to_name: formData.to_name,
         cc_emails: formData.cc_emails ? formData.cc_emails.split(',').map((e) => e.trim()) : undefined,
@@ -336,11 +360,33 @@ export function EmailComposer({ clientId, initialSubject, initialBody, templateI
 
     setLoading(true)
     try {
+      // Format body - preserve existing HTML or convert plain text
+      let formattedBody = formData.body_html || ''
+      if (formattedBody && !formattedBody.trim().startsWith('<')) {
+        // Handle double newlines (paragraph breaks) first
+        formattedBody = formattedBody
+          .split(/\n\n+/) // Split by double or more newlines
+          .map(para => para.trim())
+          .filter(para => para.length > 0)
+          .map(para => {
+            // Convert single newlines within paragraph to <br>
+            const withBreaks = para.replace(/\n/g, '<br>')
+            return `<p style="margin: 0 0 1em 0;">${withBreaks}</p>`
+          })
+          .join('')
+        
+        // If no paragraphs were created, wrap the whole thing
+        if (!formattedBody.trim().startsWith('<p')) {
+          const withBreaks = formattedBody.replace(/\n/g, '<br>')
+          formattedBody = `<p style="margin: 0;">${withBreaks}</p>`
+        }
+      }
+
       await createEmail({
         client_id: selectedClient,
         subject: formData.subject || '(No subject)',
-        body_html: formData.body_html || '',
-        body_text: formData.body_html.replace(/<[^>]*>/g, ''),
+        body_html: formattedBody,
+        body_text: formattedBody.replace(/<[^>]*>/g, ''),
         to_email: formData.to_email,
         to_name: formData.to_name,
         cc_emails: formData.cc_emails ? formData.cc_emails.split(',').map((e) => e.trim()) : undefined,
@@ -533,16 +579,13 @@ export function EmailComposer({ clientId, initialSubject, initialBody, templateI
                 <TabsTrigger value="preview">Preview</TabsTrigger>
               </TabsList>
               <TabsContent value="edit">
-                <Textarea
-                  value={formData.body_html}
-                  onChange={(e) => setFormData({ ...formData, body_html: e.target.value })}
-                  placeholder="Email body (HTML supported)"
-                  rows={12}
-                  className="mt-1 font-mono text-sm"
-                />
-                <p className="text-xs text-muted-foreground mt-1">
-                  HTML is supported. Use &lt;br&gt; for line breaks, &lt;strong&gt; for bold, etc.
-                </p>
+                <div className="mt-1">
+                  <RichTextEditor
+                    value={formData.body_html}
+                    onChange={(html) => setFormData({ ...formData, body_html: html })}
+                    placeholder="Start typing your email..."
+                  />
+                </div>
               </TabsContent>
               <TabsContent value="preview">
                 <div
@@ -647,3 +690,5 @@ export function EmailComposer({ clientId, initialSubject, initialBody, templateI
     </div>
   )
 }
+
+

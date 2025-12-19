@@ -163,3 +163,5 @@ export async function getTemplate(templateId: string): Promise<EmailTemplate> {
 
   return data as EmailTemplate
 }
+
+

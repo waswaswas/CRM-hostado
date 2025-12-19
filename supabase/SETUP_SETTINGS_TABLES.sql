@@ -80,3 +80,5 @@ CREATE INDEX IF NOT EXISTS idx_status_history_change_type ON status_change_histo
 ALTER TABLE settings ADD COLUMN IF NOT EXISTS timezone TEXT;
 
 
+
+

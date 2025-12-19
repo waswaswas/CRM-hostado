@@ -35,20 +35,33 @@ function getEmailConfig(): EmailConfig | null {
   const fromName = process.env.SMTP_FROM_NAME
 
   if (!host || !port || !user || !password || !fromEmail || !fromName) {
+    console.error('SMTP configuration missing:', {
+      hasHost: !!host,
+      hasPort: !!port,
+      hasUser: !!user,
+      hasPassword: !!password,
+      hasFromEmail: !!fromEmail,
+      hasFromName: !!fromName,
+    })
     return null
   }
 
+  const portNum = parseInt(port, 10)
+  // Port 465 uses SSL/TLS (secure: true)
+  // Port 587 uses STARTTLS (secure: false, requireTLS: true)
+  const isSecurePort = portNum === 465
+
   return {
     host,
-    port: parseInt(port, 10),
-    secure: port === '465' || port === '587', // true for 465, false for other ports
+    port: portNum,
+    secure: isSecurePort,
     auth: {
-      user,
-      password,
+      user: user.trim(),
+      password: password.trim(),
     },
     from: {
-      email: fromEmail,
-      name: fromName,
+      email: fromEmail.trim(),
+      name: fromName.trim(),
     },
   }
 }
@@ -63,14 +76,33 @@ function getTransporter(): nodemailer.Transporter | null {
     return null
   }
 
-  transporter = nodemailer.createTransport({
+  // Configure transporter with proper SSL/TLS settings
+  const transporterConfig: any = {
     host: config.host,
     port: config.port,
-    secure: config.secure,
-    auth: config.auth,
-  })
+    secure: config.secure, // true for port 465 (SSL/TLS), false for port 587 (STARTTLS)
+    auth: {
+      user: config.auth.user,
+      pass: config.auth.password, // nodemailer uses 'pass' not 'password'
+    },
+    // Additional TLS options for better compatibility
+    tls: {
+      rejectUnauthorized: false, // Accept self-signed certificates if needed
+    },
+  }
 
-  return transporter
+  // For port 587, require TLS
+  if (config.port === 587) {
+    transporterConfig.requireTLS = true
+  }
+
+  try {
+    transporter = nodemailer.createTransport(transporterConfig)
+    return transporter
+  } catch (error) {
+    console.error('Failed to create transporter:', error)
+    return null
+  }
 }
 
 export async function sendEmail(options: SendEmailOptions): Promise<{
@@ -96,6 +128,9 @@ export async function sendEmail(options: SendEmailOptions): Promise<{
   }
 
   try {
+    // Verify connection before sending
+    await transporter.verify()
+
     const mailOptions = {
       from: `"${config.from.name}" <${config.from.email}>`,
       to: options.toName ? `"${options.toName}" <${options.to}>` : options.to,
@@ -137,3 +172,5 @@ function stripHtml(html: string): string {
     .replace(/&#39;/g, "'")
     .trim()
 }
+
+

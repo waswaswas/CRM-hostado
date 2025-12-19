@@ -96,5 +96,36 @@
   text-decoration: underline;
 }
 
+/* Rich text editor placeholder */
+[contenteditable][data-placeholder]:empty:before {
+  content: attr(data-placeholder);
+  color: hsl(var(--muted-foreground));
+  pointer-events: none;
+  position: absolute;
+}
+
+[contenteditable][data-placeholder]:empty:focus:before {
+  color: hsl(var(--muted-foreground) / 0.7);
+}
+
+/* Rich text editor content styling */
+[contenteditable] {
+  position: relative;
+}
+
+[contenteditable] p {
+  margin: 0 0 1em 0;
+}
+
+[contenteditable] p:last-child {
+  margin-bottom: 0;
+}
+
+[contenteditable] ul,
+[contenteditable] ol {
+  margin: 0.5em 0;
+  padding-left: 1.5em;
+}
+
 
 

@@ -27,3 +27,5 @@ ALTER TABLE clients DROP CONSTRAINT IF EXISTS clients_status_customer_check;
 After running this, you'll be able to use custom statuses like "test" without any errors!
 
 
+
+

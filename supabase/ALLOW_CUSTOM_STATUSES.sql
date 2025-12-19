@@ -13,3 +13,5 @@ ALTER TABLE clients DROP CONSTRAINT IF EXISTS clients_status_customer_check;
 -- based on the client_type and custom_statuses from the settings table
 
 
+
+
