@@ -189,7 +189,7 @@ export function EmailComposer({ clientId, initialSubject, initialBody, templateI
         // Ensure signature is in preview even if not in body_html yet
         if (!bodyWithSignature.includes(signature.html_content)) {
           bodyWithSignature = bodyWithSignature 
-            ? `${bodyWithSignature}<br><br>${signature.html_content}`
+            ? `${bodyWithSignature}<br>${signature.html_content}`
             : signature.html_content
         }
       }

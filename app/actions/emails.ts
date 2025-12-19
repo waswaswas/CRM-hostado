@@ -84,7 +84,8 @@ export async function createEmail(input: CreateEmailInput): Promise<Email> {
     if (signature && signature.html_content) {
       // Only add signature if it's not already in the body_html
       if (!bodyHtml.includes(signature.html_content)) {
-        bodyHtml = `${bodyHtml}<br><br>${signature.html_content}`
+        // Add single <br> to separate body from signature (not double to avoid extra spacing)
+        bodyHtml = `${bodyHtml}<br>${signature.html_content}`
       }
     }
   }
