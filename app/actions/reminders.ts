@@ -177,6 +177,42 @@ export async function markReminderDone(id: string, clientId: string) {
   revalidatePath('/dashboard')
 }
 
+export async function updateReminder(
+  id: string,
+  clientId: string,
+  data: {
+    due_at?: string
+    title?: string
+    description?: string
+  }
+) {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    throw new Error('Not authenticated')
+  }
+
+  const updateData: any = {}
+  if (data.due_at) updateData.due_at = new Date(data.due_at).toISOString()
+  if (data.title) updateData.title = data.title
+  if (data.description !== undefined) updateData.description = data.description
+
+  const { error } = await supabase
+    .from('reminders')
+    .update(updateData)
+    .eq('id', id)
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  revalidatePath(`/clients/${clientId}`)
+  revalidatePath('/dashboard')
+}
+
 export async function deleteReminder(id: string, clientId: string) {
   const supabase = await createClient()
   const {
