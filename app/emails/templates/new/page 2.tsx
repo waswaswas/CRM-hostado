@@ -2,28 +2,25 @@
 
 import { useSearchParams } from 'next/navigation'
 import { AppLayoutClient } from '@/components/layout/app-layout-client'
-import { EmailComposer } from '@/components/emails/email-composer'
+import { TemplateComposer } from '@/components/emails/template-composer'
 
-export default function ComposeEmailPage() {
+export default function NewTemplatePage() {
   const searchParams = useSearchParams()
-  const clientId = searchParams?.get('client_id') || undefined
   const templateId = searchParams?.get('template_id') || undefined
+  const name = searchParams?.get('name') || undefined
   const subject = searchParams?.get('subject') || undefined
   const body = searchParams?.get('body') || undefined
+  const category = searchParams?.get('category') || undefined
 
   return (
     <AppLayoutClient>
-      <EmailComposer
-        clientId={clientId}
+      <TemplateComposer
         templateId={templateId}
+        initialName={name}
         initialSubject={subject}
         initialBody={body}
+        initialCategory={category as any}
       />
     </AppLayoutClient>
   )
 }
-
-
-
-
-

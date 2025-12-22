@@ -23,3 +23,6 @@ export default async function OfferDetailPage({ params }: { params: { id: string
 
 
 
+
+
+

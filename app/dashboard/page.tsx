@@ -8,8 +8,8 @@ import { getDashboardStats } from '@/app/actions/stats'
 import { getSettings } from '@/app/actions/settings'
 import { formatStatus, getStatusColor } from '@/lib/status-utils'
 import Link from 'next/link'
-import { Calendar, Users, Plus, AlertCircle, TrendingUp, Clock, Tag } from 'lucide-react'
-import { format, parseISO } from 'date-fns'
+import { Calendar, Users, Plus, AlertCircle, TrendingUp, Clock, Tag, List } from 'lucide-react'
+import { RemindersCard } from '@/components/dashboard/reminders-card'
 
 function formatDateTime(dateString: string) {
   try {
@@ -116,105 +116,13 @@ export default async function DashboardPage() {
         </div>
 
         <div className="grid gap-6 md:grid-cols-2">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Calendar className="h-5 w-5" />
-                Reminders
-              </CardTitle>
-              <CardDescription>Upcoming and overdue reminders</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {overdueReminders.length > 0 && (
-                <div>
-                  <h3 className="mb-2 text-sm font-semibold text-destructive">
-                    Overdue
-                  </h3>
-                  <div className="space-y-2">
-                    {overdueReminders.map((reminder: any) => (
-                      <Link
-                        key={reminder.id}
-                        href={`/clients/${reminder.client_id}`}
-                        className="block rounded-lg border p-3 transition-colors hover:bg-accent"
-                      >
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <p className="font-medium">{reminder.title}</p>
-                            <p className="text-sm text-muted-foreground">
-                              {getClientName(reminder)}
-                            </p>
-                            <p className="text-xs text-destructive">
-                              {formatDateTime(reminder.due_at)}
-                            </p>
-                          </div>
-                        </div>
-                      </Link>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {todayReminders.length > 0 && (
-                <div>
-                  <h3 className="mb-2 text-sm font-semibold">Today</h3>
-                  <div className="space-y-2">
-                    {todayReminders.map((reminder: any) => (
-                      <Link
-                        key={reminder.id}
-                        href={`/clients/${reminder.client_id}`}
-                        className="block rounded-lg border p-3 transition-colors hover:bg-accent"
-                      >
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <p className="font-medium">{reminder.title}</p>
-                            <p className="text-sm text-muted-foreground">
-                              {getClientName(reminder)}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              {formatDateTime(reminder.due_at)}
-                            </p>
-                          </div>
-                        </div>
-                      </Link>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {upcomingReminders.length > 0 && (
-                <div>
-                  <h3 className="mb-2 text-sm font-semibold">Upcoming</h3>
-                  <div className="space-y-2">
-                    {upcomingReminders.map((reminder: any) => (
-                      <Link
-                        key={reminder.id}
-                        href={`/clients/${reminder.client_id}`}
-                        className="block rounded-lg border p-3 transition-colors hover:bg-accent"
-                      >
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <p className="font-medium">{reminder.title}</p>
-                            <p className="text-sm text-muted-foreground">
-                              {getClientName(reminder)}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              {formatDateTime(reminder.due_at)}
-                            </p>
-                          </div>
-                        </div>
-                      </Link>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {reminders.length === 0 && (
-                <p className="text-sm text-muted-foreground">
-                  No upcoming reminders
-                </p>
-              )}
-            </CardContent>
-          </Card>
+          <RemindersCard 
+            reminders={reminders}
+            overdueReminders={overdueReminders}
+            todayReminders={todayReminders}
+            upcomingReminders={upcomingReminders}
+            clients={clients}
+          />
 
           <Card>
             <CardHeader>
