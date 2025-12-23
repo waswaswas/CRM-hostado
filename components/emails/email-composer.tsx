@@ -26,10 +26,12 @@ interface EmailComposerProps {
   clientId?: string
   initialSubject?: string
   initialBody?: string
+  initialToEmail?: string
+  initialToName?: string
   templateId?: string
 }
 
-export function EmailComposer({ clientId, initialSubject, initialBody, templateId }: EmailComposerProps) {
+export function EmailComposer({ clientId, initialSubject, initialBody, initialToEmail, initialToName, templateId }: EmailComposerProps) {
   const router = useRouter()
   const { toast } = useToast()
   const [loading, setLoading] = useState(false)
@@ -50,8 +52,8 @@ export function EmailComposer({ clientId, initialSubject, initialBody, templateI
   const [formData, setFormData] = useState({
     subject: initialSubject || '',
     body_html: initialBody || '',
-    to_email: '',
-    to_name: '',
+    to_email: initialToEmail || '',
+    to_name: initialToName || '',
     cc_emails: '',
     bcc_emails: '',
   })

@@ -73,6 +73,7 @@ export async function GET(request: NextRequest) {
               provider_message_id: result.messageId,
               provider_response: result.response,
               error_message: null,
+              folder: 'sent',
             })
             .eq('id', email.id)
 

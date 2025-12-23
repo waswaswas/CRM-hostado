@@ -9,8 +9,9 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { useToast } from '@/components/ui/toaster'
 import { format } from 'date-fns'
-import { ArrowLeft, Send, Trash2, Mail } from 'lucide-react'
+import { ArrowLeft, Send, Trash2, Mail, Reply, Forward, MailOpen } from 'lucide-react'
 import Link from 'next/link'
+import { markEmailAsRead } from '@/app/actions/emails'
 
 interface EmailDetailProps {
   initialEmail: Email
@@ -21,6 +22,15 @@ export function EmailDetail({ initialEmail }: EmailDetailProps) {
   const { toast } = useToast()
   const [email, setEmail] = useState<Email>(initialEmail)
   const [loading, setLoading] = useState(false)
+
+  // Mark email as read when viewed
+  useEffect(() => {
+    if (!email.is_read && email.direction === 'inbound') {
+      markEmailAsRead(email.id, true).then((updated) => {
+        setEmail(updated)
+      }).catch(console.error)
+    }
+  }, [email.id, email.is_read, email.direction])
 
   async function handleSend() {
     if (email.status === 'sent') {
@@ -52,7 +62,7 @@ export function EmailDetail({ initialEmail }: EmailDetailProps) {
   }
 
   async function handleDelete() {
-    if (!confirm('Are you sure you want to delete this email?')) {
+    if (!confirm('Are you sure you want to move this email to trash?')) {
       return
     }
 
@@ -60,13 +70,30 @@ export function EmailDetail({ initialEmail }: EmailDetailProps) {
       await deleteEmail(email.id)
       toast({
         title: 'Success',
-        description: 'Email deleted successfully',
+        description: 'Email moved to trash',
       })
       router.push('/emails')
     } catch (error) {
       toast({
         title: 'Error',
         description: error instanceof Error ? error.message : 'Failed to delete email',
+        variant: 'destructive',
+      })
+    }
+  }
+
+  async function handleMarkAsRead(isRead: boolean) {
+    try {
+      const updated = await markEmailAsRead(email.id, isRead)
+      setEmail(updated)
+      toast({
+        title: 'Success',
+        description: isRead ? 'Email marked as read' : 'Email marked as unread',
+      })
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to update email',
         variant: 'destructive',
       })
     }
@@ -102,6 +129,45 @@ export function EmailDetail({ initialEmail }: EmailDetailProps) {
         </div>
         <div className="flex items-center gap-2">
           <Badge className={getStatusColor(email.status)}>{email.status}</Badge>
+          {email.status === 'sent' && (
+            <>
+              <Button
+                variant="outline"
+                onClick={() => router.push(`/emails/${email.id}/reply`)}
+                disabled={loading}
+              >
+                <Reply className="h-4 w-4 mr-2" />
+                Reply
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => router.push(`/emails/${email.id}/forward`)}
+                disabled={loading}
+              >
+                <Forward className="h-4 w-4 mr-2" />
+                Forward
+              </Button>
+            </>
+          )}
+          {email.direction === 'inbound' && (
+            <Button
+              variant="outline"
+              onClick={() => handleMarkAsRead(!email.is_read)}
+              disabled={loading}
+            >
+              {email.is_read ? (
+                <>
+                  <MailOpen className="h-4 w-4 mr-2" />
+                  Mark as Unread
+                </>
+              ) : (
+                <>
+                  <Mail className="h-4 w-4 mr-2" />
+                  Mark as Read
+                </>
+              )}
+            </Button>
+          )}
           {email.status === 'draft' && (
             <Button onClick={handleSend} disabled={loading}>
               <Send className="h-4 w-4 mr-2" />
@@ -121,14 +187,18 @@ export function EmailDetail({ initialEmail }: EmailDetailProps) {
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
-            <label className="text-sm font-medium text-muted-foreground">From</label>
+            <label className="text-sm font-medium text-muted-foreground">
+              {email.direction === 'inbound' ? 'From' : 'From'}
+            </label>
             <p className="mt-1">
               {email.from_name} &lt;{email.from_email}&gt;
             </p>
           </div>
 
           <div>
-            <label className="text-sm font-medium text-muted-foreground">To</label>
+            <label className="text-sm font-medium text-muted-foreground">
+              {email.direction === 'inbound' ? 'To' : 'To'}
+            </label>
             <p className="mt-1">
               {email.to_name ? `${email.to_name} ` : ''}&lt;{email.to_email}&gt;
             </p>

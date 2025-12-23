@@ -3,7 +3,8 @@ import { EmailList } from '@/components/emails/email-list'
 import { getEmails } from '@/app/actions/emails'
 
 export default async function EmailsPage() {
-  const emails = await getEmails()
+  // Load sent emails by default
+  const emails = await getEmails({ folder: 'sent' })
 
   return (
     <AppLayout>

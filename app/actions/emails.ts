@@ -6,6 +6,9 @@ import { createInteraction } from './interactions'
 
 export type EmailStatus = 'draft' | 'scheduled' | 'sending' | 'sent' | 'failed' | 'bounced'
 
+export type EmailFolder = 'inbox' | 'sent' | 'draft' | 'trash'
+export type EmailDirection = 'inbound' | 'outbound'
+
 export interface Email {
   id: string
   created_at: string
@@ -31,6 +34,13 @@ export interface Email {
   metadata: any
   error_message: string | null
   retry_count: number
+  direction: EmailDirection | null
+  folder: EmailFolder
+  is_read: boolean
+  is_deleted: boolean
+  deleted_at: string | null
+  in_reply_to: string | null
+  forwarded_from: string | null
 }
 
 export interface CreateEmailInput {
@@ -45,6 +55,21 @@ export interface CreateEmailInput {
   signature_id?: string | null
   template_id?: string | null
   scheduled_at?: string | null
+  direction?: EmailDirection
+  folder?: EmailFolder
+}
+
+export interface CreateInboundEmailInput {
+  client_id?: string
+  from_email: string
+  from_name: string
+  subject: string
+  body_html: string
+  body_text?: string
+  to_email?: string
+  to_name?: string
+  cc_emails?: string[]
+  received_at?: string
 }
 
 export async function createEmail(input: CreateEmailInput): Promise<Email> {
@@ -95,6 +120,8 @@ export async function createEmail(input: CreateEmailInput): Promise<Email> {
   const fromName = process.env.SMTP_FROM_NAME || 'Pre-Sales CRM'
 
   const status: EmailStatus = input.scheduled_at ? 'scheduled' : 'draft'
+  const folder: EmailFolder = input.folder || (status === 'draft' ? 'draft' : 'sent')
+  const direction: EmailDirection = input.direction || 'outbound'
 
   const { data, error } = await supabase
     .from('emails')
@@ -114,12 +141,106 @@ export async function createEmail(input: CreateEmailInput): Promise<Email> {
       scheduled_at: input.scheduled_at || null,
       signature_id: signatureId,
       template_id: input.template_id || null,
+      folder,
+      direction,
+      is_read: false,
+      is_deleted: false,
     })
     .select()
     .single()
 
   if (error) {
     throw new Error(`Failed to create email: ${error.message}`)
+  }
+
+  return data as Email
+}
+
+export async function createInboundEmail(input: CreateInboundEmailInput): Promise<Email> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    throw new Error('Unauthorized')
+  }
+
+  // Get to_email from environment if not provided
+  const toEmail = input.to_email || process.env.SMTP_FROM_EMAIL || user.email || ''
+  const toName = input.to_name || process.env.SMTP_FROM_NAME || 'Pre-Sales CRM'
+
+  // Try to find client by email if client_id not provided
+  let clientId = input.client_id
+  if (!clientId && input.from_email) {
+    const { data: client } = await supabase
+      .from('clients')
+      .select('id')
+      .eq('email', input.from_email)
+      .eq('owner_id', user.id)
+      .single()
+
+    if (client) {
+      clientId = client.id
+    } else {
+      // Create a new client if not found
+      const { createClientRecord } = await import('./clients')
+      const newClient = await createClientRecord({
+        name: input.from_name || input.from_email.split('@')[0],
+        email: input.from_email,
+        client_type: 'presales',
+      })
+      clientId = newClient.id
+    }
+  }
+
+  if (!clientId) {
+    throw new Error('Client ID is required or could not be determined from email')
+  }
+
+  const receivedAt = input.received_at ? new Date(input.received_at).toISOString() : new Date().toISOString()
+
+  const { data, error } = await supabase
+    .from('emails')
+    .insert({
+      owner_id: user.id,
+      client_id: clientId,
+      subject: input.subject,
+      body_html: input.body_html,
+      body_text: input.body_text || input.body_html.replace(/<[^>]*>/g, ''),
+      from_email: input.from_email,
+      from_name: input.from_name,
+      to_email: toEmail,
+      to_name: toName,
+      cc_emails: input.cc_emails || [],
+      bcc_emails: [],
+      status: 'sent',
+      sent_at: receivedAt,
+      folder: 'inbox',
+      direction: 'inbound',
+      is_read: false,
+      is_deleted: false,
+    })
+    .select()
+    .single()
+
+  if (error) {
+    throw new Error(`Failed to create inbound email: ${error.message}`)
+  }
+
+  // Create interaction
+  try {
+    await createInteraction({
+      client_id: clientId,
+      type: 'email',
+      direction: 'inbound',
+      date: receivedAt,
+      subject: input.subject,
+      notes: input.body_text || input.body_html,
+      email_id: data.id,
+    })
+  } catch (interactionError) {
+    console.error('Failed to create interaction:', interactionError)
   }
 
   return data as Email
@@ -210,6 +331,7 @@ export async function sendEmailNow(emailId: string): Promise<Email> {
         provider_message_id: result.messageId,
         provider_response: result.response,
         error_message: null,
+        folder: 'sent',
       })
       .eq('id', emailId)
       .select()
@@ -341,9 +463,14 @@ export async function deleteEmail(emailId: string): Promise<void> {
     throw new Error('Unauthorized')
   }
 
+  // Move to trash instead of permanent delete
   const { error } = await supabase
     .from('emails')
-    .delete()
+    .update({
+      is_deleted: true,
+      deleted_at: new Date().toISOString(),
+      folder: 'trash',
+    })
     .eq('id', emailId)
     .eq('owner_id', user.id)
 
@@ -352,9 +479,267 @@ export async function deleteEmail(emailId: string): Promise<void> {
   }
 }
 
+export async function permanentlyDeleteEmail(emailId: string): Promise<void> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    throw new Error('Unauthorized')
+  }
+
+  const { error } = await supabase
+    .from('emails')
+    .delete()
+    .eq('id', emailId)
+    .eq('owner_id', user.id)
+
+  if (error) {
+    throw new Error(`Failed to permanently delete email: ${error.message}`)
+  }
+}
+
+export async function restoreEmail(emailId: string): Promise<Email> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    throw new Error('Unauthorized')
+  }
+
+  // Get the email to determine original folder
+  const { data: email } = await supabase
+    .from('emails')
+    .select('*')
+    .eq('id', emailId)
+    .eq('owner_id', user.id)
+    .single()
+
+  if (!email) {
+    throw new Error('Email not found')
+  }
+
+  // Restore to original folder (inbox for inbound, sent for outbound)
+  const restoredFolder = email.direction === 'inbound' ? 'inbox' : 'sent'
+
+  const { data, error } = await supabase
+    .from('emails')
+    .update({
+      is_deleted: false,
+      deleted_at: null,
+      folder: restoredFolder,
+    })
+    .eq('id', emailId)
+    .eq('owner_id', user.id)
+    .select()
+    .single()
+
+  if (error) {
+    throw new Error(`Failed to restore email: ${error.message}`)
+  }
+
+  return data as Email
+}
+
+export async function markEmailAsRead(emailId: string, isRead: boolean = true): Promise<Email> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    throw new Error('Unauthorized')
+  }
+
+  const { data, error } = await supabase
+    .from('emails')
+    .update({ is_read: isRead })
+    .eq('id', emailId)
+    .eq('owner_id', user.id)
+    .select()
+    .single()
+
+  if (error) {
+    throw new Error(`Failed to update email read status: ${error.message}`)
+  }
+
+  return data as Email
+}
+
+export async function replyToEmail(
+  originalEmailId: string,
+  replyData: {
+    subject: string
+    body_html: string
+    body_text?: string
+    to_email: string
+    to_name?: string
+    cc_emails?: string[]
+    bcc_emails?: string[]
+    signature_id?: string | null
+  }
+): Promise<Email> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    throw new Error('Unauthorized')
+  }
+
+  // Get original email
+  const { data: originalEmail } = await supabase
+    .from('emails')
+    .select('*')
+    .eq('id', originalEmailId)
+    .eq('owner_id', user.id)
+    .single()
+
+  if (!originalEmail) {
+    throw new Error('Original email not found')
+  }
+
+  // Create reply email
+  const reply = await createEmail({
+    client_id: originalEmail.client_id,
+    subject: replyData.subject,
+    body_html: replyData.body_html,
+    body_text: replyData.body_text,
+    to_email: replyData.to_email,
+    to_name: replyData.to_name,
+    cc_emails: replyData.cc_emails,
+    bcc_emails: replyData.bcc_emails,
+    signature_id: replyData.signature_id,
+  })
+
+  // Link reply to original
+  await supabase
+    .from('emails')
+    .update({ in_reply_to: originalEmailId, folder: 'sent', direction: 'outbound' })
+    .eq('id', reply.id)
+
+  // Mark original as read
+  await markEmailAsRead(originalEmailId, true)
+
+  return reply
+}
+
+export async function forwardEmail(
+  originalEmailId: string,
+  forwardData: {
+    to_email: string
+    to_name?: string
+    subject: string
+    body_html: string
+    body_text?: string
+    cc_emails?: string[]
+    bcc_emails?: string[]
+    signature_id?: string | null
+  }
+): Promise<Email> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    throw new Error('Unauthorized')
+  }
+
+  // Get original email
+  const { data: originalEmail } = await supabase
+    .from('emails')
+    .select('*')
+    .eq('id', originalEmailId)
+    .eq('owner_id', user.id)
+    .single()
+
+  if (!originalEmail) {
+    throw new Error('Original email not found')
+  }
+
+  // Create forwarded email
+  const forwarded = await createEmail({
+    client_id: originalEmail.client_id,
+    subject: forwardData.subject,
+    body_html: forwardData.body_html,
+    body_text: forwardData.body_text,
+    to_email: forwardData.to_email,
+    to_name: forwardData.to_name,
+    cc_emails: forwardData.cc_emails,
+    bcc_emails: forwardData.bcc_emails,
+    signature_id: forwardData.signature_id,
+  })
+
+  // Link forward to original
+  await supabase
+    .from('emails')
+    .update({ forwarded_from: originalEmailId, folder: 'sent', direction: 'outbound' })
+    .eq('id', forwarded.id)
+
+  return forwarded
+}
+
+export async function checkForNewEmails(): Promise<{
+  success: boolean
+  processed: number
+  errors: string[]
+}> {
+  // Import dynamically to avoid loading IMAP in environments where it's not needed
+  try {
+    const { checkForNewEmails: checkEmails } = await import('@/lib/email-receiver')
+    return await checkEmails()
+  } catch (error) {
+    console.error('Failed to check for new emails:', error)
+    return {
+      success: false,
+      processed: 0,
+      errors: [
+        error instanceof Error
+          ? error.message
+          : 'Failed to check for new emails. Make sure IMAP packages are installed and configured.',
+      ],
+    }
+  }
+}
+
+export async function cleanupOldTrashEmails(): Promise<number> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    throw new Error('Unauthorized')
+  }
+
+  // Delete emails in trash older than 150 days
+  const cutoffDate = new Date()
+  cutoffDate.setDate(cutoffDate.getDate() - 150)
+
+  const { data, error } = await supabase
+    .from('emails')
+    .delete()
+    .eq('owner_id', user.id)
+    .eq('is_deleted', true)
+    .lt('deleted_at', cutoffDate.toISOString())
+    .select('id')
+
+  if (error) {
+    throw new Error(`Failed to cleanup trash emails: ${error.message}`)
+  }
+
+  return data?.length || 0
+}
+
 export async function getEmails(filters?: {
   client_id?: string
   status?: EmailStatus
+  folder?: EmailFolder
   limit?: number
 }): Promise<Email[]> {
   const supabase = await createClient()
@@ -370,6 +755,7 @@ export async function getEmails(filters?: {
     .from('emails')
     .select('*')
     .eq('owner_id', user.id)
+    .eq('is_deleted', false)
     .order('created_at', { ascending: false })
 
   if (filters?.client_id) {
@@ -380,6 +766,10 @@ export async function getEmails(filters?: {
     query = query.eq('status', filters.status)
   }
 
+  if (filters?.folder) {
+    query = query.eq('folder', filters.folder)
+  }
+
   if (filters?.limit) {
     query = query.limit(filters.limit)
   }
@@ -388,6 +778,30 @@ export async function getEmails(filters?: {
 
   if (error) {
     throw new Error(`Failed to fetch emails: ${error.message}`)
+  }
+
+  return (data || []) as Email[]
+}
+
+export async function getTrashEmails(): Promise<Email[]> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    throw new Error('Unauthorized')
+  }
+
+  const { data, error } = await supabase
+    .from('emails')
+    .select('*')
+    .eq('owner_id', user.id)
+    .eq('is_deleted', true)
+    .order('deleted_at', { ascending: false })
+
+  if (error) {
+    throw new Error(`Failed to fetch trash emails: ${error.message}`)
   }
 
   return (data || []) as Email[]
