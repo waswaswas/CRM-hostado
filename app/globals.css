@@ -111,20 +111,31 @@
 /* Rich text editor content styling */
 [contenteditable] {
   position: relative;
+  outline: none;
 }
 
 [contenteditable] p {
-  margin: 0 0 1em 0;
+  margin: 0 0 1em 0 !important;
+  padding: 0 !important;
+  min-height: 1.5em;
 }
 
 [contenteditable] p:last-child {
-  margin-bottom: 0;
+  margin-bottom: 0 !important;
+}
+
+[contenteditable] p:empty:before {
+  content: '\200B'; /* Zero-width space to maintain height */
 }
 
 [contenteditable] ul,
 [contenteditable] ol {
   margin: 0.5em 0;
   padding-left: 1.5em;
+}
+
+[contenteditable] br {
+  line-height: 1.6;
 }
 
 /* Ensure proper spacing in email body preview */

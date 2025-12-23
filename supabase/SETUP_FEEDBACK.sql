@@ -35,3 +35,5 @@ CREATE POLICY "Users can view their own feedback" ON feedback FOR SELECT USING (
 CREATE POLICY "Users can insert their own feedback" ON feedback FOR INSERT WITH CHECK (owner_id = auth.uid());
 CREATE POLICY "Users can update their own feedback" ON feedback FOR UPDATE USING (owner_id = auth.uid());
 CREATE POLICY "Users can delete their own feedback" ON feedback FOR DELETE USING (owner_id = auth.uid());
+
+

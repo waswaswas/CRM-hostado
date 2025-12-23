@@ -142,3 +142,5 @@ CREATE TRIGGER update_offers_updated_at
 
 
 
+
+
