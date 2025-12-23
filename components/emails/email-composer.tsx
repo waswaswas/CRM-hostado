@@ -13,7 +13,7 @@ import { RichTextEditor } from './rich-text-editor'
 import { createEmail, sendEmailNow, scheduleEmail } from '@/app/actions/emails'
 import { getClients as getClientsList } from '@/app/actions/clients'
 import { getSignatures, createDefaultHostadoSignature } from '@/app/actions/email-signatures'
-import { getTemplates } from '@/app/actions/email-templates'
+import { getTemplates, ensureDefaultBasicTemplate } from '@/app/actions/email-templates'
 import { renderTemplate } from '@/lib/email-template-utils'
 import { useToast } from '@/components/ui/toaster'
 import { Client } from '@/types/database'
@@ -56,13 +56,19 @@ export function EmailComposer({ clientId, initialSubject, initialBody, templateI
   useEffect(() => {
     async function loadData() {
       try {
-        const [clientsData, signaturesData, templatesData] = await Promise.all([
+        // Ensure default Basic template exists first
+        const basicTemplateCreated = await ensureDefaultBasicTemplate()
+        
+        // Load clients and signatures
+        const [clientsData, signaturesData] = await Promise.all([
           getClientsList(),
           getSignatures(),
-          getTemplates(),
         ])
         setClients(clientsData)
         setSignatures(signaturesData)
+        
+        // Load templates (reload to ensure Basic is included if it was just created)
+        const templatesData = await getTemplates()
         setTemplates(templatesData)
 
         // Set default signature
@@ -114,28 +120,63 @@ export function EmailComposer({ clientId, initialSubject, initialBody, templateI
     if (selectedClient) {
       const client = clients.find((c) => c.id === selectedClient)
       if (client) {
-        setFormData((prev) => ({
-          ...prev,
-          to_email: client.email || '',
-          to_name: client.name,
-        }))
+        // Extract first name from client name
+        const firstName = client.name.split(' ')[0] || client.name
+        
+        setFormData((prev) => {
+          const newData = {
+            ...prev,
+            to_email: client.email || '',
+            to_name: client.name,
+          }
+          
+          // Auto-fill greeting only if body is completely empty (not when template is selected)
+          if ((!prev.body_html || prev.body_html.trim() === '') && !selectedTemplate) {
+            const greeting = `Здравейте, ${firstName},`
+            newData.body_html = `<p style="margin: 0 0 1em 0;">${greeting}</p>`
+          } else if (prev.body_html && prev.body_html.includes('{{client_first_name}}')) {
+            // If template has variable, replace it with actual first name
+            newData.body_html = prev.body_html.replace(/\{\{client_first_name\}\}/g, firstName)
+          } else if (prev.body_html && prev.body_html.includes('Здравейте,') && !prev.body_html.includes(firstName)) {
+            // If greeting exists but doesn't have the name, update it
+            newData.body_html = prev.body_html.replace(
+              /Здравейте,\s*[^,<]*,/g,
+              `Здравейте, ${firstName},`
+            )
+          }
+          
+          return newData
+        })
       }
     }
-  }, [selectedClient, clients])
+  }, [selectedClient, clients, selectedTemplate])
 
   useEffect(() => {
     if (templateId && !selectedTemplate) {
       setSelectedTemplate(templateId)
     }
-  }, [templateId])
+  }, [templateId, selectedTemplate])
+
+  // Auto-select Basic template when templates are loaded (only if no template is selected and no templateId prop)
+  useEffect(() => {
+    if (!templateId && !selectedTemplate && templates.length > 0) {
+      const basicTemplate = templates.find((t) => t.name === 'Basic')
+      if (basicTemplate) {
+        setSelectedTemplate(basicTemplate.id)
+      }
+    }
+  }, [templates, templateId, selectedTemplate])
 
   useEffect(() => {
     if (selectedTemplate) {
       const template = templates.find((t) => t.id === selectedTemplate)
       if (template) {
         const client = clients.find((c) => c.id === selectedClient)
+        // Extract first name from client name
+        const firstName = client?.name ? client.name.split(' ')[0] : ''
         const variables: any = {
           client_name: client?.name || '',
+          client_first_name: firstName || '{{client_first_name}}', // Keep placeholder if no client selected
           client_email: client?.email || '',
           client_company: client?.company || '',
         }
@@ -144,6 +185,21 @@ export function EmailComposer({ clientId, initialSubject, initialBody, templateI
           subject: renderTemplate(template.subject, variables),
           body_html: renderTemplate(template.body_html, variables),
         }))
+      }
+    } else if (selectedClient && !selectedTemplate) {
+      // If no template selected but client is selected, ensure greeting has first name
+      const client = clients.find((c) => c.id === selectedClient)
+      if (client) {
+        const firstName = client.name.split(' ')[0] || client.name
+        setFormData((prev) => {
+          if (prev.body_html && prev.body_html.includes('{{client_first_name}}')) {
+            return {
+              ...prev,
+              body_html: prev.body_html.replace(/\{\{client_first_name\}\}/g, firstName),
+            }
+          }
+          return prev
+        })
       }
     }
   }, [selectedTemplate, templates, selectedClient, clients])
@@ -512,7 +568,13 @@ export function EmailComposer({ clientId, initialSubject, initialBody, templateI
               <label className="text-sm font-medium">Template</label>
               <Select
                 value={selectedTemplate}
-                onChange={(e) => setSelectedTemplate(e.target.value)}
+                onChange={(e) => {
+                  if (e.target.value === '__create_template__') {
+                    router.push('/emails/templates/new')
+                  } else {
+                    setSelectedTemplate(e.target.value)
+                  }
+                }}
                 className="mt-1"
               >
                 <option value="">No template</option>
@@ -521,6 +583,7 @@ export function EmailComposer({ clientId, initialSubject, initialBody, templateI
                     {template.name}
                   </option>
                 ))}
+                <option value="__create_template__">+ Create Template</option>
               </Select>
             </div>
 

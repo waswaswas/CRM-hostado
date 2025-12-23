@@ -164,6 +164,69 @@ export async function getTemplate(templateId: string): Promise<EmailTemplate> {
   return data as EmailTemplate
 }
 
+export async function ensureDefaultBasicTemplate(): Promise<EmailTemplate | null> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return null
+  }
+
+  // Check if "Basic" template already exists
+  const { data: existing } = await supabase
+    .from('email_templates')
+    .select('*')
+    .eq('name', 'Basic')
+    .eq('owner_id', user.id)
+    .single()
+
+  if (existing) {
+    // Update existing template to remove "ТЕКСТ" if it still contains it
+    const updatedHtml = existing.body_html?.replace(/ТЕКСТ/g, '').replace(/<p[^>]*>ТЕКСТ<\/p>/gi, '<p style="margin: 0 0 1em 0;"></p>')
+    if (updatedHtml !== existing.body_html) {
+      try {
+        await updateTemplate(existing.id, {
+          body_html: updatedHtml,
+          body_text: existing.body_text?.replace(/ТЕКСТ/g, '') || null,
+        })
+        const { data: updated } = await supabase
+          .from('email_templates')
+          .select('*')
+          .eq('id', existing.id)
+          .single()
+        return updated as EmailTemplate
+      } catch (error) {
+        console.error('Failed to update existing Basic template:', error)
+      }
+    }
+    return existing as EmailTemplate
+  }
+
+  // Create the default "Basic" template
+  const basicTemplateHtml = `<p style="margin: 0 0 1em 0;">Здравейте, {{client_first_name}},</p>
+<p style="margin: 0 0 1em 0;"></p>
+<p style="margin: 0 0 1em 0;">При необходимост от съдействие, оставаме на разположение.</p>
+<p style="margin: 0 0 1em 0;">Поздрави,</p>`
+
+  try {
+    const template = await createTemplate({
+      name: 'Basic',
+      category: 'custom',
+      subject: '',
+      body_html: basicTemplateHtml,
+      body_text: 'Здравейте, {{client_first_name}},\n\n\nПри необходимост от съдействие, оставаме на разположение.\n\nПоздрави,',
+      variables: ['client_first_name', 'client_name', 'client_email', 'client_company'],
+      is_shared: false,
+    })
+    return template
+  } catch (error) {
+    console.error('Failed to create default Basic template:', error)
+    return null
+  }
+}
+
 
 
 

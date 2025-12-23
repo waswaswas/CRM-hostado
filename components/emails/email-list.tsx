@@ -10,7 +10,7 @@ import { Select } from '@/components/ui/select'
 import { useToast } from '@/components/ui/toaster'
 import { format } from 'date-fns'
 import Link from 'next/link'
-import { Mail, Trash2, Eye, Send, Clock, XCircle, CheckCircle } from 'lucide-react'
+import { Mail, Trash2, Eye, Send, Clock, XCircle, CheckCircle, FileText } from 'lucide-react'
 
 interface EmailListProps {
   initialEmails?: Email[]
@@ -106,12 +106,20 @@ export function EmailList({ initialEmails = [], clientId }: EmailListProps) {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold">Emails</h1>
-        <Link href="/emails/compose">
-          <Button>
-            <Mail className="mr-2 h-4 w-4" />
-            Compose
-          </Button>
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link href="/emails/templates">
+            <Button variant="outline">
+              <FileText className="mr-2 h-4 w-4" />
+              Templates
+            </Button>
+          </Link>
+          <Link href="/emails/compose">
+            <Button>
+              <Mail className="mr-2 h-4 w-4" />
+              Compose
+            </Button>
+          </Link>
+        </div>
       </div>
 
       <div className="flex items-center gap-4">
