@@ -157,6 +157,37 @@ export async function sendEmailNow(emailId: string): Promise<Email> {
     .update({ status: 'sending' })
     .eq('id', emailId)
 
+  // Get attachments
+  const { getEmailAttachments } = await import('./email-attachments')
+  const attachments = await getEmailAttachments(emailId).catch(() => [])
+
+  // Download attachments and prepare for email
+  const emailAttachments = []
+  for (const attachment of attachments) {
+    try {
+      const { data, error } = await supabase.storage
+        .from('email-attachments')
+        .download(attachment.file_path)
+
+      if (error || !data) {
+        console.error(`Failed to download attachment ${attachment.file_name}:`, error)
+        continue
+      }
+
+      // Convert blob to buffer
+      const arrayBuffer = await data.arrayBuffer()
+      const buffer = Buffer.from(arrayBuffer)
+
+      emailAttachments.push({
+        filename: attachment.file_name,
+        path: buffer,
+        contentType: attachment.mime_type,
+      })
+    } catch (error) {
+      console.error(`Error processing attachment ${attachment.file_name}:`, error)
+    }
+  }
+
   // Send email
   const result = await sendEmail({
     to: email.to_email,
@@ -166,6 +197,7 @@ export async function sendEmailNow(emailId: string): Promise<Email> {
     text: email.body_text || undefined,
     cc: email.cc_emails || undefined,
     bcc: email.bcc_emails || undefined,
+    attachments: emailAttachments.length > 0 ? emailAttachments : undefined,
   })
 
   if (result.success) {
@@ -384,6 +416,7 @@ export async function getEmail(emailId: string): Promise<Email> {
 
   return data as Email
 }
+
 
 
 

@@ -14,6 +14,12 @@ interface EmailConfig {
   }
 }
 
+interface Attachment {
+  filename: string
+  path: Buffer | string
+  contentType: string
+}
+
 interface SendEmailOptions {
   to: string
   toName?: string
@@ -22,6 +28,7 @@ interface SendEmailOptions {
   text?: string
   cc?: string[]
   bcc?: string[]
+  attachments?: Attachment[]
 }
 
 let transporter: nodemailer.Transporter | null = null
@@ -131,7 +138,7 @@ export async function sendEmail(options: SendEmailOptions): Promise<{
     // Verify connection before sending
     await transporter.verify()
 
-    const mailOptions = {
+    const mailOptions: any = {
       from: `"${config.from.name}" <${config.from.email}>`,
       to: options.toName ? `"${options.toName}" <${options.to}>` : options.to,
       subject: options.subject,
@@ -139,6 +146,25 @@ export async function sendEmail(options: SendEmailOptions): Promise<{
       text: options.text || stripHtml(options.html),
       cc: options.cc,
       bcc: options.bcc,
+    }
+
+    // Add attachments if provided
+    if (options.attachments && options.attachments.length > 0) {
+      mailOptions.attachments = options.attachments.map((att) => {
+        // If path is a Buffer, use content property instead
+        if (Buffer.isBuffer(att.path)) {
+          return {
+            filename: att.filename,
+            content: att.path,
+            contentType: att.contentType,
+          }
+        }
+        return {
+          filename: att.filename,
+          path: att.path,
+          contentType: att.contentType,
+        }
+      })
     }
 
     const info = await transporter.sendMail(mailOptions)
@@ -172,6 +198,7 @@ function stripHtml(html: string): string {
     .replace(/&#39;/g, "'")
     .trim()
 }
+
 
 
 

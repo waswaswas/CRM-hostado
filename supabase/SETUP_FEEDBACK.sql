@@ -37,3 +37,4 @@ CREATE POLICY "Users can update their own feedback" ON feedback FOR UPDATE USING
 CREATE POLICY "Users can delete their own feedback" ON feedback FOR DELETE USING (owner_id = auth.uid());
 
 
+

@@ -19,7 +19,7 @@ import { useToast } from '@/components/ui/toaster'
 import { Client } from '@/types/database'
 import { EmailSignature, EmailTemplate } from '@/app/actions/email-signatures'
 import type { EmailTemplate as TemplateType } from '@/app/actions/email-templates'
-import { Calendar, Send, Clock, X, Mail } from 'lucide-react'
+import { Calendar, Send, Clock, X, Mail, Paperclip, XCircle } from 'lucide-react'
 import { format } from 'date-fns'
 
 interface EmailComposerProps {
@@ -33,6 +33,7 @@ export function EmailComposer({ clientId, initialSubject, initialBody, templateI
   const router = useRouter()
   const { toast } = useToast()
   const [loading, setLoading] = useState(false)
+  const [loadingData, setLoadingData] = useState(true)
   const [clients, setClients] = useState<Client[]>([])
   const [signatures, setSignatures] = useState<EmailSignature[]>([])
   const [templates, setTemplates] = useState<TemplateType[]>([])
@@ -44,6 +45,8 @@ export function EmailComposer({ clientId, initialSubject, initialBody, templateI
   const [scheduledTime, setScheduledTime] = useState('')
   const [previewHtml, setPreviewHtml] = useState<string>('')
   const [activeTab, setActiveTab] = useState<string>('edit')
+  const [attachments, setAttachments] = useState<File[]>([])
+  const [uploadingAttachments, setUploadingAttachments] = useState(false)
   const [formData, setFormData] = useState({
     subject: initialSubject || '',
     body_html: initialBody || '',
@@ -55,6 +58,7 @@ export function EmailComposer({ clientId, initialSubject, initialBody, templateI
 
   useEffect(() => {
     async function loadData() {
+      setLoadingData(true)
       try {
         // Ensure default Basic template exists first
         const basicTemplateCreated = await ensureDefaultBasicTemplate()
@@ -104,6 +108,8 @@ export function EmailComposer({ clientId, initialSubject, initialBody, templateI
             : errorMessage,
           variant: 'destructive',
         })
+      } finally {
+        setLoadingData(false)
       }
     }
     loadData()
@@ -321,6 +327,30 @@ export function EmailComposer({ clientId, initialSubject, initialBody, templateI
         template_id: selectedTemplate || null,
       })
 
+      // Upload attachments if any
+      if (attachments.length > 0) {
+        setUploadingAttachments(true)
+        try {
+          const { uploadEmailAttachment } = await import('@/app/actions/email-attachments')
+          await Promise.all(
+            attachments.map((file) => {
+              const formData = new FormData()
+              formData.append('file', file)
+              return uploadEmailAttachment(email.id, formData)
+            })
+          )
+        } catch (error) {
+          console.error('Failed to upload attachments:', error)
+          toast({
+            title: 'Warning',
+            description: 'Email sent but some attachments failed to upload',
+            variant: 'destructive',
+          })
+        } finally {
+          setUploadingAttachments(false)
+        }
+      }
+
       await sendEmailNow(email.id)
 
       toast({
@@ -423,6 +453,30 @@ export function EmailComposer({ clientId, initialSubject, initialBody, templateI
         scheduled_at: scheduledAt,
       })
 
+      // Upload attachments if any
+      if (attachments.length > 0) {
+        setUploadingAttachments(true)
+        try {
+          const { uploadEmailAttachment } = await import('@/app/actions/email-attachments')
+          await Promise.all(
+            attachments.map((file) => {
+              const formData = new FormData()
+              formData.append('file', file)
+              return uploadEmailAttachment(email.id, formData)
+            })
+          )
+        } catch (error) {
+          console.error('Failed to upload attachments:', error)
+          toast({
+            title: 'Warning',
+            description: 'Email scheduled but some attachments failed to upload',
+            variant: 'destructive',
+          })
+        } finally {
+          setUploadingAttachments(false)
+        }
+      }
+
       toast({
         title: 'Success',
         description: 'Email scheduled successfully',
@@ -480,7 +534,7 @@ export function EmailComposer({ clientId, initialSubject, initialBody, templateI
         }
       }
 
-      await createEmail({
+      const email = await createEmail({
         client_id: selectedClient,
         subject: formData.subject || '(No subject)',
         body_html: formattedBody,
@@ -492,6 +546,30 @@ export function EmailComposer({ clientId, initialSubject, initialBody, templateI
         signature_id: selectedSignature || null,
         template_id: selectedTemplate || null,
       })
+
+      // Upload attachments if any
+      if (attachments.length > 0) {
+        setUploadingAttachments(true)
+        try {
+          const { uploadEmailAttachment } = await import('@/app/actions/email-attachments')
+          await Promise.all(
+            attachments.map((file) => {
+              const formData = new FormData()
+              formData.append('file', file)
+              return uploadEmailAttachment(email.id, formData)
+            })
+          )
+        } catch (error) {
+          console.error('Failed to upload attachments:', error)
+          toast({
+            title: 'Warning',
+            description: 'Draft saved but some attachments failed to upload',
+            variant: 'destructive',
+          })
+        } finally {
+          setUploadingAttachments(false)
+        }
+      }
 
       toast({
         title: 'Success',
@@ -523,8 +601,11 @@ export function EmailComposer({ clientId, initialSubject, initialBody, templateI
               value={selectedClient}
               onChange={(e) => setSelectedClient(e.target.value)}
               className="mt-1"
+              disabled={loadingData}
             >
-              <option value="">Select a client</option>
+              <option value="">
+                {loadingData ? 'Loading clients...' : 'Select a client'}
+              </option>
               {clients.map((client) => (
                 <option key={client.id} value={client.id}>
                   {client.name} {client.email ? `(${client.email})` : ''}
@@ -576,8 +657,11 @@ export function EmailComposer({ clientId, initialSubject, initialBody, templateI
                   }
                 }}
                 className="mt-1"
+                disabled={loadingData}
               >
-                <option value="">No template</option>
+                <option value="">
+                  {loadingData ? 'Loading templates...' : 'No template'}
+                </option>
                 {templates.map((template) => (
                   <option key={template.id} value={template.id}>
                     {template.name}
@@ -627,9 +711,12 @@ export function EmailComposer({ clientId, initialSubject, initialBody, templateI
                     // The useEffect will handle adding the signature to body_html
                   }}
                   className="mt-1"
+                  disabled={loadingData}
                 >
-                  <option value="">No signature</option>
-                  {signatures.length === 0 ? (
+                  <option value="">
+                    {loadingData ? 'Loading signatures...' : 'No signature'}
+                  </option>
+                  {signatures.length === 0 && !loadingData ? (
                     <option value="" disabled>No signatures available</option>
                   ) : (
                     signatures.map((signature) => (
@@ -677,7 +764,109 @@ export function EmailComposer({ clientId, initialSubject, initialBody, templateI
           <div>
             <div className="flex items-center justify-between mb-1">
               <label className="text-sm font-medium">Body (HTML)</label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="file"
+                  id="file-attachment"
+                  multiple
+                  accept=".png,.jpg,.jpeg,.pdf,.doc,.docx,.mp4,.mov,.avi,.webm,image/*,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,video/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const files = Array.from(e.target.files || [])
+                    // Validate file types
+                    const allowedTypes = [
+                      'image/png',
+                      'image/jpeg',
+                      'image/jpg',
+                      'application/pdf',
+                      'application/msword',
+                      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                      'video/mp4',
+                      'video/quicktime',
+                      'video/x-msvideo',
+                      'video/webm',
+                    ]
+                    const allowedExtensions = ['png', 'jpg', 'jpeg', 'pdf', 'doc', 'docx', 'mp4', 'mov', 'avi', 'webm']
+                    
+                    const validFiles: File[] = []
+                    const invalidFiles: string[] = []
+                    
+                    files.forEach((file) => {
+                      const fileExtension = file.name.split('.').pop()?.toLowerCase()
+                      if (
+                        allowedTypes.includes(file.type) ||
+                        allowedExtensions.includes(fileExtension || '')
+                      ) {
+                        // Check file size (25MB max)
+                        if (file.size <= 25 * 1024 * 1024) {
+                          validFiles.push(file)
+                        } else {
+                          invalidFiles.push(`${file.name} (exceeds 25MB)`)
+                        }
+                      } else {
+                        invalidFiles.push(file.name)
+                      }
+                    })
+                    
+                    if (invalidFiles.length > 0) {
+                      toast({
+                        title: 'Invalid Files',
+                        description: `Some files were not added: ${invalidFiles.join(', ')}. Allowed: PNG, JPEG, PDF, Word, Videos (max 25MB)`,
+                        variant: 'destructive',
+                      })
+                    }
+                    
+                    if (validFiles.length > 0) {
+                      setAttachments((prev) => [...prev, ...validFiles])
+                    }
+                    
+                    // Reset input
+                    e.target.value = ''
+                  }}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => document.getElementById('file-attachment')?.click()}
+                  disabled={uploadingAttachments}
+                >
+                  <Paperclip className="h-4 w-4 mr-2" />
+                  Attach Files
+                </Button>
+              </div>
             </div>
+            {attachments.length > 0 && (
+              <div className="mt-2 space-y-2">
+                {attachments.map((file, index) => (
+                  <div
+                    key={index}
+                    className="flex items-center justify-between p-2 bg-muted rounded-lg text-sm"
+                  >
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <Paperclip className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                      <span className="truncate" title={file.name}>
+                        {file.name}
+                      </span>
+                      <span className="text-xs text-muted-foreground flex-shrink-0">
+                        ({(file.size / 1024 / 1024).toFixed(2)} MB)
+                      </span>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setAttachments((prev) => prev.filter((_, i) => i !== index))
+                      }}
+                      className="h-6 w-6 p-0"
+                    >
+                      <XCircle className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
               <TabsList>
                 <TabsTrigger value="edit">Edit</TabsTrigger>
@@ -765,9 +954,9 @@ export function EmailComposer({ clientId, initialSubject, initialBody, templateI
           )}
 
           <div className="flex items-center gap-2 pt-4">
-            <Button onClick={handleSend} disabled={loading}>
+            <Button onClick={handleSend} disabled={loading || uploadingAttachments}>
               <Send className="h-4 w-4 mr-2" />
-              Send
+              {uploadingAttachments ? 'Uploading...' : 'Send'}
             </Button>
             <Button
               variant="outline"
@@ -795,6 +984,7 @@ export function EmailComposer({ clientId, initialSubject, initialBody, templateI
     </div>
   )
 }
+
 
 
 
