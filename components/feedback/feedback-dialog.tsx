@@ -6,9 +6,9 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Select } from '@/components/ui/select'
-import { createFeedback, updateFeedback, deleteFeedback, getFeedback, type Feedback } from '@/app/actions/feedback'
+import { createFeedback, updateFeedback, deleteFeedback, getFeedback, toggleFeedbackCompleted, type Feedback } from '@/app/actions/feedback'
 import { useToast } from '@/components/ui/toaster'
-import { Edit, Trash2, Plus } from 'lucide-react'
+import { Edit, Trash2, Plus, Check } from 'lucide-react'
 import { format } from 'date-fns'
 
 interface FeedbackDialogProps {
@@ -128,6 +128,19 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
     }
   }
 
+  async function handleToggleCompleted(id: string, completed: boolean) {
+    try {
+      await toggleFeedbackCompleted(id, completed)
+      loadFeedback()
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to update feedback',
+        variant: 'destructive',
+      })
+    }
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
@@ -227,30 +240,41 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
                     key={feedback.id}
                     className={`border rounded-lg p-4 ${
                       editingId === feedback.id ? 'ring-2 ring-primary' : ''
-                    }`}
+                    } ${feedback.completed ? 'opacity-60' : ''}`}
                   >
                     <div className="flex items-start justify-between gap-2">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2">
-                          {feedback.priority && (
-                            <span
-                              className={`text-xs px-2 py-0.5 rounded ${
-                                feedback.priority === 'high'
-                                  ? 'bg-destructive/20 text-destructive'
-                                  : feedback.priority === 'medium'
-                                  ? 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-500'
-                                  : 'bg-blue-500/20 text-blue-700 dark:text-blue-500'
-                              }`}
-                            >
-                              {feedback.priority.charAt(0).toUpperCase() +
-                                feedback.priority.slice(1)}
+                      <div className="flex-1 flex items-start gap-3">
+                        <input
+                          type="checkbox"
+                          checked={feedback.completed || false}
+                          onChange={(e) => handleToggleCompleted(feedback.id, e.target.checked)}
+                          className="mt-1 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
+                          disabled={loading}
+                        />
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            {feedback.priority && (
+                              <span
+                                className={`text-xs px-2 py-0.5 rounded ${
+                                  feedback.priority === 'high'
+                                    ? 'bg-destructive/20 text-destructive'
+                                    : feedback.priority === 'medium'
+                                    ? 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-500'
+                                    : 'bg-blue-500/20 text-blue-700 dark:text-blue-500'
+                                }`}
+                              >
+                                {feedback.priority.charAt(0).toUpperCase() +
+                                  feedback.priority.slice(1)}
+                              </span>
+                            )}
+                            <span className="text-xs text-muted-foreground">
+                              {format(new Date(feedback.created_at), 'MMM d, yyyy HH:mm')}
                             </span>
-                          )}
-                          <span className="text-xs text-muted-foreground">
-                            {format(new Date(feedback.created_at), 'MMM d, yyyy HH:mm')}
-                          </span>
+                          </div>
+                          <p className={`text-sm whitespace-pre-wrap ${feedback.completed ? 'line-through text-muted-foreground' : ''}`}>
+                            {feedback.note}
+                          </p>
                         </div>
-                        <p className="text-sm whitespace-pre-wrap">{feedback.note}</p>
                       </div>
                       <div className="flex items-center gap-1">
                         <Button

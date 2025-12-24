@@ -29,10 +29,18 @@ interface EmailListProps {
 export function EmailList({ initialEmails = [], clientId }: EmailListProps) {
   const router = useRouter()
   const { toast } = useToast()
-  const [emails, setEmails] = useState<Email[]>(initialEmails)
-  const [folderFilter, setFolderFilter] = useState<EmailFolder | 'all'>('sent')
+  const [folderFilter, setFolderFilter] = useState<EmailFolder | 'all'>('all')
+  const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest')
   const [loading, setLoading] = useState(false)
   const [checkingEmails, setCheckingEmails] = useState(false)
+
+  // Sort initial emails (newest first by default)
+  const sortedInitialEmails = [...initialEmails].sort((a, b) => {
+    const dateA = new Date(a.sent_at || a.created_at).getTime()
+    const dateB = new Date(b.sent_at || b.created_at).getTime()
+    return dateB - dateA // Newest first
+  })
+  const [emails, setEmails] = useState<Email[]>(sortedInitialEmails)
 
   const loadEmails = useCallback(async (silent = false) => {
     if (!silent) {
@@ -62,7 +70,14 @@ export function EmailList({ initialEmails = [], clientId }: EmailListProps) {
           })
         }
         
-        return data
+        // Sort emails based on sortOrder
+        const sortedData = [...data].sort((a, b) => {
+          const dateA = new Date(a.sent_at || a.created_at).getTime()
+          const dateB = new Date(b.sent_at || b.created_at).getTime()
+          return sortOrder === 'newest' ? dateB - dateA : dateA - dateB
+        })
+        
+        return sortedData
       })
     } catch (error) {
       console.error('Failed to load emails:', error)
@@ -78,20 +93,54 @@ export function EmailList({ initialEmails = [], clientId }: EmailListProps) {
         setLoading(false)
       }
     }
-  }, [folderFilter, clientId, toast])
+  }, [folderFilter, clientId, sortOrder, toast])
 
   useEffect(() => {
     loadEmails()
   }, [loadEmails])
 
-  // Auto-refresh emails every 60 seconds (silent refresh)
+  // Sort emails when sortOrder changes
+  useEffect(() => {
+    setEmails((prevEmails) => {
+      return [...prevEmails].sort((a, b) => {
+        const dateA = new Date(a.sent_at || a.created_at).getTime()
+        const dateB = new Date(b.sent_at || b.created_at).getTime()
+        return sortOrder === 'newest' ? dateB - dateA : dateA - dateB
+      })
+    })
+  }, [sortOrder])
+
+  // Auto-refresh emails every 20 seconds to catch emails within 45 seconds of arrival
+  // With 20-second intervals and 5-minute search window, emails will be caught quickly
   useEffect(() => {
     // Only start auto-refresh after initial load
     if (emails.length === 0) return
 
     const interval = setInterval(() => {
       loadEmails(true) // Silent refresh - no loading indicator
-    }, 60000) // 60 seconds
+    }, 20000) // 20 seconds - ensures emails caught within ~40-45 seconds
+
+    return () => clearInterval(interval)
+  }, [loadEmails, emails.length])
+  
+  // Also auto-check for new emails via IMAP every 20 seconds
+  useEffect(() => {
+    // Only start auto-check after initial load
+    if (emails.length === 0) return
+
+    const interval = setInterval(() => {
+      // Silently check for new emails via IMAP
+      checkForNewEmails()
+        .then((result) => {
+          if (result.success && result.processed > 0) {
+            // Reload emails if new ones were found
+            loadEmails(true)
+          }
+        })
+        .catch((error) => {
+          console.error('Auto-check for emails failed:', error)
+        })
+    }, 20000) // 20 seconds
 
     return () => clearInterval(interval)
   }, [loadEmails, emails.length])
@@ -119,30 +168,46 @@ export function EmailList({ initialEmails = [], clientId }: EmailListProps) {
 
   async function handleCheckForEmails() {
     setCheckingEmails(true)
+    
+    // Add timeout to prevent button from getting stuck
+    const timeoutId = setTimeout(() => {
+      setCheckingEmails(false)
+      toast({
+        title: 'Timeout',
+        description: 'Email check is taking too long. Please try again.',
+        variant: 'destructive',
+      })
+    }, 30000) // 30 second timeout
+    
     try {
       const result = await checkForNewEmails()
+      clearTimeout(timeoutId)
+      
       if (result.success) {
         if (result.processed > 0) {
           toast({
             title: 'Success',
             description: `Found and processed ${result.processed} new email${result.processed > 1 ? 's' : ''}`,
           })
-          // Reload emails to show new ones
-          await loadEmails()
+          // Reload emails to show the new ones
+          await loadEmails(false)
         } else {
           toast({
             title: 'No New Emails',
-            description: 'No new emails found in your inbox',
+            description: 'No new emails found',
           })
+          // Still reload to make sure we have the latest
+          await loadEmails(true)
         }
       } else {
         toast({
           title: 'Error',
-          description: result.errors.join(', ') || 'Failed to check for emails',
+          description: result.errors.length > 0 ? result.errors.join(', ') : 'Failed to check for emails',
           variant: 'destructive',
         })
       }
     } catch (error) {
+      clearTimeout(timeoutId)
       console.error('Failed to check for emails:', error)
       toast({
         title: 'Error',
@@ -211,23 +276,34 @@ export function EmailList({ initialEmails = [], clientId }: EmailListProps) {
     }
   }
 
-  function getStatusIcon(status: EmailStatus) {
+  function getStatusIcon(status: EmailStatus, direction?: string) {
+    // For inbound emails, use mail icon
+    if (direction === 'inbound') {
+      return <Mail className="h-3 w-3" />
+    }
+    
     switch (status) {
       case 'sent':
-        return <CheckCircle className="h-4 w-4 text-green-600" />
+        return <CheckCircle className="h-3 w-3" />
       case 'scheduled':
-        return <Clock className="h-4 w-4 text-blue-600" />
+        return <Clock className="h-3 w-3" />
       case 'sending':
-        return <Send className="h-4 w-4 text-yellow-600" />
+        return <Send className="h-3 w-3" />
       case 'failed':
       case 'bounced':
-        return <XCircle className="h-4 w-4 text-red-600" />
+        return <XCircle className="h-3 w-3" />
       default:
-        return <Mail className="h-4 w-4 text-gray-600" />
+        return <Mail className="h-3 w-3" />
     }
   }
 
-  function getStatusColor(status: EmailStatus) {
+  function getStatusColor(status: EmailStatus, direction?: string) {
+    // For inbound emails, show "Received" in light blue
+    if (direction === 'inbound') {
+      return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
+    }
+    
+    // For outbound emails, use status-based colors
     switch (status) {
       case 'sent':
         return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
@@ -243,6 +319,35 @@ export function EmailList({ initialEmails = [], clientId }: EmailListProps) {
       default:
         return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200'
     }
+  }
+
+  function getStatusOnlyColor(status: EmailStatus) {
+    // Color for the status badge (second badge for outbound emails)
+    switch (status) {
+      case 'sent':
+        return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+      case 'scheduled':
+        return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
+      case 'sending':
+        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
+      case 'failed':
+      case 'bounced':
+        return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+      case 'draft':
+        return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200'
+      default:
+        return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200'
+    }
+  }
+
+  function getStatusLabel(status: EmailStatus, direction?: string) {
+    // For inbound emails, always show "Received"
+    if (direction === 'inbound') {
+      return 'Received'
+    }
+    
+    // For outbound emails, show status (Sent/Failed/etc.)
+    return status.charAt(0).toUpperCase() + status.slice(1)
   }
 
   return (
@@ -294,6 +399,17 @@ export function EmailList({ initialEmails = [], clientId }: EmailListProps) {
             <option value="trash">Trash</option>
           </Select>
         </div>
+        <div>
+          <label className="text-sm font-medium">Sort</label>
+          <Select
+            value={sortOrder}
+            onChange={(e) => setSortOrder(e.target.value as 'newest' | 'oldest')}
+            className="mt-1"
+          >
+            <option value="newest">Newest</option>
+            <option value="oldest">Oldest</option>
+          </Select>
+        </div>
       </div>
 
       {loading ? (
@@ -321,12 +437,22 @@ export function EmailList({ initialEmails = [], clientId }: EmailListProps) {
                       <Link href={`/emails/${email.id}`} className="font-semibold hover:underline">
                         {email.subject}
                       </Link>
-                      <Badge className={getStatusColor(email.status)}>
+                      {/* Direction/Type Badge */}
+                      <Badge className={getStatusColor(email.status, email.direction)}>
                         <span className="flex items-center gap-1">
-                          {getStatusIcon(email.status)}
-                          {email.status}
+                          {getStatusIcon(email.status, email.direction)}
+                          {getStatusLabel(email.status, email.direction)}
                         </span>
                       </Badge>
+                      {/* Status Badge (only for outbound emails) */}
+                      {email.direction === 'outbound' && (
+                        <Badge className={getStatusOnlyColor(email.status)}>
+                          <span className="flex items-center gap-1">
+                            {getStatusIcon(email.status)}
+                            {email.status}
+                          </span>
+                        </Badge>
+                      )}
                     </div>
                     <div className="text-sm text-muted-foreground mb-2">
                       {email.direction === 'inbound' ? (
@@ -362,7 +488,7 @@ export function EmailList({ initialEmails = [], clientId }: EmailListProps) {
                   <div className="flex items-center gap-2">
                     {folderFilter !== 'trash' && (
                       <>
-                        {email.status === 'sent' && (
+                        {(email.status === 'sent' || email.direction === 'inbound') && (
                           <>
                             <Button
                               variant="ghost"

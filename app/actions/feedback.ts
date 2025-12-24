@@ -10,6 +10,7 @@ export interface Feedback {
   owner_id: string
   note: string
   priority?: string | null
+  completed?: boolean
 }
 
 export async function createFeedback(data: {
@@ -77,6 +78,7 @@ export async function updateFeedback(
   data: {
     note?: string
     priority?: string | null
+    completed?: boolean
   }
 ): Promise<Feedback> {
   const supabase = await createClient()
@@ -125,6 +127,32 @@ export async function deleteFeedback(id: string): Promise<void> {
   }
 
   revalidatePath('/dashboard')
+}
+
+export async function toggleFeedbackCompleted(id: string, completed: boolean): Promise<Feedback> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    throw new Error('Not authenticated')
+  }
+
+  const { data: feedback, error } = await supabase
+    .from('feedback')
+    .update({ completed })
+    .eq('id', id)
+    .eq('owner_id', user.id)
+    .select()
+    .single()
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  revalidatePath('/dashboard')
+  return feedback as Feedback
 }
 
 

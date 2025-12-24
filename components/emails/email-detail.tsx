@@ -99,7 +99,13 @@ export function EmailDetail({ initialEmail }: EmailDetailProps) {
     }
   }
 
-  function getStatusColor(status: Email['status']) {
+  function getStatusColor(status: Email['status'], direction?: string) {
+    // For inbound emails, show "Received" in light blue
+    if (direction === 'inbound') {
+      return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
+    }
+    
+    // For outbound emails, use status-based colors
     switch (status) {
       case 'sent':
         return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
@@ -117,6 +123,16 @@ export function EmailDetail({ initialEmail }: EmailDetailProps) {
     }
   }
 
+  function getStatusLabel(status: Email['status'], direction?: string) {
+    // For inbound emails, always show "Received"
+    if (direction === 'inbound') {
+      return 'Received'
+    }
+    
+    // For outbound emails, show status (sent/failed/etc.)
+    return status.charAt(0).toUpperCase() + status.slice(1)
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -128,8 +144,10 @@ export function EmailDetail({ initialEmail }: EmailDetailProps) {
           <h1 className="text-3xl font-bold">{email.subject}</h1>
         </div>
         <div className="flex items-center gap-2">
-          <Badge className={getStatusColor(email.status)}>{email.status}</Badge>
-          {email.status === 'sent' && (
+          <Badge className={getStatusColor(email.status, email.direction)}>
+            {getStatusLabel(email.status, email.direction)}
+          </Badge>
+          {email.status === 'sent' && email.direction === 'outbound' && (
             <>
               <Button
                 variant="outline"
