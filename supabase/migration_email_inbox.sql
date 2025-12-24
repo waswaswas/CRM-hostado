@@ -40,3 +40,4 @@ $$ LANGUAGE plpgsql;
 -- Note: This requires pg_cron extension to be enabled in Supabase
 -- You may need to run this manually or set up a cron job externally
 -- SELECT cron.schedule('cleanup-trash-emails', '0 2 * * *', 'SELECT cleanup_trash_emails()');
+

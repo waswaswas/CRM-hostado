@@ -1,6 +1,7 @@
 import * as Imap from 'imap'
 import { simpleParser, ParsedMail } from 'mailparser'
 import { createInboundEmail } from '@/app/actions/emails'
+import { parseContactFormEmail } from './contact-form-parser'
 
 interface ImapConfig {
   host: string
@@ -152,7 +153,8 @@ export async function checkForNewEmails(): Promise<{
                     await processEmail(processedEmail)
                     processedCount++
 
-                    // Mark as read (SEEN)
+                    // Mark as read (SEEN) immediately after processing
+                    // This prevents the email from being processed again
                     imap.addFlags(results[seqno - 1], '\\Seen', (flagErr) => {
                       if (flagErr) {
                         console.error(`Failed to mark email ${results[seqno - 1]} as read:`, flagErr)
@@ -214,7 +216,21 @@ async function processEmail(email: ProcessedEmail): Promise<void> {
   const toEmail = email.to[0]?.address || process.env.SMTP_FROM_EMAIL || ''
   const toName = email.to[0]?.name || process.env.SMTP_FROM_NAME || 'Pre-Sales CRM'
 
-  // Create inbound email record
+  // Check if this is a contact form inquiry
+  const isContactForm = email.subject.includes('Ново запитване от контактната форма')
+
+  if (isContactForm) {
+    // Parse contact form data
+    const formData = parseContactFormEmail(email.html || email.text)
+    
+    if (formData) {
+      // Process contact form inquiry
+      await processContactFormInquiry(formData, email)
+      return
+    }
+  }
+
+  // Regular inbound email processing
   await createInboundEmail({
     from_email: email.from.address,
     from_name: email.from.name || email.from.address.split('@')[0],
@@ -228,6 +244,152 @@ async function processEmail(email: ProcessedEmail): Promise<void> {
   })
 }
 
+async function processContactFormInquiry(
+  formData: { name: string; firstName: string; secondName?: string; email: string; phone?: string; subject?: string; message: string },
+  email: ProcessedEmail
+): Promise<void> {
+  const { createClientRecord } = await import('@/app/actions/clients')
+  const { createInteraction } = await import('@/app/actions/interactions')
+  const { createClient: createSupabaseClient } = await import('@/lib/supabase/server')
+
+  const supabase = await createSupabaseClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    throw new Error('Unauthorized')
+  }
+
+  // Check if client already exists by email
+  const { data: existingClient } = await supabase
+    .from('clients')
+    .select('id')
+    .eq('email', formData.email)
+    .eq('owner_id', user.id)
+    .single()
+
+  let clientId: string
+
+  if (existingClient) {
+    clientId = existingClient.id
+  } else {
+    // Create new presales client
+    const newClient = await createClientRecord({
+      name: formData.name, // Full name
+      email: formData.email,
+      phone: formData.phone,
+      client_type: 'presales',
+      status: 'new',
+      source: 'contact_form',
+    })
+    clientId = newClient.id
+  }
+
+  // Get the "to" email address
+  const toEmail = email.to[0]?.address || process.env.SMTP_FROM_EMAIL || ''
+  const toName = email.to[0]?.name || process.env.SMTP_FROM_NAME || 'Pre-Sales CRM'
+
+  const receivedAt = email.date.toISOString()
+
+  // Check if this email already exists (prevent duplicates)
+  // First try to match by messageId if available (most reliable)
+  let existingEmail = null
+  if (email.messageId) {
+    const { data: emailByMessageId } = await supabase
+      .from('emails')
+      .select('id')
+      .eq('owner_id', user.id)
+      .eq('provider_message_id', email.messageId)
+      .single()
+    existingEmail = emailByMessageId
+  }
+
+  // If not found by messageId, check by from_email, subject, and sent_at (within 2 minutes)
+  if (!existingEmail) {
+    const { data: emailByContent } = await supabase
+      .from('emails')
+      .select('id')
+      .eq('owner_id', user.id)
+      .eq('client_id', clientId)
+      .eq('from_email', formData.email)
+      .eq('subject', email.subject)
+      .eq('direction', 'inbound')
+      .gte('sent_at', new Date(new Date(receivedAt).getTime() - 120000).toISOString()) // Within 2 minutes
+      .lte('sent_at', new Date(new Date(receivedAt).getTime() + 120000).toISOString())
+      .order('sent_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    existingEmail = emailByContent
+  }
+
+  let emailRecord
+
+  if (existingEmail) {
+    // Email already exists, use it
+    emailRecord = existingEmail
+  } else {
+    // Create inbound email record directly (without using createInboundEmail to avoid auto-creating interaction)
+    const { data: newEmailRecord, error: emailError } = await supabase
+      .from('emails')
+      .insert({
+        owner_id: user.id,
+        client_id: clientId,
+        subject: email.subject,
+        body_html: email.html || email.text,
+        body_text: email.text || (email.html ? email.html.replace(/<[^>]*>/g, '') : ''),
+        from_email: formData.email,
+        from_name: formData.name,
+        to_email: toEmail,
+        to_name: toName,
+        cc_emails: [],
+        bcc_emails: [],
+        status: 'sent',
+        sent_at: receivedAt,
+        folder: 'inbox',
+        direction: 'inbound',
+        is_read: false,
+        is_deleted: false,
+        provider_message_id: email.messageId || null, // Store messageId for duplicate detection
+      })
+      .select()
+      .single()
+
+    if (emailError) {
+      throw new Error(`Failed to create email record: ${emailError.message}`)
+    }
+
+    emailRecord = newEmailRecord
+  }
+
+  // Check if "Initial request" interaction already exists for this email
+  const { data: existingInteraction } = await supabase
+    .from('interactions')
+    .select('id')
+    .eq('client_id', clientId)
+    .eq('email_id', emailRecord.id)
+    .eq('subject', 'Initial request')
+    .eq('type', 'email')
+    .eq('direction', 'inbound')
+    .single()
+
+  // Only create interaction if it doesn't exist
+  if (!existingInteraction) {
+    const interactionNotes = formData.message || email.text || (email.html ? email.html.replace(/<[^>]*>/g, '') : '')
+
+    await createInteraction({
+      client_id: clientId,
+      type: 'email',
+      direction: 'inbound',
+      date: receivedAt,
+      subject: 'Initial request',
+      notes: interactionNotes,
+      email_id: emailRecord.id,
+    })
+  }
+}
+
 export function isImapConfigured(): boolean {
   return getImapConfig() !== null
 }
+

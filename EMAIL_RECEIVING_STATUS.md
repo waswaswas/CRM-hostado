@@ -71,3 +71,4 @@ If emails aren't being received:
 5. **Gmail users**: Make sure you're using an App Password, not your regular password
 
 See `SETUP_EMAIL_RECEIVING.md` for detailed setup instructions.
+
