@@ -58,7 +58,7 @@ export function getStatusColor(status: ClientStatus, clientType: ClientType | nu
     case 'attention_needed':
       return 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200'
     case 'follow_up_required':
-      return 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200'
+      return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
     case 'waits_for_offer':
       return 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200'
     case 'on_hold':
@@ -77,6 +77,11 @@ export function formatStatus(status: ClientStatus, customStatuses?: Array<{ key:
     if (customStatus) {
       return customStatus.label
     }
+  }
+  
+  // Special handling for follow_up_required - rename to "Follow up needed"
+  if (status === 'follow_up_required') {
+    return 'Follow up needed'
   }
   
   // Default formatting for built-in statuses

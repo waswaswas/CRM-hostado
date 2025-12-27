@@ -428,12 +428,13 @@ async function processContactFormInquiry(
     }
   } else {
     // No client with this email exists, create new one
+    // Set status to 'follow_up_required' to remind to contact them
     const newClient = await createClientRecord({
       name: formData.name, // Full name (cleaned, without "Имейл адрес")
       email: formData.email,
       phone: formData.phone,
       client_type: 'presales',
-      status: 'new',
+      status: 'follow_up_required', // Set to follow up required for contact form inquiries
       source: 'contact_form',
     })
     clientId = newClient.id

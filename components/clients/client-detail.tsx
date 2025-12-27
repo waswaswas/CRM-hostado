@@ -401,13 +401,111 @@ export function ClientDetail({ client: initialClient }: ClientDetailProps) {
         </div>
 
         <div className="lg:col-span-2">
-          <Tabs defaultValue="notes" className="w-full">
+          <Tabs defaultValue="timeline" className="w-full">
             <TabsList>
-              <TabsTrigger value="notes">Notes</TabsTrigger>
-              <TabsTrigger value="reminders">Reminders</TabsTrigger>
-              <TabsTrigger value="offers">Offers</TabsTrigger>
               <TabsTrigger value="timeline">Timeline</TabsTrigger>
+              <TabsTrigger value="notes">Notes</TabsTrigger>
+              <TabsTrigger value="offers">Offers</TabsTrigger>
+              <TabsTrigger value="reminders">Reminders</TabsTrigger>
             </TabsList>
+
+            <TabsContent value="timeline" className="space-y-4">
+              <div className="flex justify-end gap-2">
+                <Link href={`/emails/compose?client_id=${client.id}`}>
+                  <Button variant="outline">
+                    <Mail className="mr-2 h-4 w-4" />
+                    Send Email
+                  </Button>
+                </Link>
+                <Button onClick={() => setShowInteractionDialog(true)}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add Interaction
+                </Button>
+              </div>
+
+              {loading ? (
+                <p className="text-muted-foreground">Loading...</p>
+              ) : interactions.length > 0 ? (
+                <div className="space-y-4">
+                  {interactions.map((interaction) => (
+                    <Card key={interaction.id}>
+                      <CardContent className="p-4">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              {getInteractionIcon(interaction.type)}
+                              <span className="font-medium capitalize">
+                                {interaction.type}
+                              </span>
+                              {interaction.direction && (
+                                <Badge variant="outline" className="text-xs">
+                                  {interaction.direction}
+                                </Badge>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <p className="mt-1 font-semibold">{interaction.subject}</p>
+                              {interaction.email_id && (
+                                <Link href={`/emails/${interaction.email_id}`}>
+                                  <Button variant="ghost" size="sm" className="h-6 text-xs">
+                                    View Email
+                                  </Button>
+                                </Link>
+                              )}
+                            </div>
+                            {interaction.notes && (
+                              <p className="mt-1 text-sm text-muted-foreground">
+                                {interaction.notes}
+                              </p>
+                            )}
+                            <div className="mt-2 flex gap-4 text-xs text-muted-foreground">
+                              <span>
+                                {format(new Date(interaction.date), 'MMM d, yyyy HH:mm')}
+                              </span>
+                              {interaction.duration_minutes && (
+                                <span>{interaction.duration_minutes} min</span>
+                              )}
+                            </div>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={async () => {
+                              if (confirm('Delete this interaction?')) {
+                                try {
+                                  await deleteInteraction(interaction.id, client.id)
+                                  setInteractions((prev) =>
+                                    prev.filter((i) => i.id !== interaction.id)
+                                  )
+                                  toast({
+                                    title: 'Success',
+                                    description: 'Interaction deleted',
+                                  })
+                                } catch (error) {
+                                  toast({
+                                    title: 'Error',
+                                    description: 'Failed to delete interaction',
+                                    variant: 'destructive',
+                                  })
+                                }
+                              }
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              ) : (
+                <Card>
+                  <CardContent className="p-8 text-center">
+                    <p className="text-muted-foreground">No interactions yet.</p>
+                  </CardContent>
+                </Card>
+              )}
+            </TabsContent>
 
             <TabsContent value="notes" className="space-y-4">
               <div className="flex justify-end">
@@ -497,6 +595,72 @@ export function ClientDetail({ client: initialClient }: ClientDetailProps) {
                 <Card>
                   <CardContent className="p-8 text-center">
                     <p className="text-muted-foreground">No notes yet.</p>
+                  </CardContent>
+                </Card>
+              )}
+            </TabsContent>
+
+            <TabsContent value="offers" className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold">Offers</h3>
+                <Link href={`/offers/new?client_id=${client.id}`}>
+                  <Button size="sm">
+                    <Plus className="mr-2 h-4 w-4" />
+                    New Offer
+                  </Button>
+                </Link>
+              </div>
+              {loading && offers.length === 0 ? (
+                <Card>
+                  <CardContent className="p-8 text-center">
+                    <p className="text-muted-foreground">Loading...</p>
+                  </CardContent>
+                </Card>
+              ) : offers.length > 0 ? (
+                <div className="space-y-4">
+                  {offers.map((offer) => (
+                    <Card key={offer.id}>
+                      <CardContent className="p-4">
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <Link href={`/offers/${offer.id}`} className="font-semibold hover:underline">
+                                {offer.title}
+                              </Link>
+                              <Badge className={getStatusColor(offer.status as any, null)}>
+                                {offer.status}
+                              </Badge>
+                            </div>
+                            {offer.description && (
+                              <p className="mt-1 text-sm text-muted-foreground">
+                                {offer.description}
+                              </p>
+                            )}
+                            <div className="mt-2 flex gap-4 text-sm">
+                              <span className="font-semibold">
+                                {offer.amount} {offer.currency}
+                              </span>
+                              {offer.valid_until && (
+                                <span className="text-muted-foreground">
+                                  Valid until: {format(new Date(offer.valid_until), 'MMM d, yyyy')}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <Link href={`/offers/${offer.id}`}>
+                            <Button variant="outline" size="sm">
+                              View
+                            </Button>
+                          </Link>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              ) : (
+                <Card>
+                  <CardContent className="p-8 text-center">
+                    <p className="text-muted-foreground">No offers yet.</p>
                   </CardContent>
                 </Card>
               )}
@@ -602,164 +766,6 @@ export function ClientDetail({ client: initialClient }: ClientDetailProps) {
                 <Card>
                   <CardContent className="p-8 text-center">
                     <p className="text-muted-foreground">No reminders yet.</p>
-                  </CardContent>
-                </Card>
-              )}
-            </TabsContent>
-
-            <TabsContent value="timeline" className="space-y-4">
-              <div className="flex justify-end gap-2">
-                <Link href={`/emails/compose?client_id=${client.id}`}>
-                  <Button variant="outline">
-                    <Mail className="mr-2 h-4 w-4" />
-                    Send Email
-                  </Button>
-                </Link>
-                <Button onClick={() => setShowInteractionDialog(true)}>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add Interaction
-                </Button>
-              </div>
-
-              {loading ? (
-                <p className="text-muted-foreground">Loading...</p>
-              ) : interactions.length > 0 ? (
-                <div className="space-y-4">
-                  {interactions.map((interaction) => (
-                    <Card key={interaction.id}>
-                      <CardContent className="p-4">
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2">
-                              {getInteractionIcon(interaction.type)}
-                              <span className="font-medium capitalize">
-                                {interaction.type}
-                              </span>
-                              {interaction.direction && (
-                                <Badge variant="outline" className="text-xs">
-                                  {interaction.direction}
-                                </Badge>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <p className="mt-1 font-semibold">{interaction.subject}</p>
-                              {interaction.email_id && (
-                                <Link href={`/emails/${interaction.email_id}`}>
-                                  <Button variant="ghost" size="sm" className="h-6 text-xs">
-                                    View Email
-                                  </Button>
-                                </Link>
-                              )}
-                            </div>
-                            {interaction.notes && (
-                              <p className="mt-1 text-sm text-muted-foreground">
-                                {interaction.notes}
-                              </p>
-                            )}
-                            <div className="mt-2 flex gap-4 text-xs text-muted-foreground">
-                              <span>
-                                {format(new Date(interaction.date), 'MMM d, yyyy HH:mm')}
-                              </span>
-                              {interaction.duration_minutes && (
-                                <span>{interaction.duration_minutes} min</span>
-                              )}
-                            </div>
-                          </div>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={async () => {
-                              if (confirm('Delete this interaction?')) {
-                                try {
-                                  await deleteInteraction(interaction.id, client.id)
-                                  setInteractions((prev) =>
-                                    prev.filter((i) => i.id !== interaction.id)
-                                  )
-                                  toast({
-                                    title: 'Success',
-                                    description: 'Interaction deleted',
-                                  })
-                                } catch (error) {
-                                  toast({
-                                    title: 'Error',
-                                    description: 'Failed to delete interaction',
-                                    variant: 'destructive',
-                                  })
-                                }
-                              }
-                            }}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              ) : (
-                <Card>
-                  <CardContent className="p-8 text-center">
-                    <p className="text-muted-foreground">No interactions yet.</p>
-                  </CardContent>
-                </Card>
-              )}
-            </TabsContent>
-
-            <TabsContent value="offers" className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold">Offers</h3>
-                <Link href={`/offers/new?client_id=${client.id}`}>
-                  <Button size="sm">
-                    <Plus className="mr-2 h-4 w-4" />
-                    New Offer
-                  </Button>
-                </Link>
-              </div>
-              {loading && offers.length === 0 ? (
-                <Card>
-                  <CardContent className="p-8 text-center">
-                    <p className="text-muted-foreground">Loading...</p>
-                  </CardContent>
-                </Card>
-              ) : offers.length > 0 ? (
-                <div className="space-y-2">
-                  {offers.map((offer) => (
-                    <Card key={offer.id}>
-                      <CardContent className="p-4">
-                        <div className="flex items-center justify-between">
-                          <div className="flex-1">
-                            <Link href={`/offers/${offer.id}`} className="font-semibold hover:underline">
-                              {offer.title}
-                            </Link>
-                            <p className="text-sm text-muted-foreground mt-1">
-                              {offer.amount} {offer.currency} • {offer.status}
-                            </p>
-                            {offer.description && (
-                              <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
-                                {offer.description}
-                              </p>
-                            )}
-                          </div>
-                          <Link href={`/offers/${offer.id}`}>
-                            <Button variant="ghost" size="sm">
-                              View
-                            </Button>
-                          </Link>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              ) : (
-                <Card>
-                  <CardContent className="p-8 text-center">
-                    <p className="text-muted-foreground mb-2">No offers found</p>
-                    <Link href={`/offers/new?client_id=${client.id}`}>
-                      <Button className="mt-4">
-                        <Plus className="mr-2 h-4 w-4" />
-                        Create Offer
-                      </Button>
-                    </Link>
                   </CardContent>
                 </Card>
               )}

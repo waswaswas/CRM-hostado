@@ -107,7 +107,7 @@ export const translations = {
     status: {
       contacted: 'Contacted',
       attentionNeeded: 'Attention Needed',
-      followUpRequired: 'Follow Up Required',
+      followUpRequired: 'Follow Up Needed',
       waitsForOffer: 'Waiting for Offer',
       onHold: 'On Hold',
       abandoned: 'Abandoned',
