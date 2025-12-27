@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, Users, Settings, FileText, Mail } from 'lucide-react'
+import { LayoutDashboard, Users, Settings, FileText, Mail, Building2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const navigation = [
@@ -10,6 +10,7 @@ const navigation = [
   { name: 'Clients', href: '/clients', icon: Users },
   { name: 'Offers', href: '/offers', icon: FileText },
   { name: 'Emails', href: '/emails', icon: Mail },
+  { name: 'Accounting', href: '/accounting', icon: Building2 },
 ]
 
 export function Sidebar() {

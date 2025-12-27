@@ -15,3 +15,5 @@ ALTER TABLE interactions
 
 -- This ensures that when an email is deleted (e.g., when a client is deleted),
 -- all interactions referencing that email will also be automatically deleted.
+
+

@@ -104,5 +104,64 @@ export interface Payment {
   paid_at: string | null
 }
 
+// Accounting
+export type AccountType = 'bank' | 'cash' | 'credit_card' | 'other'
+export type TransactionType = 'income' | 'expense' | 'transfer'
+
+export interface Account {
+  id: string
+  created_at: string
+  updated_at: string
+  owner_id: string
+  name: string
+  account_number: string | null
+  bank_name: string | null
+  bank_phone: string | null
+  type: AccountType
+  currency: string
+  opening_balance: number
+  current_balance: number
+  is_locked: boolean | null
+  notes: string | null
+}
+
+export interface TransactionCategory {
+  id: string
+  created_at: string
+  owner_id: string
+  name: string
+  type: 'income' | 'expense'
+  color: string | null
+  parent_id: string | null
+}
+
+export interface Transaction {
+  id: string
+  created_at: string
+  updated_at: string
+  owner_id: string
+  account_id: string
+  type: TransactionType
+  number: string
+  date: string
+  amount: number
+  currency: string
+  category: string | null
+  payment_method: string
+  description: string | null
+  reference: string | null
+  contact_id: string | null
+  tax_id: string | null
+  attachment_url: string | null
+  created_by: string | null
+  transfer_to_account_id: string | null
+  transfer_transaction_id: string | null
+}
+
+export interface TransactionWithRelations extends Transaction {
+  account?: Account
+  contact?: Client
+}
+
 
 

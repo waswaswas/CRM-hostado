@@ -14,3 +14,5 @@ ALTER TABLE public.feedback ALTER COLUMN completed SET NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_feedback_completed ON public.feedback(completed);
 
 
+
+
