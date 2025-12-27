@@ -8,7 +8,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Select } from '@/components/ui/select'
 import { Client, ClientStatus, ClientType } from '@/types/database'
 import Link from 'next/link'
-import { Plus, Search, Trash2, Calendar } from 'lucide-react'
+import { Plus, Search, Trash2, Calendar, Link as LinkIcon } from 'lucide-react'
 import { format, subDays, isAfter, startOfDay, endOfDay } from 'date-fns'
 import { getStatusesForType, getStatusColor, formatStatus, STATUS_DESCRIPTIONS, isClientNew } from '@/lib/status-utils'
 import { deleteClient, updateClient } from '@/app/actions/clients'
@@ -18,9 +18,10 @@ import type { StatusConfig } from '@/types/settings'
 
 interface ClientsListProps {
   initialClients: Client[]
+  linkedClientIds?: string[]
 }
 
-export function ClientsList({ initialClients }: ClientsListProps) {
+export function ClientsList({ initialClients, linkedClientIds = [] }: ClientsListProps) {
   const { toast } = useToast()
   const [clients, setClients] = useState<Client[]>(initialClients)
   const [filteredClients, setFilteredClients] = useState<Client[]>(initialClients)
@@ -457,6 +458,15 @@ export function ClientsList({ initialClients }: ClientsListProps) {
                               title="Added within the last 14 days"
                             >
                               New
+                            </Badge>
+                          )}
+                          {linkedClientIds.includes(client.id) && (
+                            <Badge 
+                              className="bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200 flex items-center gap-1"
+                              title="Linked to accounting customer"
+                            >
+                              <LinkIcon className="h-3 w-3" />
+                              Accounting
                             </Badge>
                           )}
                           {editingClient?.id === client.id && editingClient.field === 'type' ? (

@@ -202,3 +202,35 @@ export async function getAccountingCustomersByClientId(clientId: string): Promis
     return []
   }
 }
+
+export async function getLinkedClientIds(): Promise<string[]> {
+  try {
+    const supabase = await createClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    if (!user) {
+      return []
+    }
+
+    const { data, error } = await supabase
+      .from('accounting_customers')
+      .select('linked_client_id')
+      .eq('owner_id', user.id)
+      .not('linked_client_id', 'is', null)
+
+    if (error) {
+      if (error.message.includes('Could not find the table') || error.message.includes('relation') || error.message.includes('does not exist')) {
+        return []
+      }
+      return []
+    }
+
+    return (data || [])
+      .map(customer => customer.linked_client_id)
+      .filter((id): id is string => id !== null)
+  } catch (error) {
+    return []
+  }
+}
