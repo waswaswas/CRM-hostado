@@ -2,49 +2,40 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Building2, Wallet, Receipt, LayoutDashboard, Upload, ArrowLeft } from 'lucide-react'
+import { Building2, Wallet, Receipt, LayoutDashboard, Upload, Users } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { Button } from '@/components/ui/button'
 
 const accountingNav = [
-  { name: 'Accounts', href: '/accounting/accounts', icon: Wallet },
-  { name: 'Transactions', href: '/accounting/transactions', icon: Receipt },
-  { name: 'Import', href: '/accounting/import', icon: Upload },
   { name: 'Dashboard', href: '/accounting/dashboard', icon: LayoutDashboard },
+  { name: 'Customers', href: '/accounting/customers', icon: Users },
+  { name: 'Transactions', href: '/accounting/transactions', icon: Receipt },
+  { name: 'Accounts', href: '/accounting/accounts', icon: Wallet },
+  { name: 'Import', href: '/accounting/import', icon: Upload },
 ]
 
 export function AccountingNav() {
   const pathname = usePathname()
 
   return (
-    <div className="flex items-center justify-between border-b pb-4 mb-6">
-      <div className="flex items-center gap-2">
-        <Link href="/dashboard">
-          <Button variant="ghost" size="sm" className="gap-2">
-            <ArrowLeft className="h-4 w-4" />
-            Back to home
-          </Button>
-        </Link>
-        <div className="h-6 w-px bg-border mx-2" />
-        {accountingNav.map((item) => {
-          const isActive = pathname === item.href || pathname?.startsWith(item.href + '/')
-          return (
-            <Link
-              key={item.name}
-              href={item.href}
-              className={cn(
-                'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors',
-                isActive
-                  ? 'bg-primary text-primary-foreground'
-                  : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
-              )}
-            >
-              <item.icon className="h-4 w-4" />
-              {item.name}
-            </Link>
-          )
-        })}
-      </div>
+    <div className="flex items-center gap-2 border-b pb-4 mb-6">
+      {accountingNav.map((item) => {
+        const isActive = pathname === item.href || pathname?.startsWith(item.href + '/')
+        return (
+          <Link
+            key={item.name}
+            href={item.href}
+            className={cn(
+              'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors',
+              isActive
+                ? 'bg-primary text-primary-foreground'
+                : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+            )}
+          >
+            <item.icon className="h-4 w-4" />
+            {item.name}
+          </Link>
+        )
+      })}
     </div>
   )
 }

@@ -11,6 +11,7 @@ export async function getTransactions(filters?: {
   start_date?: string
   end_date?: string
   contact_id?: string
+  accounting_customer_id?: string
 }): Promise<TransactionWithRelations[]> {
   const supabase = await createClient()
   const {
@@ -44,7 +45,8 @@ export async function getTransactions(filters?: {
     .select(`
       *,
       account:accounts(*),
-      contact:clients(*)
+      contact:clients(*),
+      accounting_customer:accounting_customers(*)
     `)
     .eq('owner_id', user.id)
 
@@ -70,6 +72,10 @@ export async function getTransactions(filters?: {
 
   if (filters?.contact_id) {
     query = query.eq('contact_id', filters.contact_id)
+  }
+
+  if (filters?.accounting_customer_id) {
+    query = query.eq('accounting_customer_id', filters.accounting_customer_id)
   }
 
   let { data, error } = await query.order('date', { ascending: false }).order('created_at', { ascending: false })
@@ -213,6 +219,7 @@ export async function createTransaction(data: {
   description?: string
   reference?: string
   contact_id?: string
+  accounting_customer_id?: string
   number?: string
   transfer_to_account_id?: string
 }): Promise<Transaction> {
@@ -245,6 +252,7 @@ export async function createTransaction(data: {
         description: data.description || null,
         reference: data.reference || null,
         contact_id: data.contact_id || null,
+        accounting_customer_id: data.accounting_customer_id || null,
         transfer_to_account_id: data.transfer_to_account_id,
         created_by: user.id,
       })
@@ -273,6 +281,7 @@ export async function createTransaction(data: {
         description: data.description || null,
         reference: data.reference || null,
         contact_id: data.contact_id || null,
+        accounting_customer_id: data.accounting_customer_id || null,
         transfer_transaction_id: fromTransaction.id,
         created_by: user.id,
       })
@@ -312,6 +321,7 @@ export async function createTransaction(data: {
       description: data.description || null,
       reference: data.reference || null,
       contact_id: data.contact_id || null,
+      accounting_customer_id: data.accounting_customer_id || null,
       created_by: user.id,
     })
     .select()

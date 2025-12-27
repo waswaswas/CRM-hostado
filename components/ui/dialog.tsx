@@ -100,6 +100,16 @@ const DialogClose = ({
   </button>
 )
 
+const DialogTrigger = React.forwardRef<
+  HTMLButtonElement,
+  React.ButtonHTMLAttributes<HTMLButtonElement>
+>(({ className, children, ...props }, ref) => (
+  <button ref={ref} className={className} {...props}>
+    {children}
+  </button>
+))
+DialogTrigger.displayName = "DialogTrigger"
+
 export {
   Dialog,
   DialogContent,
@@ -107,6 +117,7 @@ export {
   DialogTitle,
   DialogDescription,
   DialogClose,
+  DialogTrigger,
 }
 
 

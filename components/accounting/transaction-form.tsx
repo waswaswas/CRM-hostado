@@ -18,6 +18,8 @@ interface TransactionFormProps {
   accounts: Account[]
   clients: Client[]
   categories: TransactionCategory[]
+  initialContactId?: string
+  initialType?: 'income' | 'expense'
 }
 
 export function TransactionForm({
@@ -25,17 +27,19 @@ export function TransactionForm({
   accounts,
   clients,
   categories,
+  initialContactId,
+  initialType,
 }: TransactionFormProps) {
   const { toast } = useToast()
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [transactionType, setTransactionType] = useState<'income' | 'expense' | 'transfer'>(
-    transaction?.type || 'expense'
+    transaction?.type || initialType || 'expense'
   )
 
   const [formData, setFormData] = useState({
     account_id: transaction?.account_id || accounts[0]?.id || '',
-    type: transaction?.type || 'expense',
+    type: transaction?.type || initialType || 'expense',
     date: transaction?.date || format(new Date(), 'yyyy-MM-dd'),
     amount: transaction?.amount || 0,
     currency: transaction?.currency || 'BGN',
@@ -44,6 +48,7 @@ export function TransactionForm({
     description: transaction?.description || '',
     reference: transaction?.reference || '',
     contact_id: transaction?.contact_id || '',
+    accounting_customer_id: transaction?.accounting_customer_id || initialContactId || '',
     transfer_to_account_id: '',
   })
 
@@ -76,6 +81,8 @@ export function TransactionForm({
         await createTransaction({
           ...formData,
           type: transactionType,
+          accounting_customer_id: formData.accounting_customer_id || undefined,
+          contact_id: formData.contact_id || undefined,
           transfer_to_account_id: transactionType === 'transfer' ? formData.transfer_to_account_id : undefined,
         })
         toast({

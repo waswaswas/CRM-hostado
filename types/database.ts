@@ -161,6 +161,28 @@ export interface Transaction {
 export interface TransactionWithRelations extends Transaction {
   account?: Account
   contact?: Client
+  accounting_customer?: AccountingCustomer
+}
+
+// Accounting Customers (separate from CRM clients)
+export interface AccountingCustomer {
+  id: string
+  created_at: string
+  updated_at: string
+  owner_id: string
+  name: string
+  company: string | null
+  email: string | null
+  phone: string | null
+  address: string | null
+  tax_number: string | null
+  website: string | null
+  notes: string | null
+  linked_client_id: string | null
+}
+
+export interface AccountingCustomerWithRelations extends AccountingCustomer {
+  linked_client?: Client
 }
 
 
