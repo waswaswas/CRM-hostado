@@ -2,12 +2,13 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Building2, Wallet, Receipt, LayoutDashboard } from 'lucide-react'
+import { Building2, Wallet, Receipt, LayoutDashboard, Upload } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const accountingNav = [
   { name: 'Accounts', href: '/accounting/accounts', icon: Wallet },
   { name: 'Transactions', href: '/accounting/transactions', icon: Receipt },
+  { name: 'Import', href: '/accounting/import', icon: Upload },
   { name: 'Dashboard', href: '/accounting/dashboard', icon: LayoutDashboard },
 ]
 

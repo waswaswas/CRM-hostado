@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
-import { Search, Plus, ArrowUpDown } from 'lucide-react'
+import { Search, Plus, ArrowUpDown, Upload } from 'lucide-react'
 import { format } from 'date-fns'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -111,12 +111,20 @@ export function TransactionsList({ initialTransactions, accounts }: Transactions
           <ArrowUpDown className="mr-2 h-4 w-4" />
           {sortOrder === 'newest' ? 'Newest' : 'Oldest'}
         </Button>
-        <Link href="/accounting/transactions/new">
-          <Button>
-            <Plus className="mr-2 h-4 w-4" />
-            New Transaction
-          </Button>
-        </Link>
+        <div className="flex gap-2">
+          <Link href="/accounting/import">
+            <Button variant="outline">
+              <Upload className="mr-2 h-4 w-4" />
+              Import
+            </Button>
+          </Link>
+          <Link href="/accounting/transactions/new">
+            <Button>
+              <Plus className="mr-2 h-4 w-4" />
+              New Transaction
+            </Button>
+          </Link>
+        </div>
       </div>
 
       <div className="space-y-2">

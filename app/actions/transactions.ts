@@ -189,7 +189,7 @@ async function generateTransactionNumber(): Promise<string> {
     .like('number', 'TRA-%')
     .order('number', { ascending: false })
     .limit(1)
-    .single()
+    .maybeSingle()
 
   let nextNumber = 1
   if (lastTransaction?.number) {
