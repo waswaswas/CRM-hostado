@@ -79,7 +79,7 @@ CREATE TABLE IF NOT EXISTS emails (
 );
 
 -- Update interactions table to link emails
-ALTER TABLE interactions ADD COLUMN IF NOT EXISTS email_id UUID REFERENCES emails(id);
+ALTER TABLE interactions ADD COLUMN IF NOT EXISTS email_id UUID REFERENCES emails(id) ON DELETE CASCADE;
 
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_email_signatures_owner_id ON email_signatures(owner_id);

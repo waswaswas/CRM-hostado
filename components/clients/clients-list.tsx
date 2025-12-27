@@ -188,7 +188,9 @@ export function ClientsList({ initialClients }: ClientsListProps) {
           
           // Log specific error to help debug
           if (errorMessage.includes('foreign key') || errorMessage.includes('constraint')) {
-            console.error(`Client ${clientId} cannot be deleted due to related records (emails, offers, etc.)`)
+            console.error(`Client ${clientId} cannot be deleted due to related records.`)
+            console.error(`Error details: ${errorMessage}`)
+            console.error(`Solution: Run the migration: supabase/migration_fix_interactions_email_cascade.sql`)
           }
         }
       }
