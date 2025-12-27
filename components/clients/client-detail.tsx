@@ -41,13 +41,19 @@ import {
   PinOff,
   Trash2,
   Edit,
+  Link as LinkIcon,
+  Unlink,
 } from 'lucide-react'
+
+import { AccountingCustomerWithRelations } from '@/types/database'
+import { LinkAccountingCustomerDialog } from './link-accounting-customer-dialog'
 
 interface ClientDetailProps {
   client: Client
+  linkedAccountingCustomers?: AccountingCustomerWithRelations[]
 }
 
-export function ClientDetail({ client: initialClient }: ClientDetailProps) {
+export function ClientDetail({ client: initialClient, linkedAccountingCustomers = [] }: ClientDetailProps) {
   const { toast } = useToast()
   const [client, setClient] = useState(initialClient)
   const [interactions, setInteractions] = useState<Interaction[]>([])
@@ -69,6 +75,7 @@ export function ClientDetail({ client: initialClient }: ClientDetailProps) {
     notes_summary: '',
   })
   const [customStatuses, setCustomStatuses] = useState<StatusConfig[]>([])
+  const [showLinkMenu, setShowLinkMenu] = useState(false)
 
   // Load custom statuses on mount
   useEffect(() => {
@@ -394,6 +401,54 @@ export function ClientDetail({ client: initialClient }: ClientDetailProps) {
                   >
                     {client.notes_summary || 'Click to add summary'}
                   </p>
+                )}
+              </div>
+              <div className="pt-2 border-t">
+                <h3 className="text-sm font-medium text-muted-foreground mb-2">Accounting Link</h3>
+                {linkedAccountingCustomers.length > 0 ? (
+                  <div className="space-y-2">
+                    {linkedAccountingCustomers.map((customer) => (
+                      <div key={customer.id} className="flex items-center justify-between">
+                        <Link 
+                          href={`/accounting/customers/${customer.id}`}
+                          className="text-sm text-primary hover:underline flex items-center gap-1"
+                        >
+                          <LinkIcon className="h-3 w-3" />
+                          {customer.name}
+                        </Link>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={async () => {
+                            try {
+                              const { linkAccountingCustomerToClient } = await import('@/app/actions/accounting-customers')
+                              await linkAccountingCustomerToClient(customer.id, null)
+                              toast({
+                                title: 'Success',
+                                description: 'Unlinked from accounting customer',
+                              })
+                              // Reload the page to refresh the list
+                              window.location.reload()
+                            } catch (error) {
+                              toast({
+                                title: 'Error',
+                                description: error instanceof Error ? error.message : 'Failed to unlink',
+                                variant: 'destructive',
+                              })
+                            }
+                          }}
+                          className="h-6 w-6 p-0"
+                        >
+                          <Unlink className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <LinkAccountingCustomerDialog 
+                    clientId={client.id}
+                    currentAccountingCustomerId={null}
+                  />
                 )}
               </div>
             </CardContent>

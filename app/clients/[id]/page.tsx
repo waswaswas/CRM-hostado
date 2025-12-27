@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation'
 import { AppLayout } from '@/components/layout/app-layout'
 import { getClient } from '@/app/actions/clients'
+import { getAccountingCustomersByClientId } from '@/app/actions/accounting-customers'
 import { ClientDetail } from '@/components/clients/client-detail'
 
 export default async function ClientDetailPage({
@@ -15,9 +16,15 @@ export default async function ClientDetailPage({
     notFound()
   }
 
+  // Get linked accounting customers
+  const linkedAccountingCustomers = await getAccountingCustomersByClientId(params.id).catch(() => [])
+
   return (
     <AppLayout>
-      <ClientDetail client={client} />
+      <ClientDetail 
+        client={client} 
+        linkedAccountingCustomers={linkedAccountingCustomers}
+      />
     </AppLayout>
   )
 }

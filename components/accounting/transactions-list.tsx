@@ -7,10 +7,11 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
-import { Search, Plus, ArrowUpDown, Upload } from 'lucide-react'
+import { Search, Plus, ArrowUpDown, Upload, UserPlus } from 'lucide-react'
 import { format } from 'date-fns'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { AssignCustomerDialog } from './assign-customer-dialog'
 
 interface TransactionsListProps {
   initialTransactions: TransactionWithRelations[]
@@ -166,10 +167,17 @@ export function TransactionsList({ initialTransactions, accounts }: Transactions
                       <div className="col-span-2 text-sm text-muted-foreground truncate" title={transaction.contact?.name || 'N/A'}>
                         {transaction.contact?.name || 'N/A'}
                       </div>
-                      <div className="col-span-2 text-sm text-muted-foreground truncate" title={transaction.reference || 'N/A'}>
+                      <div className="col-span-1 text-sm text-muted-foreground truncate" title={transaction.reference || 'N/A'}>
                         {transaction.reference || 'N/A'}
                       </div>
-                      <div className="col-span-2 text-right">
+                      <div className="col-span-1 flex items-center justify-center flex-shrink-0 min-w-[120px]">
+                        <AssignCustomerDialog
+                          transactionId={transaction.id}
+                          currentCustomerId={(transaction as any).accounting_customer_id}
+                          currentCustomerName={(transaction as any).accounting_customer?.name}
+                        />
+                      </div>
+                      <div className="col-span-2 flex items-center justify-end">
                         <div
                           className={`font-semibold ${
                             transaction.type === 'income' ? 'text-green-600' : 'text-red-600'

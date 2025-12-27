@@ -46,7 +46,7 @@ export async function getTransactions(filters?: {
       *,
       account:accounts(*),
       contact:clients(*),
-      accounting_customer:accounting_customers(*)
+      accounting_customer:accounting_customers!left(*)
     `)
     .eq('owner_id', user.id)
 
@@ -102,12 +102,14 @@ export async function getTransactions(filters?: {
       throw new Error(`Failed to fetch transactions: ${simpleError.message || simpleError.code || 'Unknown error'}`)
     }
 
-    // Manually fetch related accounts and clients
+    // Manually fetch related accounts, clients, and accounting customers
     const accountIds = [...new Set(simpleData?.map((t: any) => t.account_id).filter(Boolean) || [])]
     const contactIds = [...new Set(simpleData?.map((t: any) => t.contact_id).filter(Boolean) || [])]
+    const accountingCustomerIds = [...new Set(simpleData?.map((t: any) => t.accounting_customer_id).filter(Boolean) || [])]
 
     const accountsMap = new Map()
     const contactsMap = new Map()
+    const accountingCustomersMap = new Map()
 
     if (accountIds.length > 0) {
       const { data: accounts } = await supabase
@@ -128,11 +130,22 @@ export async function getTransactions(filters?: {
       contacts?.forEach((client: any) => contactsMap.set(client.id, client))
     }
 
+    if (accountingCustomerIds.length > 0) {
+      const { data: accountingCustomers } = await supabase
+        .from('accounting_customers')
+        .select('*')
+        .in('id', accountingCustomerIds)
+        .eq('owner_id', user.id)
+
+      accountingCustomers?.forEach((customer: any) => accountingCustomersMap.set(customer.id, customer))
+    }
+
     // Combine data
     data = simpleData?.map((t: any) => ({
       ...t,
       account: accountsMap.get(t.account_id),
       contact: contactsMap.get(t.contact_id),
+      accounting_customer: accountingCustomersMap.get(t.accounting_customer_id),
     }))
   } else if (error) {
     console.error('Error fetching transactions:', error)
@@ -391,6 +404,33 @@ export async function updateTransaction(
   revalidatePath('/accounting/transactions')
   revalidatePath(`/accounting/transactions/${id}`)
   return transaction
+}
+
+export async function assignCustomerToTransaction(
+  transactionId: string,
+  customerId: string | null
+): Promise<void> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    throw new Error('Unauthorized')
+  }
+
+  const { error } = await supabase
+    .from('transactions')
+    .update({ accounting_customer_id: customerId })
+    .eq('id', transactionId)
+    .eq('owner_id', user.id)
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  revalidatePath('/accounting/transactions')
+  revalidatePath(`/accounting/transactions/${transactionId}`)
 }
 
 export async function deleteTransaction(id: string): Promise<void> {

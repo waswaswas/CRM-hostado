@@ -14,7 +14,9 @@ import {
   Eye, 
   Copy,
   Star,
-  X
+  X,
+  Link as LinkIcon,
+  Unlink
 } from 'lucide-react'
 import { LinkCustomerDialog } from './link-customer-dialog'
 import { format } from 'date-fns'
@@ -39,6 +41,7 @@ export function AccountingCustomerDetail({
   const [activeTab, setActiveTab] = useState<'invoices' | 'transactions'>('transactions')
   const [showNewMenu, setShowNewMenu] = useState(false)
   const [showMoreMenu, setShowMoreMenu] = useState(false)
+  const [showUnlinkMenu, setShowUnlinkMenu] = useState(false)
 
   const getInitials = (name: string) => {
     const parts = name.trim().split(' ')
@@ -167,6 +170,54 @@ export function AccountingCustomerDetail({
               Edit
             </Button>
           </Link>
+          {customer.linked_client_id ? (
+            <div className="relative">
+              <Button 
+                variant="outline"
+                onClick={() => setShowUnlinkMenu(!showUnlinkMenu)}
+              >
+                <Unlink className="mr-2 h-4 w-4" />
+                Unlink CRM
+              </Button>
+              {showUnlinkMenu && (
+                <>
+                  <div 
+                    className="fixed inset-0 z-10" 
+                    onClick={() => setShowUnlinkMenu(false)}
+                  />
+                  <div className="absolute right-0 top-full mt-1 bg-background border rounded-md shadow-lg z-20 min-w-[200px]">
+                    <button 
+                      className="block w-full text-left px-4 py-2 text-sm hover:bg-accent rounded-t-md"
+                      onClick={async () => {
+                        try {
+                          const { linkAccountingCustomerToClient } = await import('@/app/actions/accounting-customers')
+                          await linkAccountingCustomerToClient(customer.id, null)
+                          setShowUnlinkMenu(false)
+                          router.refresh()
+                        } catch (error) {
+                          console.error('Failed to unlink:', error)
+                        }
+                      }}
+                    >
+                      Unlink from CRM Client
+                    </button>
+                    <Link 
+                      href={`/clients/${customer.linked_client_id}`}
+                      className="block px-4 py-2 text-sm hover:bg-accent rounded-b-md"
+                      onClick={() => setShowUnlinkMenu(false)}
+                    >
+                      View CRM Client
+                    </Link>
+                  </div>
+                </>
+              )}
+            </div>
+          ) : (
+            <LinkCustomerDialog 
+              customer={customer} 
+              crmClients={crmClients}
+            />
+          )}
           <Button variant="outline">
             <FileText className="mr-2 h-4 w-4" />
             Customer Statement
@@ -217,18 +268,11 @@ export function AccountingCustomerDetail({
                   <h3 className="text-sm font-medium text-muted-foreground mb-2">Linked to CRM</h3>
                   <Link 
                     href={`/clients/${customer.linked_client_id}`}
-                    className="text-sm text-primary hover:underline"
+                    className="text-sm text-primary hover:underline flex items-center gap-1"
                   >
+                    <LinkIcon className="h-3 w-3" />
                     {customer.linked_client.name}
                   </Link>
-                </div>
-              )}
-              {!customer.linked_client_id && (
-                <div className="pt-2 border-t">
-                  <LinkCustomerDialog 
-                    customer={customer} 
-                    crmClients={crmClients}
-                  />
                 </div>
               )}
               {customer.email && (

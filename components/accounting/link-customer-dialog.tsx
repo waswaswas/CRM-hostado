@@ -62,9 +62,9 @@ export function LinkCustomerDialog({ customer, crmClients }: LinkCustomerDialogP
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm" className="w-full">
-          <LinkIcon className="h-4 w-4 mr-2" />
-          Link to CRM Client
+        <Button variant="outline" className="flex items-center gap-2">
+          <LinkIcon className="h-4 w-4" />
+          Link CRM
         </Button>
       </DialogTrigger>
       <DialogContent>
