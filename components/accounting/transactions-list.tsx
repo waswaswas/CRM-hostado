@@ -72,8 +72,8 @@ export function TransactionsList({ initialTransactions, accounts }: Transactions
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-4">
-        <div className="flex-1">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+        <div className="flex-1 min-w-0">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
@@ -84,46 +84,52 @@ export function TransactionsList({ initialTransactions, accounts }: Transactions
             />
           </div>
         </div>
-        <Select
-          value={filterType}
-          onChange={(e) => setFilterType(e.target.value)}
-        >
-          <option value="all">All Types</option>
-          <option value="income">Income</option>
-          <option value="expense">Expense</option>
-          <option value="transfer">Transfer</option>
-        </Select>
-        <Select
-          value={filterAccount}
-          onChange={(e) => setFilterAccount(e.target.value)}
-        >
-          <option value="all">All Accounts</option>
-          {accounts.map((account) => (
-            <option key={account.id} value={account.id}>
-              {account.name}
-            </option>
-          ))}
-        </Select>
-        <Button
-          variant="outline"
-          onClick={() => setSortOrder(sortOrder === 'newest' ? 'oldest' : 'newest')}
-        >
-          <ArrowUpDown className="mr-2 h-4 w-4" />
-          {sortOrder === 'newest' ? 'Newest' : 'Oldest'}
-        </Button>
-        <div className="flex gap-2">
-          <Link href="/accounting/import">
-            <Button variant="outline">
-              <Upload className="mr-2 h-4 w-4" />
-              Import
-            </Button>
-          </Link>
-          <Link href="/accounting/transactions/new">
-            <Button>
-              <Plus className="mr-2 h-4 w-4" />
-              New Transaction
-            </Button>
-          </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          <Select
+            value={filterType}
+            onChange={(e) => setFilterType(e.target.value)}
+            className="min-w-[120px]"
+          >
+            <option value="all">All Types</option>
+            <option value="income">Income</option>
+            <option value="expense">Expense</option>
+            <option value="transfer">Transfer</option>
+          </Select>
+          <Select
+            value={filterAccount}
+            onChange={(e) => setFilterAccount(e.target.value)}
+            className="min-w-[140px]"
+          >
+            <option value="all">All Accounts</option>
+            {accounts.map((account) => (
+              <option key={account.id} value={account.id}>
+                {account.name}
+              </option>
+            ))}
+          </Select>
+          <Button
+            variant="outline"
+            onClick={() => setSortOrder(sortOrder === 'newest' ? 'oldest' : 'newest')}
+            className="whitespace-nowrap"
+          >
+            <ArrowUpDown className="mr-2 h-4 w-4" />
+            {sortOrder === 'newest' ? 'Newest' : 'Oldest'}
+          </Button>
+          <div className="flex gap-2">
+            <Link href="/accounting/import">
+              <Button variant="outline" size="sm" className="whitespace-nowrap">
+                <Upload className="mr-2 h-4 w-4" />
+                <span className="hidden sm:inline">Import</span>
+              </Button>
+            </Link>
+            <Link href="/accounting/transactions/new">
+              <Button size="sm" className="whitespace-nowrap">
+                <Plus className="mr-2 h-4 w-4" />
+                <span className="hidden sm:inline">New</span>
+                <span className="sm:hidden">+</span>
+              </Button>
+            </Link>
+          </div>
         </div>
       </div>
 
@@ -133,37 +139,37 @@ export function TransactionsList({ initialTransactions, accounts }: Transactions
             {filteredAndSorted.map((transaction) => (
               <Card key={transaction.id} className="hover:shadow-md transition-shadow">
                 <CardContent className="p-4">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1 grid grid-cols-8 gap-4 items-center">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1 grid grid-cols-12 gap-3 items-center">
                       <div className="col-span-2">
                         <div className="text-sm font-medium">
                           {format(new Date(transaction.date), 'dd MMM yyyy')}
                         </div>
-                        <div className="text-xs text-muted-foreground">{transaction.number}</div>
+                        <div className="text-xs text-muted-foreground truncate">{transaction.number}</div>
                       </div>
                       <div className="col-span-2">
                         <div className="flex items-center gap-2">
-                          <div className={`w-2 h-2 rounded-full ${
+                          <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
                             transaction.type === 'income' ? 'bg-green-500' : 
                             transaction.type === 'expense' ? 'bg-red-500' : 
                             'bg-blue-500'
                           }`} />
-                          <span className="text-sm font-medium capitalize">{transaction.type}</span>
+                          <span className="text-sm font-medium capitalize truncate">{transaction.type}</span>
                         </div>
-                        <div className="text-xs text-muted-foreground mt-1">
+                        <div className="text-xs text-muted-foreground mt-1 truncate">
                           {transaction.category || 'N/A'}
                         </div>
                       </div>
-                      <div className="col-span-1 text-sm">
+                      <div className="col-span-2 text-sm truncate" title={transaction.account?.name || 'N/A'}>
                         {transaction.account?.name || 'N/A'}
                       </div>
-                      <div className="col-span-1 text-sm text-muted-foreground">
+                      <div className="col-span-2 text-sm text-muted-foreground truncate" title={transaction.contact?.name || 'N/A'}>
                         {transaction.contact?.name || 'N/A'}
                       </div>
-                      <div className="col-span-1 text-sm text-muted-foreground">
+                      <div className="col-span-2 text-sm text-muted-foreground truncate" title={transaction.reference || 'N/A'}>
                         {transaction.reference || 'N/A'}
                       </div>
-                      <div className="col-span-1 text-right">
+                      <div className="col-span-2 text-right">
                         <div
                           className={`font-semibold ${
                             transaction.type === 'income' ? 'text-green-600' : 'text-red-600'
@@ -175,7 +181,7 @@ export function TransactionsList({ initialTransactions, accounts }: Transactions
                       </div>
                     </div>
                     <Link href={`/accounting/transactions/${transaction.id}`}>
-                      <Button variant="ghost" size="sm">
+                      <Button variant="ghost" size="sm" className="flex-shrink-0">
                         View
                       </Button>
                     </Link>

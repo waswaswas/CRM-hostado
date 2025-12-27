@@ -1,6 +1,7 @@
 import { getAccounts } from '@/app/actions/accounts'
 import { AccountsList } from '@/components/accounting/accounts-list'
 import { AccountingNav } from '@/components/accounting/accounting-nav'
+import { AppLayout } from '@/components/layout/app-layout'
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 
@@ -28,15 +29,19 @@ export default async function AccountsPage() {
   const accounts = await getAccounts()
 
   return (
-    <div className="space-y-6">
-      <AccountingNav />
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Accounts</h1>
-          <p className="text-muted-foreground">Manage your bank accounts and cash</p>
+    <AppLayout>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="space-y-6">
+          <AccountingNav />
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold">Accounts</h1>
+              <p className="text-muted-foreground">Manage your bank accounts and cash</p>
+            </div>
+          </div>
+          <AccountsList accounts={accounts} />
         </div>
       </div>
-      <AccountsList accounts={accounts} />
-    </div>
+    </AppLayout>
   )
 }
