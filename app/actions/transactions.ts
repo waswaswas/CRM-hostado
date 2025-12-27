@@ -84,10 +84,35 @@ export async function getTransactions(filters?: {
   if (error && (error.message?.includes('foreign key') || error.message?.includes('relation') || error.code === '42P01')) {
     console.warn('Foreign key relationships failed, trying without them:', error.message)
     // Fallback: fetch transactions without foreign key relationships
-    const { data: simpleData, error: simpleError } = await supabase
+    let fallbackQuery = supabase
       .from('transactions')
       .select('*')
       .eq('owner_id', user.id)
+
+    // Apply the same filters to fallback query
+    if (filters?.account_id) {
+      fallbackQuery = fallbackQuery.eq('account_id', filters.account_id)
+    }
+    if (filters?.type) {
+      fallbackQuery = fallbackQuery.eq('type', filters.type)
+    }
+    if (filters?.category) {
+      fallbackQuery = fallbackQuery.eq('category', filters.category)
+    }
+    if (filters?.start_date) {
+      fallbackQuery = fallbackQuery.gte('date', filters.start_date)
+    }
+    if (filters?.end_date) {
+      fallbackQuery = fallbackQuery.lte('date', filters.end_date)
+    }
+    if (filters?.contact_id) {
+      fallbackQuery = fallbackQuery.eq('contact_id', filters.contact_id)
+    }
+    if (filters?.accounting_customer_id) {
+      fallbackQuery = fallbackQuery.eq('accounting_customer_id', filters.accounting_customer_id)
+    }
+
+    const { data: simpleData, error: simpleError } = await fallbackQuery
       .order('date', { ascending: false })
       .order('created_at', { ascending: false })
 
@@ -419,6 +444,14 @@ export async function assignCustomerToTransaction(
     throw new Error('Unauthorized')
   }
 
+  // Get the current customer ID before updating (for revalidation)
+  const { data: currentTransaction } = await supabase
+    .from('transactions')
+    .select('accounting_customer_id')
+    .eq('id', transactionId)
+    .eq('owner_id', user.id)
+    .single()
+
   const { error } = await supabase
     .from('transactions')
     .update({ accounting_customer_id: customerId })
@@ -431,6 +464,16 @@ export async function assignCustomerToTransaction(
 
   revalidatePath('/accounting/transactions')
   revalidatePath(`/accounting/transactions/${transactionId}`)
+  
+  // Revalidate the customer detail pages
+  if (customerId) {
+    // Revalidate the new customer's page
+    revalidatePath(`/accounting/customers/${customerId}`)
+  }
+  if (currentTransaction?.accounting_customer_id) {
+    // Revalidate the old customer's page (if it was assigned to someone)
+    revalidatePath(`/accounting/customers/${currentTransaction.accounting_customer_id}`)
+  }
 }
 
 export async function deleteTransaction(id: string): Promise<void> {

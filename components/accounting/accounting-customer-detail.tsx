@@ -16,13 +16,15 @@ import {
   Star,
   X,
   Link as LinkIcon,
-  Unlink
+  Unlink,
+  XCircle
 } from 'lucide-react'
 import { LinkCustomerDialog } from './link-customer-dialog'
+import { assignCustomerToTransaction } from '@/app/actions/transactions'
+import { useRouter } from 'next/navigation'
 import { format } from 'date-fns'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
-// Using a simple div-based dropdown for now
+import { useToast } from '@/components/ui/toaster'
 
 interface AccountingCustomerDetailProps {
   customer: AccountingCustomerWithRelations
@@ -38,6 +40,7 @@ export function AccountingCustomerDetail({
   crmClients
 }: AccountingCustomerDetailProps) {
   const router = useRouter()
+  const { toast } = useToast()
   const [activeTab, setActiveTab] = useState<'invoices' | 'transactions'>('transactions')
   const [showNewMenu, setShowNewMenu] = useState(false)
   const [showMoreMenu, setShowMoreMenu] = useState(false)
@@ -419,11 +422,39 @@ export function AccountingCustomerDetail({
                               {formatAmount(transaction.amount, transaction.currency)}
                             </div>
                           </div>
-                          <Link href={`/accounting/transactions/${transaction.id}`}>
-                            <Button variant="ghost" size="icon" className="h-8 w-8">
-                              <Eye className="h-4 w-4" />
+                          <div className="flex items-center gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              onClick={async () => {
+                                if (confirm('Unlink this transaction from this customer?')) {
+                                  try {
+                                    await assignCustomerToTransaction(transaction.id, null)
+                                    toast({
+                                      title: 'Success',
+                                      description: 'Transaction unlinked from customer',
+                                    })
+                                    router.refresh()
+                                  } catch (error) {
+                                    toast({
+                                      title: 'Error',
+                                      description: error instanceof Error ? error.message : 'Failed to unlink transaction',
+                                      variant: 'destructive',
+                                    })
+                                  }
+                                }
+                              }}
+                              title="Unlink transaction from customer"
+                            >
+                              <XCircle className="h-4 w-4 text-muted-foreground hover:text-destructive" />
                             </Button>
-                          </Link>
+                            <Link href={`/accounting/transactions/${transaction.id}`}>
+                              <Button variant="ghost" size="icon" className="h-8 w-8">
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                            </Link>
+                          </div>
                         </div>
                       </CardContent>
                     </Card>
