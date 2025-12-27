@@ -22,3 +22,5 @@ ALTER TABLE clients DROP CONSTRAINT IF EXISTS clients_status_customer_check;
 
 
 
+
+

@@ -41,3 +41,5 @@ $$ LANGUAGE plpgsql;
 -- You may need to run this manually or set up a cron job externally
 -- SELECT cron.schedule('cleanup-trash-emails', '0 2 * * *', 'SELECT cleanup_trash_emails()');
 
+
+
