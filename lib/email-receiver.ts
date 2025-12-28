@@ -398,7 +398,74 @@ async function processContactFormInquiry(
     throw new Error('Unauthorized')
   }
 
-  // Check if client already exists by email (prevent duplicates)
+  const receivedAt = email.date.toISOString()
+
+  // FIRST: Check if this email already exists (prevent duplicates)
+  // This is the most important check - if email was already processed, skip entirely
+  let existingEmail = null
+  
+  // Method 1: Check by messageId (most reliable - unique per email)
+  if (email.messageId) {
+    const { data: emailByMessageId } = await supabase
+      .from('emails')
+      .select('id, client_id, from_email, provider_message_id')
+      .eq('owner_id', user.id)
+      .eq('provider_message_id', email.messageId)
+      .maybeSingle()
+    existingEmail = emailByMessageId
+  }
+
+  // Method 2: Check by from_email and subject (wider time window - 7 days to catch re-fetched emails)
+  if (!existingEmail) {
+    const { data: emailByContent } = await supabase
+      .from('emails')
+      .select('id, client_id, from_email, provider_message_id')
+      .eq('owner_id', user.id)
+      .eq('from_email', formData.email)
+      .eq('subject', email.subject)
+      .eq('direction', 'inbound')
+      .gte('sent_at', new Date(new Date(receivedAt).getTime() - 7 * 24 * 60 * 60 * 1000).toISOString()) // Within 7 days
+      .lte('sent_at', new Date(new Date(receivedAt).getTime() + 7 * 24 * 60 * 60 * 1000).toISOString())
+      .order('sent_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    existingEmail = emailByContent
+  }
+
+  // Method 3: Check if ANY email exists from this sender with this subject (no time limit)
+  // This catches emails that were processed before, even if dates don't match exactly
+  if (!existingEmail) {
+    const { data: emailBySenderAndSubject } = await supabase
+      .from('emails')
+      .select('id, client_id, from_email, sent_at, provider_message_id')
+      .eq('owner_id', user.id)
+      .eq('from_email', formData.email)
+      .eq('subject', email.subject)
+      .eq('direction', 'inbound')
+      .order('sent_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    
+    // Only consider it a duplicate if the sent_at date is very close (within 7 days)
+    if (emailBySenderAndSubject) {
+      const existingDate = new Date(emailBySenderAndSubject.sent_at)
+      const currentDate = new Date(receivedAt)
+      const timeDiff = Math.abs(currentDate.getTime() - existingDate.getTime())
+      const sevenDays = 7 * 24 * 60 * 60 * 1000
+      
+      if (timeDiff < sevenDays) {
+        existingEmail = emailBySenderAndSubject
+      }
+    }
+  }
+
+  // If email already exists, skip processing entirely (don't recreate clients)
+  if (existingEmail) {
+    console.log(`[Email Receiver] Email already processed, skipping: ${email.subject} from ${formData.email} (existing email ID: ${existingEmail.id}, messageId: ${existingEmail.provider_message_id || 'none'})`)
+    return false // Return false to indicate this was a duplicate
+  }
+
+  // THIRD: Check if client already exists by email (prevent duplicates)
   const { data: existingClients } = await supabase
     .from('clients')
     .select('id, name, email')
@@ -444,76 +511,37 @@ async function processContactFormInquiry(
   const toEmail = email.to[0]?.address || process.env.SMTP_FROM_EMAIL || ''
   const toName = email.to[0]?.name || process.env.SMTP_FROM_NAME || 'Pre-Sales CRM'
 
-  const receivedAt = email.date.toISOString()
+  // Note: existingEmail check was moved above to prevent client recreation
+  // At this point, if we reach here, the email doesn't exist yet
 
-  // Check if this email already exists (prevent duplicates)
-  // First try to match by messageId if available (most reliable)
-  let existingEmail = null
-  if (email.messageId) {
-    const { data: emailByMessageId } = await supabase
-      .from('emails')
-      .select('id')
-      .eq('owner_id', user.id)
-      .eq('provider_message_id', email.messageId)
-      .single()
-    existingEmail = emailByMessageId
-  }
+  // Create inbound email record (we already checked it doesn't exist above)
+  const { data: emailRecord, error: emailError } = await supabase
+    .from('emails')
+    .insert({
+      owner_id: user.id,
+      client_id: clientId,
+      subject: email.subject,
+      body_html: email.html || email.text,
+      body_text: email.text || (email.html ? email.html.replace(/<[^>]*>/g, '') : ''),
+      from_email: formData.email,
+      from_name: formData.name,
+      to_email: toEmail,
+      to_name: toName,
+      cc_emails: [],
+      bcc_emails: [],
+      status: 'sent',
+      sent_at: receivedAt,
+      folder: 'inbox',
+      direction: 'inbound',
+      is_read: false,
+      is_deleted: false,
+      provider_message_id: email.messageId || null, // Store messageId for duplicate detection
+    })
+    .select()
+    .single()
 
-  // If not found by messageId, check by from_email, subject, and sent_at (within 2 minutes)
-  if (!existingEmail) {
-    const { data: emailByContent } = await supabase
-      .from('emails')
-      .select('id')
-      .eq('owner_id', user.id)
-      .eq('client_id', clientId)
-      .eq('from_email', formData.email)
-      .eq('subject', email.subject)
-      .eq('direction', 'inbound')
-      .gte('sent_at', new Date(new Date(receivedAt).getTime() - 120000).toISOString()) // Within 2 minutes
-      .lte('sent_at', new Date(new Date(receivedAt).getTime() + 120000).toISOString())
-      .order('sent_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
-    existingEmail = emailByContent
-  }
-
-  let emailRecord
-
-  if (existingEmail) {
-    // Email already exists, use it
-    emailRecord = existingEmail
-  } else {
-    // Create inbound email record directly (without using createInboundEmail to avoid auto-creating interaction)
-    const { data: newEmailRecord, error: emailError } = await supabase
-      .from('emails')
-      .insert({
-        owner_id: user.id,
-        client_id: clientId,
-        subject: email.subject,
-        body_html: email.html || email.text,
-        body_text: email.text || (email.html ? email.html.replace(/<[^>]*>/g, '') : ''),
-        from_email: formData.email,
-        from_name: formData.name,
-        to_email: toEmail,
-        to_name: toName,
-        cc_emails: [],
-        bcc_emails: [],
-        status: 'sent',
-        sent_at: receivedAt,
-        folder: 'inbox',
-        direction: 'inbound',
-        is_read: false,
-        is_deleted: false,
-        provider_message_id: email.messageId || null, // Store messageId for duplicate detection
-      })
-      .select()
-      .single()
-
-    if (emailError) {
-      throw new Error(`Failed to create email record: ${emailError.message}`)
-    }
-
-    emailRecord = newEmailRecord
+  if (emailError) {
+    throw new Error(`Failed to create email record: ${emailError.message}`)
   }
 
   // Check if "Initial request" interaction already exists for this email
@@ -543,7 +571,7 @@ async function processContactFormInquiry(
   }
 
   // Return true if this was a new email/interaction, false if it was a duplicate
-  return !existingEmail && !existingInteraction
+  return !existingInteraction
 }
 
 export function isImapConfigured(): boolean {

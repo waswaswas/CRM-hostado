@@ -170,6 +170,88 @@ export async function createInboundEmail(input: CreateInboundEmailInput): Promis
   const toEmail = input.to_email || process.env.SMTP_FROM_EMAIL || user.email || ''
   const toName = input.to_name || process.env.SMTP_FROM_NAME || 'Pre-Sales CRM'
 
+  // FIRST: Check if this email already exists (prevent duplicates and client recreation)
+  const receivedAt = input.received_at ? new Date(input.received_at).toISOString() : new Date().toISOString()
+  
+  // Check for existing email by from_email and subject (wider time window - 24 hours)
+  const { data: existingEmail } = await supabase
+    .from('emails')
+    .select('id, client_id, from_email, sent_at')
+    .eq('owner_id', user.id)
+    .eq('from_email', input.from_email)
+    .eq('subject', input.subject)
+    .eq('direction', 'inbound')
+    .gte('sent_at', new Date(new Date(receivedAt).getTime() - 24 * 60 * 60 * 1000).toISOString()) // Within 24 hours
+    .lte('sent_at', new Date(new Date(receivedAt).getTime() + 24 * 60 * 60 * 1000).toISOString())
+    .order('sent_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  // Also check if ANY email exists from this sender with this subject (no time limit, but verify date is close)
+  if (!existingEmail) {
+    const { data: emailBySenderAndSubject } = await supabase
+      .from('emails')
+      .select('id, client_id, from_email, sent_at')
+      .eq('owner_id', user.id)
+      .eq('from_email', input.from_email)
+      .eq('subject', input.subject)
+      .eq('direction', 'inbound')
+      .order('sent_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    
+    // Only consider it a duplicate if the sent_at date is very close (within 1 day)
+    if (emailBySenderAndSubject) {
+      const existingDate = new Date(emailBySenderAndSubject.sent_at)
+      const currentDate = new Date(receivedAt)
+      const timeDiff = Math.abs(currentDate.getTime() - existingDate.getTime())
+      const oneDay = 24 * 60 * 60 * 1000
+      
+      if (timeDiff < oneDay) {
+        // Email exists, skip processing
+        console.log(`[Email] Email already processed, skipping: ${input.subject} from ${input.from_email} (existing email ID: ${emailBySenderAndSubject.id})`)
+        throw new Error('This email has already been processed')
+      }
+    }
+  } else {
+    // Email exists within 24 hours, skip processing
+    console.log(`[Email] Email already processed, skipping: ${input.subject} from ${input.from_email} (existing email ID: ${existingEmail.id})`)
+    throw new Error('This email has already been processed')
+  }
+
+  // SECOND: Before checking for clients, check if we have ANY emails from this sender
+  // If we do, and the client was deleted, don't recreate it
+  if (!input.client_id && input.from_email) {
+    const { data: anyEmailsFromSender } = await supabase
+      .from('emails')
+      .select('id, from_email, sent_at')
+      .eq('owner_id', user.id)
+      .eq('from_email', input.from_email)
+      .eq('direction', 'inbound')
+      .order('sent_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    // If we have emails from this sender, check if a client with this email exists
+    // If no client exists but emails do, it means the client was deleted
+    // In that case, don't recreate the client
+    if (anyEmailsFromSender) {
+      const { data: existingClient } = await supabase
+        .from('clients')
+        .select('id')
+        .eq('owner_id', user.id)
+        .eq('email', input.from_email)
+        .single()
+
+      if (!existingClient) {
+        // We have emails from this sender but no client exists
+        // This means the client was deleted - don't recreate it
+        console.log(`[Email] Found emails from ${input.from_email} but client was deleted. Skipping to prevent recreation.`)
+        throw new Error('Cannot process email: associated client was deleted. Please restore the client or process manually.')
+      }
+    }
+  }
+
   // Try to find client by email if client_id not provided
   let clientId = input.client_id
   if (!clientId && input.from_email) {
@@ -183,7 +265,7 @@ export async function createInboundEmail(input: CreateInboundEmailInput): Promis
     if (client) {
       clientId = client.id
     } else {
-      // Create a new client if not found
+      // Create a new client if not found (only if no emails exist from this sender)
       const { createClientRecord } = await import('./clients')
       const newClient = await createClientRecord({
         name: input.from_name || input.from_email.split('@')[0],
@@ -197,8 +279,6 @@ export async function createInboundEmail(input: CreateInboundEmailInput): Promis
   if (!clientId) {
     throw new Error('Client ID is required or could not be determined from email')
   }
-
-  const receivedAt = input.received_at ? new Date(input.received_at).toISOString() : new Date().toISOString()
 
   const { data, error } = await supabase
     .from('emails')
