@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Select } from '@/components/ui/select'
 import Link from 'next/link'
-import { Calendar, List, Plus, Edit, Trash2 } from 'lucide-react'
+import { Calendar, List, Plus, Edit, Trash2, UserPlus } from 'lucide-react'
 import { format, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, startOfWeek, endOfWeek, addMonths, subMonths } from 'date-fns'
 import { createReminder, updateReminder, deleteReminder } from '@/app/actions/reminders'
 import { useToast } from '@/components/ui/toaster'
@@ -31,6 +31,9 @@ function formatDateTime(dateString: string) {
 }
 
 function getClientName(reminder: any) {
+  if (!reminder.client_id) {
+    return 'General'
+  }
   if (reminder.clients && typeof reminder.clients === 'object') {
     return reminder.clients.name || 'Client'
   }
@@ -128,10 +131,10 @@ export function RemindersCard({
   }
 
   async function handleQuickCreate() {
-    if (!quickFormData.client_id || !quickFormData.title) {
+    if (!quickFormData.title) {
       toast({
         title: 'Error',
-        description: 'Please select a client and enter a title',
+        description: 'Please enter a title',
         variant: 'destructive',
       })
       return
@@ -139,9 +142,12 @@ export function RemindersCard({
 
     setLoading(true)
     try {
+      // For "General" reminders, pass null as client_id
+      const clientId = quickFormData.client_id === 'general' ? null : quickFormData.client_id
+      
       if (editingReminder) {
         // Update existing reminder
-        await updateReminder(editingReminder.id, quickFormData.client_id, {
+        await updateReminder(editingReminder.id, clientId || editingReminder.client_id, {
           due_at: quickFormData.due_at,
           title: quickFormData.title,
           description: quickFormData.description || undefined,
@@ -153,7 +159,7 @@ export function RemindersCard({
       } else {
         // Create new reminder
         await createReminder({
-          client_id: quickFormData.client_id,
+          client_id: clientId,
           due_at: quickFormData.due_at,
           title: quickFormData.title,
           description: quickFormData.description || undefined,
@@ -259,8 +265,9 @@ export function RemindersCard({
                       className="flex items-start gap-2 rounded-lg border p-3"
                     >
                       <Link
-                        href={`/clients/${reminder.client_id}`}
-                        className="flex-1 transition-colors hover:text-primary"
+                        href={reminder.client_id ? `/clients/${reminder.client_id}` : '#'}
+                        className={`flex-1 transition-colors ${reminder.client_id ? 'hover:text-primary' : 'cursor-default'}`}
+                        onClick={(e) => !reminder.client_id && e.preventDefault()}
                       >
                         <div>
                           <p className="font-medium">{reminder.title}</p>
@@ -314,8 +321,9 @@ export function RemindersCard({
                       className="flex items-start gap-2 rounded-lg border p-3"
                     >
                       <Link
-                        href={`/clients/${reminder.client_id}`}
-                        className="flex-1 transition-colors hover:text-primary"
+                        href={reminder.client_id ? `/clients/${reminder.client_id}` : '#'}
+                        className={`flex-1 transition-colors ${reminder.client_id ? 'hover:text-primary' : 'cursor-default'}`}
+                        onClick={(e) => !reminder.client_id && e.preventDefault()}
                       >
                         <div>
                           <p className="font-medium">{reminder.title}</p>
@@ -369,8 +377,9 @@ export function RemindersCard({
                       className="flex items-start gap-2 rounded-lg border p-3"
                     >
                       <Link
-                        href={`/clients/${reminder.client_id}`}
-                        className="flex-1 transition-colors hover:text-primary"
+                        href={reminder.client_id ? `/clients/${reminder.client_id}` : '#'}
+                        className={`flex-1 transition-colors ${reminder.client_id ? 'hover:text-primary' : 'cursor-default'}`}
+                        onClick={(e) => !reminder.client_id && e.preventDefault()}
                       >
                         <div>
                           <p className="font-medium">{reminder.title}</p>
@@ -479,10 +488,15 @@ export function RemindersCard({
                             } hover:opacity-80`}
                           >
                             <Link
-                              href={`/clients/${reminder.client_id}`}
-                              className="block truncate"
+                              href={reminder.client_id ? `/clients/${reminder.client_id}` : '#'}
+                              className={`block truncate ${!reminder.client_id ? 'cursor-default' : ''}`}
                               title={reminder.title}
-                              onClick={(e) => e.stopPropagation()}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                if (!reminder.client_id) {
+                                  e.preventDefault()
+                                }
+                              }}
                             >
                               {reminder.title}
                             </Link>
@@ -546,16 +560,27 @@ export function RemindersCard({
               <label className="text-sm font-medium mb-1 block">Client</label>
               <Select
                 value={quickFormData.client_id}
-                onChange={(e) => setQuickFormData({ ...quickFormData, client_id: e.target.value })}
-                required
+                onChange={(e) => {
+                  if (e.target.value === 'add_new') {
+                    // Navigate to new client page
+                    router.push('/clients/new')
+                    closeQuickDialog()
+                  } else {
+                    setQuickFormData({ ...quickFormData, client_id: e.target.value })
+                  }
+                }}
                 disabled={loading}
               >
                 <option value="">Select a client</option>
+                <option value="general">General</option>
                 {clients.map((client: any) => (
                   <option key={client.id} value={client.id}>
                     {client.name} {client.company ? `(${client.company})` : ''}
                   </option>
                 ))}
+                <option value="add_new" className="text-primary font-medium">
+                  + Add a customer
+                </option>
               </Select>
             </div>
 
@@ -615,6 +640,8 @@ export function RemindersCard({
     </Card>
   )
 }
+
+
 
 
 

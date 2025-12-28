@@ -97,3 +97,5 @@ END $$;
 
 CREATE INDEX IF NOT EXISTS idx_transactions_accounting_customer_id ON transactions(accounting_customer_id);
 
+
+

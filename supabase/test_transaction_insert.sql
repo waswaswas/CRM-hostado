@@ -28,3 +28,5 @@ INSERT INTO transactions (
 
 -- If this works, the RLS policies are correct
 -- If this fails, check the error message
+
+

@@ -154,3 +154,5 @@ This is handled by a database trigger that calculates the balance change based o
 - Account balances are calculated automatically
 - Transfer transactions create two linked records automatically
 
+
+

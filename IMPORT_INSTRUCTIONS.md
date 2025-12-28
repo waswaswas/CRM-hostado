@@ -97,3 +97,5 @@ The import process will:
 - Transactions are linked to accounts and optionally to clients
 - Categories are preserved as-is (they should match your default categories or will be stored as custom categories)
 
+
+

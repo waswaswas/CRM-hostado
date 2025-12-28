@@ -28,3 +28,5 @@ SELECT
   COUNT(*) as policy_count
 FROM pg_policies 
 WHERE tablename = 'transactions';
+
+

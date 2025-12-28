@@ -172,3 +172,5 @@ CREATE POLICY "Users can delete their own emails" ON emails FOR DELETE USING (ow
 
 
 
+
+

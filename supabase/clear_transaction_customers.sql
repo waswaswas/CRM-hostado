@@ -5,3 +5,5 @@ UPDATE transactions
 SET accounting_customer_id = NULL
 WHERE accounting_customer_id IS NOT NULL;
 
+
+
