@@ -260,14 +260,37 @@ export async function createTransaction(data: {
   accounting_customer_id?: string
   number?: string
   transfer_to_account_id?: string
+  attachment_url?: string
 }): Promise<Transaction> {
   const supabase = await createClient()
   const {
     data: { user },
+    error: authError,
   } = await supabase.auth.getUser()
 
+  if (authError) {
+    console.error('Auth error:', authError)
+    throw new Error(`Authentication error: ${authError.message}`)
+  }
+
   if (!user) {
-    throw new Error('Unauthorized')
+    throw new Error('Unauthorized - User not found')
+  }
+
+  if (!user.id) {
+    throw new Error('Unauthorized - User ID not found')
+  }
+
+  // Verify account ownership before creating transaction
+  const { data: account, error: accountError } = await supabase
+    .from('accounts')
+    .select('id, owner_id')
+    .eq('id', data.account_id)
+    .eq('owner_id', user.id)
+    .single()
+
+  if (accountError || !account) {
+    throw new Error('Account not found or you do not have permission to use this account')
   }
 
   const transactionNumber = data.number || await generateTransactionNumber()
@@ -292,6 +315,7 @@ export async function createTransaction(data: {
         contact_id: data.contact_id || null,
         accounting_customer_id: data.accounting_customer_id || null,
         transfer_to_account_id: data.transfer_to_account_id,
+        attachment_url: data.attachment_url || null,
         created_by: user.id,
       })
       .select()
@@ -321,6 +345,7 @@ export async function createTransaction(data: {
         contact_id: data.contact_id || null,
         accounting_customer_id: data.accounting_customer_id || null,
         transfer_transaction_id: fromTransaction.id,
+        attachment_url: data.attachment_url || null,
         created_by: user.id,
       })
       .select()
@@ -344,30 +369,53 @@ export async function createTransaction(data: {
   }
 
   // Regular income or expense transaction
+  // Prepare insert data
+  const insertData = {
+    owner_id: user.id,
+    account_id: data.account_id,
+    type: data.type,
+    number: transactionNumber,
+    date: data.date,
+    amount: data.amount,
+    currency: data.currency || 'BGN',
+    category: data.category || null,
+    payment_method: data.payment_method || 'cash',
+    description: data.description || null,
+    reference: data.reference || null,
+    contact_id: data.contact_id || null,
+    accounting_customer_id: data.accounting_customer_id || null,
+    attachment_url: data.attachment_url || null,
+    created_by: user.id,
+  }
+
+  // Verify auth context is correct
+  const { data: { user: verifyUser } } = await supabase.auth.getUser()
+  if (!verifyUser || verifyUser.id !== user.id) {
+    console.error('Auth context mismatch:', { original: user.id, verified: verifyUser?.id })
+    throw new Error('Authentication context mismatch. Please refresh the page and try again.')
+  }
+
+  console.log('Creating transaction with owner_id:', user.id)
+  console.log('Insert data:', { ...insertData, attachment_url: insertData.attachment_url ? '[SET]' : '[NULL]' })
+
   const { data: transaction, error } = await supabase
     .from('transactions')
-    .insert({
-      owner_id: user.id,
-      account_id: data.account_id,
-      type: data.type,
-      number: transactionNumber,
-      date: data.date,
-      amount: data.amount,
-      currency: data.currency || 'BGN',
-      category: data.category || null,
-      payment_method: data.payment_method || 'cash',
-      description: data.description || null,
-      reference: data.reference || null,
-      contact_id: data.contact_id || null,
-      accounting_customer_id: data.accounting_customer_id || null,
-      created_by: user.id,
-    })
+    .insert(insertData)
     .select()
     .single()
 
   if (error) {
     console.error('Error creating transaction:', error)
-    throw new Error('Failed to create transaction')
+    console.error('Error code:', error.code)
+    console.error('Error message:', error.message)
+    console.error('Error details:', error.details)
+    console.error('Error hint:', error.hint)
+    
+    // Provide more helpful error messages
+    if (error.message?.includes('row-level security') || error.code === '42501') {
+      throw new Error('Permission denied. Please run the RLS fix script: supabase/fix_transactions_rls.sql in your Supabase SQL Editor. Make sure you are logged in and the policies are correctly set up.')
+    }
+    throw new Error(`Failed to create transaction: ${error.message || error.code || 'Unknown error'}`)
   }
 
   revalidatePath('/accounting/transactions')
@@ -515,3 +563,4 @@ export async function deleteTransaction(id: string): Promise<void> {
 
   revalidatePath('/accounting/transactions')
 }
+

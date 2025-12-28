@@ -1,5 +1,5 @@
 import { getAccounts } from '@/app/actions/accounts'
-import { getClients } from '@/app/actions/clients'
+import { getAccountingCustomers } from '@/app/actions/accounting-customers'
 import { TransactionForm } from '@/components/accounting/transaction-form'
 import { AppLayout } from '@/components/layout/app-layout'
 import { createClient } from '@/lib/supabase/server'
@@ -20,14 +20,7 @@ export default async function NewTransactionPage({
   }
 
   const accounts = await getAccounts()
-  const clients = await getClients()
-
-  // Get default categories
-  const { data: categories } = await supabase
-    .from('transaction_categories')
-    .select('*')
-    .eq('owner_id', user.id)
-    .order('name', { ascending: true })
+  const accountingCustomers = await getAccountingCustomers().catch(() => [])
 
   return (
     <AppLayout>
@@ -41,9 +34,8 @@ export default async function NewTransactionPage({
           </div>
           <TransactionForm 
             accounts={accounts} 
-            clients={clients} 
-            categories={categories || []}
-            initialContactId={searchParams.accounting_customer_id || searchParams.contact_id}
+            accountingCustomers={accountingCustomers}
+            initialCustomerId={searchParams.accounting_customer_id || searchParams.contact_id}
             initialType={searchParams.type as 'income' | 'expense' | undefined}
           />
         </div>
@@ -51,3 +43,4 @@ export default async function NewTransactionPage({
     </AppLayout>
   )
 }
+

@@ -241,3 +241,4 @@ BEGIN
   ON CONFLICT (owner_id, name, type) DO NOTHING;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
+

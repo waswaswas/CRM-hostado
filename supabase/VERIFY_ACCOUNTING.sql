@@ -90,3 +90,4 @@ FROM information_schema.table_constraints tc
 WHERE tc.table_schema = 'public' 
 AND tc.table_name IN ('accounts', 'transactions', 'transaction_categories')
 ORDER BY tc.table_name, tc.constraint_type, tc.constraint_name;
+

@@ -141,3 +141,4 @@ export function AccountsList({ accounts: initialAccounts }: AccountsListProps) {
     </div>
   )
 }
+

@@ -474,3 +474,4 @@ export function AccountingCustomerDetail({
     </div>
   )
 }
+

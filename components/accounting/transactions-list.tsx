@@ -7,11 +7,13 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
-import { Search, Plus, ArrowUpDown, Upload, UserPlus } from 'lucide-react'
+import { Search, Plus, ArrowUpDown, Upload, UserPlus, Trash2, Eye } from 'lucide-react'
 import { format } from 'date-fns'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { AssignCustomerDialog } from './assign-customer-dialog'
+import { deleteTransaction } from '@/app/actions/transactions'
+import { useToast } from '@/components/ui/toaster'
 
 interface TransactionsListProps {
   initialTransactions: TransactionWithRelations[]
@@ -20,11 +22,14 @@ interface TransactionsListProps {
 
 export function TransactionsList({ initialTransactions, accounts }: TransactionsListProps) {
   const router = useRouter()
-  const [transactions] = useState(initialTransactions)
+  const { toast } = useToast()
+  const [transactions, setTransactions] = useState(initialTransactions)
+  const [selectedTransactions, setSelectedTransactions] = useState<Set<string>>(new Set())
   const [searchQuery, setSearchQuery] = useState('')
   const [filterType, setFilterType] = useState<string>('all')
   const [filterAccount, setFilterAccount] = useState<string>('all')
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest')
+  const [deleting, setDeleting] = useState(false)
 
   const filteredAndSorted = useMemo(() => {
     let filtered = transactions.filter((transaction) => {
@@ -69,6 +74,95 @@ export function TransactionsList({ initialTransactions, accounts }: Transactions
       default:
         return 'bg-gray-100 text-gray-800 border-gray-200'
     }
+  }
+
+  const handleToggleSelect = (transactionId: string) => {
+    setSelectedTransactions((prev) => {
+      const newSet = new Set(prev)
+      if (newSet.has(transactionId)) {
+        newSet.delete(transactionId)
+      } else {
+        newSet.add(transactionId)
+      }
+      return newSet
+    })
+  }
+
+  const handleSelectAll = () => {
+    if (selectedTransactions.size === filteredAndSorted.length) {
+      setSelectedTransactions(new Set())
+    } else {
+      setSelectedTransactions(new Set(filteredAndSorted.map((t) => t.id)))
+    }
+  }
+
+  const handleDelete = async (transactionId: string) => {
+    if (!confirm('Are you sure you want to delete this transaction?')) {
+      return
+    }
+
+    try {
+      await deleteTransaction(transactionId)
+      setTransactions((prev) => prev.filter((t) => t.id !== transactionId))
+      setSelectedTransactions((prev) => {
+        const newSet = new Set(prev)
+        newSet.delete(transactionId)
+        return newSet
+      })
+      toast({
+        title: 'Success',
+        description: 'Transaction deleted successfully',
+      })
+      router.refresh()
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to delete transaction',
+        variant: 'destructive',
+      })
+    }
+  }
+
+  const handleBulkDelete = async () => {
+    if (selectedTransactions.size === 0) return
+
+    const count = selectedTransactions.size
+    if (!confirm(`Are you sure you want to delete ${count} transaction${count > 1 ? 's' : ''}?`)) {
+      return
+    }
+
+    setDeleting(true)
+    let successCount = 0
+    let failCount = 0
+
+    for (const transactionId of selectedTransactions) {
+      try {
+        await deleteTransaction(transactionId)
+        setTransactions((prev) => prev.filter((t) => t.id !== transactionId))
+        successCount++
+      } catch (error) {
+        console.error(`Failed to delete transaction ${transactionId}:`, error)
+        failCount++
+      }
+    }
+
+    setSelectedTransactions(new Set())
+    setDeleting(false)
+
+    if (failCount === 0) {
+      toast({
+        title: 'Success',
+        description: `Successfully deleted ${successCount} transaction${successCount > 1 ? 's' : ''}`,
+      })
+    } else {
+      toast({
+        title: 'Partial Success',
+        description: `Deleted ${successCount} transaction${successCount > 1 ? 's' : ''}, ${failCount} failed`,
+        variant: 'destructive',
+      })
+    }
+
+    router.refresh()
   }
 
   return (
@@ -134,6 +228,48 @@ export function TransactionsList({ initialTransactions, accounts }: Transactions
         </div>
       </div>
 
+      {/* Bulk actions bar */}
+      {selectedTransactions.size > 0 && (
+        <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
+          <span className="text-sm font-medium">
+            {selectedTransactions.size} transaction{selectedTransactions.size > 1 ? 's' : ''} selected
+          </span>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setSelectedTransactions(new Set())}
+            >
+              Clear Selection
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={handleBulkDelete}
+              disabled={deleting}
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              {deleting ? 'Deleting...' : `Delete ${selectedTransactions.size}`}
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Select All Checkbox */}
+      {filteredAndSorted.length > 0 && (
+        <div className="flex items-center gap-2 pb-2 border-b">
+          <input
+            type="checkbox"
+            checked={selectedTransactions.size > 0 && selectedTransactions.size === filteredAndSorted.length}
+            onChange={handleSelectAll}
+            className="h-4 w-4 rounded border-gray-300 cursor-pointer"
+          />
+          <label className="text-sm font-medium cursor-pointer" onClick={handleSelectAll}>
+            Select All ({filteredAndSorted.length})
+          </label>
+        </div>
+      )}
+
       <div className="space-y-2">
         {filteredAndSorted.length > 0 ? (
           <div className="space-y-2">
@@ -141,8 +277,17 @@ export function TransactionsList({ initialTransactions, accounts }: Transactions
               <Card key={transaction.id} className="hover:shadow-md transition-shadow">
                 <CardContent className="p-4">
                   <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1 grid grid-cols-12 gap-3 items-center">
-                      <div className="col-span-2">
+                    <div className="flex items-center gap-3 flex-1">
+                      {/* Checkbox for bulk selection */}
+                      <input
+                        type="checkbox"
+                        checked={selectedTransactions.has(transaction.id)}
+                        onChange={() => handleToggleSelect(transaction.id)}
+                        onClick={(e) => e.stopPropagation()}
+                        className="h-4 w-4 rounded border-gray-300 cursor-pointer flex-shrink-0"
+                      />
+                      <div className="flex-1 grid grid-cols-12 gap-3 items-center">
+                        <div className="col-span-2">
                         <div className="text-sm font-medium">
                           {format(new Date(transaction.date), 'dd MMM yyyy')}
                         </div>
@@ -187,12 +332,24 @@ export function TransactionsList({ initialTransactions, accounts }: Transactions
                           {formatAmount(transaction.amount, transaction.currency)}
                         </div>
                       </div>
+                      </div>
                     </div>
-                    <Link href={`/accounting/transactions/${transaction.id}`}>
-                      <Button variant="ghost" size="sm" className="flex-shrink-0">
-                        View
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      <Link href={`/accounting/transactions/${transaction.id}`}>
+                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                      </Link>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                        onClick={() => handleDelete(transaction.id)}
+                        title="Delete transaction"
+                      >
+                        <Trash2 className="h-4 w-4" />
                       </Button>
-                    </Link>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -221,3 +378,4 @@ export function TransactionsList({ initialTransactions, accounts }: Transactions
     </div>
   )
 }
+

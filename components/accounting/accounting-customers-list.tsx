@@ -126,3 +126,4 @@ export function AccountingCustomersList({ initialCustomers }: AccountingCustomer
     </div>
   )
 }
+

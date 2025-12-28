@@ -96,3 +96,4 @@ The import process will:
 - Account balances are automatically updated when transactions are imported
 - Transactions are linked to accounts and optionally to clients
 - Categories are preserved as-is (they should match your default categories or will be stored as custom categories)
+

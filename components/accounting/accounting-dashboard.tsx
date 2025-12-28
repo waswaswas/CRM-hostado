@@ -248,3 +248,4 @@ export function AccountingDashboard({ startDate: initialStartDate, endDate: init
     </div>
   )
 }
+

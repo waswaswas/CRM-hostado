@@ -317,3 +317,4 @@ export async function getAccountingSummary(
     profit: totalIncome - totalExpense,
   }
 }
+

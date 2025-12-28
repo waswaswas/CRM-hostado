@@ -4,12 +4,14 @@ import { TransactionWithRelations } from '@/types/database'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Edit, Trash2, ArrowLeft } from 'lucide-react'
+import { Edit, Trash2, ArrowLeft, Download, FileText } from 'lucide-react'
 import { format } from 'date-fns'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { deleteTransaction } from '@/app/actions/transactions'
 import { useToast } from '@/components/ui/toaster'
+import { getSignedUrl } from '@/app/actions/storage'
+import { useState } from 'react'
 
 interface TransactionDetailProps {
   transaction: TransactionWithRelations
@@ -18,6 +20,7 @@ interface TransactionDetailProps {
 export function TransactionDetail({ transaction }: TransactionDetailProps) {
   const router = useRouter()
   const { toast } = useToast()
+  const [downloading, setDownloading] = useState(false)
 
   const formatAmount = (amount: number, currency: string = 'BGN') => {
     return new Intl.NumberFormat('bg-BG', {
@@ -46,6 +49,32 @@ export function TransactionDetail({ transaction }: TransactionDetailProps) {
         description: error instanceof Error ? error.message : 'Failed to delete transaction',
         variant: 'destructive',
       })
+    }
+  }
+
+  const handleDownloadAttachment = async () => {
+    if (!transaction.attachment_url) return
+
+    setDownloading(true)
+    try {
+      const signedUrl = await getSignedUrl(transaction.attachment_url)
+      if (signedUrl) {
+        window.open(signedUrl, '_blank')
+      } else {
+        toast({
+          title: 'Error',
+          description: 'Failed to generate download link',
+          variant: 'destructive',
+        })
+      }
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to download attachment',
+        variant: 'destructive',
+      })
+    } finally {
+      setDownloading(false)
     }
   }
 
@@ -135,6 +164,21 @@ export function TransactionDetail({ transaction }: TransactionDetailProps) {
             </div>
           )}
 
+          {transaction.attachment_url && (
+            <div className="border-t pt-4">
+              <div className="text-sm text-muted-foreground mb-2">Invoice Attachment</div>
+              <Button
+                variant="outline"
+                onClick={handleDownloadAttachment}
+                disabled={downloading}
+                className="flex items-center gap-2"
+              >
+                <FileText className="h-4 w-4" />
+                {downloading ? 'Generating link...' : 'Download Invoice (PDF)'}
+              </Button>
+            </div>
+          )}
+
           {transaction.contact && (
             <div className="border-t pt-4">
               <div className="text-sm font-medium mb-2">
@@ -179,3 +223,4 @@ export function TransactionDetail({ transaction }: TransactionDetailProps) {
     </div>
   )
 }
+
