@@ -220,11 +220,13 @@ export async function createInboundEmail(input: CreateInboundEmailInput): Promis
   }
 
   // SECOND: Before checking for clients, check if we have ANY emails from this sender
-  // If we do, and the client was deleted, don't recreate it
+  // If we do, and the client was deleted, don't recreate it, but still save the email
+  let shouldSkipClientCreation = false
+  let useExistingClientId: string | null = null
   if (!input.client_id && input.from_email) {
     const { data: anyEmailsFromSender } = await supabase
       .from('emails')
-      .select('id, from_email, sent_at')
+      .select('id, from_email, sent_at, client_id')
       .eq('owner_id', user.id)
       .eq('from_email', input.from_email)
       .eq('direction', 'inbound')
@@ -234,7 +236,7 @@ export async function createInboundEmail(input: CreateInboundEmailInput): Promis
 
     // If we have emails from this sender, check if a client with this email exists
     // If no client exists but emails do, it means the client was deleted
-    // In that case, don't recreate the client
+    // In that case, don't recreate the client, but still save the email
     if (anyEmailsFromSender) {
       const { data: existingClient } = await supabase
         .from('clients')
@@ -245,16 +247,21 @@ export async function createInboundEmail(input: CreateInboundEmailInput): Promis
 
       if (!existingClient) {
         // We have emails from this sender but no client exists
-        // This means the client was deleted - don't recreate it
-        console.log(`[Email] Found emails from ${input.from_email} but client was deleted. Skipping to prevent recreation.`)
-        throw new Error('Cannot process email: associated client was deleted. Please restore the client or process manually.')
+        // This means the client was deleted - don't recreate it, but still save the email
+        // Use the client_id from the existing email (may be null if migration was run)
+        console.log(`[Email] Found emails from ${input.from_email} but client was deleted. Saving email with existing client_id to prevent recreation.`)
+        shouldSkipClientCreation = true
+        useExistingClientId = anyEmailsFromSender.client_id // May be null if migration was run
       }
     }
   }
 
   // Try to find client by email if client_id not provided
+  // Only create new clients for contact form inquiries
+  const isContactFormInquiry = input.subject === 'Ново запитване от контактната форма'
+  
   let clientId = input.client_id
-  if (!clientId && input.from_email) {
+  if (!clientId && input.from_email && !shouldSkipClientCreation) {
     const { data: client } = await supabase
       .from('clients')
       .select('id')
@@ -264,8 +271,9 @@ export async function createInboundEmail(input: CreateInboundEmailInput): Promis
 
     if (client) {
       clientId = client.id
-    } else {
-      // Create a new client if not found (only if no emails exist from this sender)
+    } else if (isContactFormInquiry) {
+      // Only create a new client if this is a contact form inquiry
+      // (not for delivery failures or other system emails)
       const { createClientRecord } = await import('./clients')
       const newClient = await createClientRecord({
         name: input.from_name || input.from_email.split('@')[0],
@@ -273,18 +281,28 @@ export async function createInboundEmail(input: CreateInboundEmailInput): Promis
         client_type: 'presales',
       })
       clientId = newClient.id
+    } else {
+      // Not a contact form inquiry - don't create a client
+      console.log(`[Email] Skipping client creation for email with subject: "${input.subject}"`)
+      clientId = null
     }
   }
 
-  if (!clientId) {
+  // If we're skipping client creation, use the existing client_id (may be null)
+  if (shouldSkipClientCreation) {
+    clientId = useExistingClientId
+  }
+
+  // Note: After running fix_email_cascade.sql, client_id can be null
+  // If migration hasn't been run yet, clientId must not be null
+  // For now, we'll try to insert with the client_id (even if null after migration)
+  if (clientId === undefined) {
     throw new Error('Client ID is required or could not be determined from email')
   }
 
-  const { data, error } = await supabase
-    .from('emails')
-    .insert({
+  // Prepare insert data - client_id may be null if migration was run
+  const insertData: any = {
       owner_id: user.id,
-      client_id: clientId,
       subject: input.subject,
       body_html: input.body_html,
       body_text: input.body_text || input.body_html.replace(/<[^>]*>/g, ''),
@@ -300,7 +318,12 @@ export async function createInboundEmail(input: CreateInboundEmailInput): Promis
       direction: 'inbound',
       is_read: false,
       is_deleted: false,
-    })
+      client_id: clientId, // May be null if migration was run and client was deleted
+  }
+
+  const { data, error } = await supabase
+    .from('emails')
+    .insert(insertData)
     .select()
     .single()
 
@@ -308,19 +331,23 @@ export async function createInboundEmail(input: CreateInboundEmailInput): Promis
     throw new Error(`Failed to create inbound email: ${error.message}`)
   }
 
-  // Create interaction
-  try {
-    await createInteraction({
-      client_id: clientId,
-      type: 'email',
-      direction: 'inbound',
-      date: receivedAt,
-      subject: input.subject,
-      notes: input.body_text || input.body_html,
-      email_id: data.id,
-    })
-  } catch (interactionError) {
-    console.error('Failed to create interaction:', interactionError)
+  // Create interaction (only if client_id exists)
+  if (clientId) {
+    try {
+      await createInteraction({
+        client_id: clientId,
+        type: 'email',
+        direction: 'inbound',
+        date: receivedAt,
+        subject: input.subject,
+        notes: input.body_text || input.body_html,
+        email_id: data.id,
+      })
+    } catch (interactionError) {
+      console.error('Failed to create interaction:', interactionError)
+    }
+  } else {
+    console.log(`[Email] Skipping interaction creation for email ${data.id} - client was deleted`)
   }
 
   return data as Email

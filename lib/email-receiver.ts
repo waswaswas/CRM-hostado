@@ -466,13 +466,16 @@ async function processContactFormInquiry(
   }
 
   // THIRD: Check if client already exists by email (prevent duplicates)
+  // Only create new clients for contact form inquiries
+  const isContactFormInquiry = email.subject === 'Ново запитване от контактната форма'
+  
   const { data: existingClients } = await supabase
     .from('clients')
     .select('id, name, email')
     .eq('owner_id', user.id)
     .eq('email', formData.email)
 
-  let clientId: string
+  let clientId: string | null = null
 
   if (existingClients && existingClients.length > 0) {
     // Client already exists with this email, use the first one
@@ -493,8 +496,9 @@ async function processContactFormInquiry(
         })
         .eq('id', clientId)
     }
-  } else {
+  } else if (isContactFormInquiry) {
     // No client with this email exists, create new one
+    // Only create for contact form inquiries (not for delivery failures or other system emails)
     // Set status to 'follow_up_required' to remind to contact them
     const newClient = await createClientRecord({
       name: formData.name, // Full name (cleaned, without "Имейл адрес")
@@ -505,6 +509,10 @@ async function processContactFormInquiry(
       source: 'contact_form',
     })
     clientId = newClient.id
+  } else {
+    // Not a contact form inquiry - don't create a client
+    console.log(`[Email Receiver] Skipping client creation for email with subject: "${email.subject}"`)
+    clientId = null
   }
 
   // Get the "to" email address
@@ -515,11 +523,9 @@ async function processContactFormInquiry(
   // At this point, if we reach here, the email doesn't exist yet
 
   // Create inbound email record (we already checked it doesn't exist above)
-  const { data: emailRecord, error: emailError } = await supabase
-    .from('emails')
-    .insert({
+  // client_id may be null if this is not a contact form inquiry
+  const emailInsertData: any = {
       owner_id: user.id,
-      client_id: clientId,
       subject: email.subject,
       body_html: email.html || email.text,
       body_text: email.text || (email.html ? email.html.replace(/<[^>]*>/g, '') : ''),
@@ -536,7 +542,12 @@ async function processContactFormInquiry(
       is_read: false,
       is_deleted: false,
       provider_message_id: email.messageId || null, // Store messageId for duplicate detection
-    })
+      client_id: clientId, // May be null if not a contact form inquiry
+  }
+
+  const { data: emailRecord, error: emailError } = await supabase
+    .from('emails')
+    .insert(emailInsertData)
     .select()
     .single()
 
@@ -544,30 +555,34 @@ async function processContactFormInquiry(
     throw new Error(`Failed to create email record: ${emailError.message}`)
   }
 
-  // Check if "Initial request" interaction already exists for this email
-  const { data: existingInteraction } = await supabase
-    .from('interactions')
-    .select('id')
-    .eq('client_id', clientId)
-    .eq('email_id', emailRecord.id)
-    .eq('subject', 'Initial request')
-    .eq('type', 'email')
-    .eq('direction', 'inbound')
-    .single()
+  // Only create interaction if client_id exists and it doesn't already exist
+  if (clientId) {
+    const { data: existingInteraction } = await supabase
+      .from('interactions')
+      .select('id')
+      .eq('client_id', clientId)
+      .eq('email_id', emailRecord.id)
+      .eq('subject', 'Initial request')
+      .eq('type', 'email')
+      .eq('direction', 'inbound')
+      .single()
 
-  // Only create interaction if it doesn't exist
-  if (!existingInteraction) {
-    const interactionNotes = formData.message || email.text || (email.html ? email.html.replace(/<[^>]*>/g, '') : '')
+    // Only create interaction if it doesn't exist
+    if (!existingInteraction) {
+      const interactionNotes = formData.message || email.text || (email.html ? email.html.replace(/<[^>]*>/g, '') : '')
 
-    await createInteraction({
-      client_id: clientId,
-      type: 'email',
-      direction: 'inbound',
-      date: receivedAt,
-      subject: 'Initial request',
-      notes: interactionNotes,
-      email_id: emailRecord.id,
-    })
+      await createInteraction({
+        client_id: clientId,
+        type: 'email',
+        direction: 'inbound',
+        date: receivedAt,
+        subject: 'Initial request',
+        notes: interactionNotes,
+        email_id: emailRecord.id,
+      })
+    }
+  } else {
+    console.log(`[Email Receiver] Skipping interaction creation for email ${emailRecord.id} - not a contact form inquiry`)
   }
 
   // Return true if this was a new email/interaction, false if it was a duplicate
