@@ -2,7 +2,7 @@ import { AppLayout } from '@/components/layout/app-layout'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { getUpcomingReminders } from '@/app/actions/reminders'
+import { getUpcomingReminders, getCompletedReminders } from '@/app/actions/reminders'
 import { getClients } from '@/app/actions/clients'
 import { getDashboardStats } from '@/app/actions/stats'
 import { getSettings } from '@/app/actions/settings'
@@ -26,8 +26,11 @@ export default async function DashboardPage() {
   let dbError = null
   let customStatuses: Array<{ key: string; label: string }> = []
 
+  let completedReminders = []
+  
   try {
     reminders = await getUpcomingReminders()
+    completedReminders = await getCompletedReminders()
     clients = await getClients()
   } catch (error) {
     dbError = error instanceof Error ? error.message : 'Database error'
@@ -121,6 +124,7 @@ export default async function DashboardPage() {
             overdueReminders={overdueReminders}
             todayReminders={todayReminders}
             upcomingReminders={upcomingReminders}
+            completedReminders={completedReminders}
             clients={clients}
           />
 

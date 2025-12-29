@@ -92,3 +92,4 @@ CREATE POLICY "Users can delete their reminders"
 -- - General reminders (client_id IS NULL) for any authenticated user
 -- - Client-specific reminders where the client belongs to the user
 
+

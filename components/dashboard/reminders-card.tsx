@@ -8,9 +8,9 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Select } from '@/components/ui/select'
 import Link from 'next/link'
-import { Calendar, List, Plus, Edit, Trash2, UserPlus } from 'lucide-react'
+import { Calendar, List, Plus, Edit, Trash2, UserPlus, CheckSquare, CheckCircle2 } from 'lucide-react'
 import { format, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, startOfWeek, endOfWeek, addMonths, subMonths } from 'date-fns'
-import { createReminder, updateReminder, deleteReminder } from '@/app/actions/reminders'
+import { createReminder, updateReminder, deleteReminder, markReminderDone, unmarkReminderDone } from '@/app/actions/reminders'
 import { useToast } from '@/components/ui/toaster'
 import { useRouter } from 'next/navigation'
 
@@ -19,6 +19,7 @@ interface RemindersCardProps {
   overdueReminders: any[]
   todayReminders: any[]
   upcomingReminders: any[]
+  completedReminders: any[]
   clients: any[]
 }
 
@@ -45,11 +46,12 @@ export function RemindersCard({
   overdueReminders,
   todayReminders,
   upcomingReminders,
+  completedReminders,
   clients,
 }: RemindersCardProps) {
   const { toast } = useToast()
   const router = useRouter()
-  const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list')
+  const [viewMode, setViewMode] = useState<'list' | 'calendar' | 'completed'>('list')
   const [currentMonth, setCurrentMonth] = useState(new Date())
   const [showQuickDialog, setShowQuickDialog] = useState(false)
   const [editingReminder, setEditingReminder] = useState<any | null>(null)
@@ -207,6 +209,36 @@ export function RemindersCard({
     }
   }
 
+  async function handleToggleDone(reminder: any) {
+    setLoading(true)
+    try {
+      if (reminder.done) {
+        // Unmark as done
+        await unmarkReminderDone(reminder.id, reminder.client_id || null)
+        toast({
+          title: 'Success',
+          description: 'Reminder marked as not done',
+        })
+      } else {
+        // Mark as done
+        await markReminderDone(reminder.id, reminder.client_id || null)
+        toast({
+          title: 'Success',
+          description: 'Reminder marked as done',
+        })
+      }
+      router.refresh()
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to update reminder',
+        variant: 'destructive',
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -246,6 +278,15 @@ export function RemindersCard({
               <Calendar className="h-4 w-4 mr-1.5" />
               Calendar
             </Button>
+            <Button
+              variant={viewMode === 'completed' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setViewMode('completed')}
+              className="h-8 px-3"
+            >
+              <CheckCircle2 className="h-4 w-4 mr-1.5" />
+              Completed
+            </Button>
             </div>
           </div>
         </div>
@@ -264,6 +305,18 @@ export function RemindersCard({
                       key={reminder.id}
                       className="flex items-start gap-2 rounded-lg border p-3"
                     >
+                      <button
+                        type="button"
+                        onClick={() => handleToggleDone(reminder)}
+                        disabled={loading}
+                        className={`mt-1 h-5 w-5 rounded border-2 flex items-center justify-center transition-colors ${
+                          reminder.done
+                            ? 'bg-green-500 border-green-500 text-white'
+                            : 'border-gray-300 hover:border-green-400'
+                        } focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-50`}
+                      >
+                        {reminder.done && <CheckCircle2 className="h-4 w-4" />}
+                      </button>
                       <Link
                         href={reminder.client_id ? `/clients/${reminder.client_id}` : '#'}
                         className={`flex-1 transition-colors ${reminder.client_id ? 'hover:text-primary' : 'cursor-default'}`}
@@ -320,6 +373,18 @@ export function RemindersCard({
                       key={reminder.id}
                       className="flex items-start gap-2 rounded-lg border p-3"
                     >
+                      <button
+                        type="button"
+                        onClick={() => handleToggleDone(reminder)}
+                        disabled={loading}
+                        className={`mt-1 h-5 w-5 rounded border-2 flex items-center justify-center transition-colors ${
+                          reminder.done
+                            ? 'bg-green-500 border-green-500 text-white'
+                            : 'border-gray-300 hover:border-green-400'
+                        } focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-50`}
+                      >
+                        {reminder.done && <CheckCircle2 className="h-4 w-4" />}
+                      </button>
                       <Link
                         href={reminder.client_id ? `/clients/${reminder.client_id}` : '#'}
                         className={`flex-1 transition-colors ${reminder.client_id ? 'hover:text-primary' : 'cursor-default'}`}
@@ -376,6 +441,18 @@ export function RemindersCard({
                       key={reminder.id}
                       className="flex items-start gap-2 rounded-lg border p-3"
                     >
+                      <button
+                        type="button"
+                        onClick={() => handleToggleDone(reminder)}
+                        disabled={loading}
+                        className={`mt-1 h-5 w-5 rounded border-2 flex items-center justify-center transition-colors ${
+                          reminder.done
+                            ? 'bg-green-500 border-green-500 text-white'
+                            : 'border-gray-300 hover:border-green-400'
+                        } focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-50`}
+                      >
+                        {reminder.done && <CheckCircle2 className="h-4 w-4" />}
+                      </button>
                       <Link
                         href={reminder.client_id ? `/clients/${reminder.client_id}` : '#'}
                         className={`flex-1 transition-colors ${reminder.client_id ? 'hover:text-primary' : 'cursor-default'}`}
@@ -426,6 +503,79 @@ export function RemindersCard({
             {reminders.length === 0 && (
               <p className="text-sm text-muted-foreground">
                 No upcoming reminders
+              </p>
+            )}
+          </div>
+        )}
+
+        {viewMode === 'completed' && (
+          <div>
+            {completedReminders.length > 0 ? (
+              <div className="space-y-2">
+                {completedReminders.map((reminder: any) => (
+                  <div
+                    key={reminder.id}
+                    className="flex items-start gap-2 rounded-lg border p-3 bg-muted/30"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => handleToggleDone(reminder)}
+                      disabled={loading}
+                      className={`mt-1 h-5 w-5 rounded border-2 flex items-center justify-center transition-colors ${
+                        reminder.done
+                          ? 'bg-green-500 border-green-500 text-white'
+                          : 'border-gray-300 hover:border-green-400'
+                      } focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-50`}
+                    >
+                      {reminder.done && <CheckCircle2 className="h-4 w-4" />}
+                    </button>
+                    <Link
+                      href={reminder.client_id ? `/clients/${reminder.client_id}` : '#'}
+                      className={`flex-1 transition-colors ${reminder.client_id ? 'hover:text-primary' : 'cursor-default'}`}
+                      onClick={(e) => !reminder.client_id && e.preventDefault()}
+                    >
+                      <div>
+                        <p className="font-medium line-through text-muted-foreground">{reminder.title}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {getClientName(reminder)}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {formatDateTime(reminder.due_at)}
+                        </p>
+                      </div>
+                    </Link>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.preventDefault()
+                          openQuickDialog(undefined, reminder)
+                        }}
+                        className="h-8 w-8 p-0"
+                        disabled={loading}
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.preventDefault()
+                          handleDelete(reminder)
+                        }}
+                        className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                        disabled={loading}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground text-center py-8">
+                No completed reminders
               </p>
             )}
           </div>
@@ -640,6 +790,7 @@ export function RemindersCard({
     </Card>
   )
 }
+
 
 
 

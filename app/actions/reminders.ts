@@ -193,7 +193,7 @@ export async function getUpcomingReminders() {
   }
 }
 
-export async function markReminderDone(id: string, clientId: string) {
+export async function markReminderDone(id: string, clientId: string | null) {
   const supabase = await createClient()
   const {
     data: { user },
@@ -212,8 +212,132 @@ export async function markReminderDone(id: string, clientId: string) {
     throw new Error(error.message)
   }
 
-  revalidatePath(`/clients/${clientId}`)
+  if (clientId) {
+    revalidatePath(`/clients/${clientId}`)
+  }
   revalidatePath('/dashboard')
+}
+
+export async function unmarkReminderDone(id: string, clientId: string | null) {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    throw new Error('Not authenticated')
+  }
+
+  const { error } = await supabase
+    .from('reminders')
+    .update({ done: false })
+    .eq('id', id)
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  if (clientId) {
+    revalidatePath(`/clients/${clientId}`)
+  }
+  revalidatePath('/dashboard')
+}
+
+export async function getCompletedReminders() {
+  try {
+    const supabase = await createClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    if (!user) {
+      return []
+    }
+
+    // First get all reminders for user's clients
+    const { data: clients, error: clientsError } = await supabase
+      .from('clients')
+      .select('id')
+      .eq('owner_id', user.id)
+
+    if (clientsError) {
+      if (clientsError.message.includes('Could not find the table') || clientsError.message.includes('relation') || clientsError.message.includes('does not exist')) {
+        return []
+      }
+      throw new Error(clientsError.message)
+    }
+
+    const clientIds = clients ? clients.map((c) => c.id) : []
+
+    // Get completed reminders for user's clients AND general reminders (where client_id is null)
+    const remindersPromises = []
+    
+    // Get completed reminders for user's clients
+    if (clientIds.length > 0) {
+      remindersPromises.push(
+        supabase
+          .from('reminders')
+          .select('*')
+          .in('client_id', clientIds)
+          .eq('done', true)
+          .order('due_at', { ascending: false })
+      )
+    }
+    
+    // Get completed general reminders (where client_id is null)
+    remindersPromises.push(
+      supabase
+        .from('reminders')
+        .select('*')
+        .is('client_id', null)
+        .eq('done', true)
+        .order('due_at', { ascending: false })
+    )
+
+    const results = await Promise.all(remindersPromises)
+    
+    // Combine all reminders and remove duplicates
+    const allReminders = results.flatMap(result => result.data || [])
+    const uniqueReminders = Array.from(
+      new Map(allReminders.map(r => [r.id, r])).values()
+    )
+    
+    // Sort by due_at descending (most recent first)
+    const reminders = uniqueReminders
+      .sort((a, b) => new Date(b.due_at).getTime() - new Date(a.due_at).getTime())
+    
+    const error = results.find(r => r.error)?.error
+
+    if (error) {
+      if (error.message.includes('Could not find the table') || error.message.includes('relation') || error.message.includes('does not exist')) {
+        return []
+      }
+      throw new Error(error.message)
+    }
+
+    // Fetch client info for each reminder (only for reminders with client_id)
+    const reminderClientIds = reminders?.filter(r => r.client_id).map(r => r.client_id) || []
+    
+    let clientsMap = new Map()
+    if (reminderClientIds.length > 0) {
+      const { data: allClients } = await supabase
+        .from('clients')
+        .select('id, name, company')
+        .in('id', reminderClientIds)
+
+      clientsMap = new Map(allClients?.map(c => [c.id, c]) || [])
+    }
+
+    // Attach client info to reminders
+    const data = reminders?.map(reminder => ({
+      ...reminder,
+      clients: reminder.client_id ? (clientsMap.get(reminder.client_id) || null) : null
+    })) || []
+
+    return data
+  } catch (error) {
+    return []
+  }
 }
 
 export async function updateReminder(
