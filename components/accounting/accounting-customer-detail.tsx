@@ -478,3 +478,10 @@ export function AccountingCustomerDetail({
 
 
 
+
+
+
+
+
+
+

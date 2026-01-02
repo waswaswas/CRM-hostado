@@ -93,3 +93,10 @@ CREATE POLICY "Users can delete their reminders"
 -- - Client-specific reminders where the client belongs to the user
 
 
+
+
+
+
+
+
+

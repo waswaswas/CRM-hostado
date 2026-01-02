@@ -47,6 +47,31 @@ export async function createReminder(data: {
     throw new Error(error.message)
   }
 
+  // Create notification for new reminder
+  if (reminder) {
+    try {
+      const { createNotification } = await import('./notifications')
+      const dueDate = new Date(data.due_at)
+      const now = new Date()
+      const isOverdue = dueDate < now
+      
+      await createNotification({
+        type: 'reminder',
+        title: isOverdue ? 'Overdue reminder' : 'New reminder',
+        message: `${reminder.title}${data.client_id ? ' (for client)' : ' (General)'}`,
+        related_id: reminder.id,
+        related_type: 'reminder',
+        metadata: {
+          due_at: data.due_at,
+          client_id: data.client_id,
+        },
+      })
+    } catch (error) {
+      // Don't fail reminder creation if notification fails
+      console.error('Failed to create notification for reminder:', error)
+    }
+  }
+
   if (data.client_id) {
     revalidatePath(`/clients/${data.client_id}`)
   }
@@ -203,6 +228,13 @@ export async function markReminderDone(id: string, clientId: string | null) {
     throw new Error('Not authenticated')
   }
 
+  // Get reminder details before updating
+  const { data: reminder } = await supabase
+    .from('reminders')
+    .select('*')
+    .eq('id', id)
+    .single()
+
   const { error } = await supabase
     .from('reminders')
     .update({ done: true })
@@ -210,6 +242,30 @@ export async function markReminderDone(id: string, clientId: string | null) {
 
   if (error) {
     throw new Error(error.message)
+  }
+
+  // Create notification for overdue reminder if it was overdue
+  if (reminder) {
+    const dueDate = new Date(reminder.due_at)
+    const now = new Date()
+    if (dueDate < now) {
+      try {
+        const { createNotification } = await import('./notifications')
+        await createNotification({
+          type: 'reminder',
+          title: 'Reminder completed',
+          message: `Reminder "${reminder.title}" has been marked as done`,
+          related_id: reminder.id,
+          related_type: 'reminder',
+          metadata: {
+            was_overdue: true,
+            due_at: reminder.due_at,
+          },
+        })
+      } catch (error) {
+        console.error('Failed to create notification for reminder completion:', error)
+      }
+    }
   }
 
   if (clientId) {

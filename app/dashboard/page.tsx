@@ -10,6 +10,7 @@ import { formatStatus, getStatusColor } from '@/lib/status-utils'
 import Link from 'next/link'
 import { Calendar, Users, Plus, AlertCircle, TrendingUp, Clock, Tag, List } from 'lucide-react'
 import { RemindersCard } from '@/components/dashboard/reminders-card'
+import { format, parseISO } from 'date-fns'
 
 function formatDateTime(dateString: string) {
   try {

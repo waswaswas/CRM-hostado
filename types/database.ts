@@ -185,5 +185,19 @@ export interface AccountingCustomerWithRelations extends AccountingCustomer {
   linked_client?: Client
 }
 
+export interface Notification {
+  id: string
+  created_at: string
+  owner_id: string
+  type: 'email' | 'reminder' | 'tag_removed' | 'other'
+  title: string
+  message: string | null
+  is_read: boolean
+  read_at: string | null
+  related_id: string | null
+  related_type: string | null
+  metadata: Record<string, any>
+}
+
 
 

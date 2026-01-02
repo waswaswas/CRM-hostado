@@ -331,6 +331,27 @@ export async function createInboundEmail(input: CreateInboundEmailInput): Promis
     throw new Error(`Failed to create inbound email: ${error.message}`)
   }
 
+  // Create notification for new inbound email (only for contact form inquiries)
+  if (data && isContactFormInquiry) {
+    try {
+      const { createNotification } = await import('./notifications')
+      await createNotification({
+        type: 'email',
+        title: 'New contact form inquiry',
+        message: `New inquiry from ${input.from_name || input.from_email}`,
+        related_id: data.id,
+        related_type: 'email',
+        metadata: {
+          from_email: input.from_email,
+          from_name: input.from_name,
+        },
+      })
+    } catch (error) {
+      // Don't fail email creation if notification fails
+      console.error('Failed to create notification for email:', error)
+    }
+  }
+
   // Create interaction (only if client_id exists)
   if (clientId) {
     try {
@@ -937,6 +958,13 @@ export async function getEmail(emailId: string): Promise<Email> {
 
   return data as Email
 }
+
+
+
+
+
+
+
 
 
 

@@ -7,6 +7,7 @@ import { LogOut, User, MessageSquare } from 'lucide-react'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { TimezoneSelector } from '@/components/timezone-selector'
 import { FeedbackDialog } from '@/components/feedback/feedback-dialog'
+import { NotificationBadge } from '@/components/notifications/notification-badge'
 
 export function Topbar({ userName }: { userName?: string }) {
   const [feedbackOpen, setFeedbackOpen] = useState(false)
@@ -21,6 +22,7 @@ export function Topbar({ userName }: { userName?: string }) {
           </span>
         </div>
         <div className="flex items-center gap-2">
+          <NotificationBadge />
           <Button
             variant="ghost"
             size="sm"

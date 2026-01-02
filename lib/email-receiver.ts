@@ -555,6 +555,27 @@ async function processContactFormInquiry(
     throw new Error(`Failed to create email record: ${emailError.message}`)
   }
 
+  // Create notification for new inbound email
+  if (emailRecord && isContactFormInquiry) {
+    try {
+      const { createNotification } = await import('@/app/actions/notifications')
+      await createNotification({
+        type: 'email',
+        title: 'New contact form inquiry',
+        message: `New inquiry from ${formData.name || formData.email}`,
+        related_id: emailRecord.id,
+        related_type: 'email',
+        metadata: {
+          from_email: formData.email,
+          from_name: formData.name,
+        },
+      })
+    } catch (error) {
+      // Don't fail email creation if notification fails
+      console.error('Failed to create notification for email:', error)
+    }
+  }
+
   // Only create interaction if client_id exists and it doesn't already exist
   if (clientId) {
     const { data: existingInteraction } = await supabase
@@ -592,6 +613,13 @@ async function processContactFormInquiry(
 export function isImapConfigured(): boolean {
   return getImapConfig() !== null
 }
+
+
+
+
+
+
+
 
 
 
