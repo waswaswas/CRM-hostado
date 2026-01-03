@@ -497,7 +497,7 @@ export async function importTransactionsFromExcel(formData: FormData): Promise<{
           
           // If not found, try partial match (e.g., "Rumen - midwestlab" might match "Rumen")
           if (!contactId) {
-            const contactParts = contactName.split('-').map(s => s.trim().toLowerCase())
+            const contactParts = contactName.split('-').map((s: string) => s.trim().toLowerCase())
             for (const part of contactParts) {
               if (part && clientsMap.has(part)) {
                 contactId = clientsMap.get(part)
@@ -605,6 +605,10 @@ export async function importTransactionsFromExcel(formData: FormData): Promise<{
     throw new Error(`Failed to import transactions: ${error instanceof Error ? error.message : 'Unknown error'}`)
   }
 }
+
+
+
+
 
 
 

@@ -3,6 +3,8 @@ import { ClientsList } from '@/components/clients/clients-list'
 import { getClients } from '@/app/actions/clients'
 import { getLinkedClientIds } from '@/app/actions/accounting-customers'
 
+export const dynamic = 'force-dynamic'
+
 export default async function ClientsPage() {
   const clients = await getClients()
   

@@ -50,7 +50,7 @@ export function AccountsList({ accounts: initialAccounts }: AccountsListProps) {
           </div>
         </div>
         <Dialog open={showNewAccountDialog} onOpenChange={setShowNewAccountDialog}>
-          <DialogTrigger asChild>
+          <DialogTrigger>
             <Button>
               <Plus className="mr-2 h-4 w-4" />
               New Account
@@ -141,6 +141,10 @@ export function AccountsList({ accounts: initialAccounts }: AccountsListProps) {
     </div>
   )
 }
+
+
+
+
 
 
 

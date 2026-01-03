@@ -5,6 +5,8 @@ import { AccountingNav } from '@/components/accounting/accounting-nav'
 import { AppLayout } from '@/components/layout/app-layout'
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
+import type { TransactionWithRelations } from '@/types/database'
+import type { Account } from '@/types/database'
 
 export default async function TransactionsPage() {
   const supabase = await createClient()
@@ -16,9 +18,9 @@ export default async function TransactionsPage() {
     redirect('/login')
   }
 
-  let transactions = []
-  let accounts = []
-  let error = null
+  let transactions: TransactionWithRelations[] = []
+  let accounts: Account[] = []
+  let error: string | null = null
 
   try {
     transactions = await getTransactions()
@@ -75,6 +77,10 @@ export default async function TransactionsPage() {
     </AppLayout>
   )
 }
+
+
+
+
 
 
 

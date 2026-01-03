@@ -1,5 +1,6 @@
 import { Sidebar } from './sidebar'
 import { Topbar } from './topbar'
+import { BottomNav } from './bottom-nav'
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 
@@ -22,10 +23,10 @@ export async function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex h-screen">
-      <Sidebar />
+      <Sidebar userName={user?.email} />
       <div className="flex flex-1 flex-col overflow-hidden">
         <Topbar userName={user?.email} />
-        <main className="flex-1 overflow-y-auto bg-muted/50 p-6">
+        <main className="flex-1 overflow-y-auto bg-muted/50 p-4 md:p-6">
           {children}
         </main>
       </div>

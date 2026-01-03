@@ -260,7 +260,7 @@ export async function createInboundEmail(input: CreateInboundEmailInput): Promis
   // Only create new clients for contact form inquiries
   const isContactFormInquiry = input.subject === 'Ново запитване от контактната форма'
   
-  let clientId = input.client_id
+  let clientId: string | null | undefined = input.client_id
   if (!clientId && input.from_email && !shouldSkipClientCreation) {
     const { data: client } = await supabase
       .from('clients')
@@ -958,6 +958,10 @@ export async function getEmail(emailId: string): Promise<Email> {
 
   return data as Email
 }
+
+
+
+
 
 
 

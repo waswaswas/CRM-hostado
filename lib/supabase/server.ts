@@ -8,8 +8,20 @@ export async function createClient() {
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
   if (!url || !key || url.includes('placeholder')) {
+    // In production, return a mock client to prevent crashes
+    // The middleware will handle redirecting to /setup
+    if (process.env.NODE_ENV === 'production') {
+      console.error('Supabase is not configured. Please set environment variables.')
+      // Return a minimal mock that won't crash
+      return {
+        auth: {
+          getUser: async () => ({ data: { user: null }, error: null }),
+          signOut: async () => ({ error: null }),
+        },
+      } as any
+    }
     throw new Error(
-      'Supabase is not configured. Please set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in your .env.local file.'
+      'Supabase is not configured. Please set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in your environment variables.'
     )
   }
 

@@ -254,29 +254,30 @@ export function RemindersCard({
             <Button
               size="sm"
               onClick={() => openQuickDialog()}
-              className="h-8"
+              className="min-h-[44px] px-3 md:h-8"
             >
               <Plus className="h-4 w-4 mr-1.5" />
-              Quick Add
+              <span className="hidden sm:inline">Quick Add</span>
+              <span className="sm:hidden">Add</span>
             </Button>
             <div className="flex items-center gap-2 border rounded-md p-1 bg-muted">
             <Button
               variant={viewMode === 'list' ? 'default' : 'ghost'}
               size="sm"
               onClick={() => setViewMode('list')}
-              className="h-8 px-3"
+              className="min-h-[44px] px-3 md:h-8"
             >
               <List className="h-4 w-4 mr-1.5" />
-              List
+              <span className="hidden sm:inline">List</span>
             </Button>
             <Button
               variant={viewMode === 'calendar' ? 'default' : 'ghost'}
               size="sm"
               onClick={() => setViewMode('calendar')}
-              className="h-8 px-3"
+              className="min-h-[44px] px-3 md:h-8"
             >
               <Calendar className="h-4 w-4 mr-1.5" />
-              Calendar
+              <span className="hidden sm:inline">Calendar</span>
             </Button>
             <Button
               variant={viewMode === 'completed' ? 'default' : 'ghost'}
@@ -309,7 +310,7 @@ export function RemindersCard({
                         type="button"
                         onClick={() => handleToggleDone(reminder)}
                         disabled={loading}
-                        className={`mt-1 h-5 w-5 rounded border-2 flex items-center justify-center transition-colors ${
+                        className={`mt-1 h-5 w-5 rounded-full border-2 flex items-center justify-center transition-colors ${
                           reminder.done
                             ? 'bg-green-500 border-green-500 text-white'
                             : 'border-gray-300 hover:border-green-400'
@@ -340,7 +341,7 @@ export function RemindersCard({
                             e.preventDefault()
                             openQuickDialog(undefined, reminder)
                           }}
-                          className="h-8 w-8 p-0"
+                          className="min-h-[44px] min-w-[44px] md:h-8 md:w-8 p-0"
                           disabled={loading}
                         >
                           <Edit className="h-4 w-4" />
@@ -352,7 +353,7 @@ export function RemindersCard({
                             e.preventDefault()
                             handleDelete(reminder)
                           }}
-                          className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                          className="min-h-[44px] min-w-[44px] md:h-8 md:w-8 p-0 text-destructive hover:text-destructive"
                           disabled={loading}
                         >
                           <Trash2 className="h-4 w-4" />
@@ -377,7 +378,7 @@ export function RemindersCard({
                         type="button"
                         onClick={() => handleToggleDone(reminder)}
                         disabled={loading}
-                        className={`mt-1 h-5 w-5 rounded border-2 flex items-center justify-center transition-colors ${
+                        className={`mt-1 h-5 w-5 rounded-full border-2 flex items-center justify-center transition-colors ${
                           reminder.done
                             ? 'bg-green-500 border-green-500 text-white'
                             : 'border-gray-300 hover:border-green-400'
@@ -408,7 +409,7 @@ export function RemindersCard({
                             e.preventDefault()
                             openQuickDialog(undefined, reminder)
                           }}
-                          className="h-8 w-8 p-0"
+                          className="min-h-[44px] min-w-[44px] md:h-8 md:w-8 p-0"
                           disabled={loading}
                         >
                           <Edit className="h-4 w-4" />
@@ -420,7 +421,7 @@ export function RemindersCard({
                             e.preventDefault()
                             handleDelete(reminder)
                           }}
-                          className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                          className="min-h-[44px] min-w-[44px] md:h-8 md:w-8 p-0 text-destructive hover:text-destructive"
                           disabled={loading}
                         >
                           <Trash2 className="h-4 w-4" />
@@ -445,7 +446,7 @@ export function RemindersCard({
                         type="button"
                         onClick={() => handleToggleDone(reminder)}
                         disabled={loading}
-                        className={`mt-1 h-5 w-5 rounded border-2 flex items-center justify-center transition-colors ${
+                        className={`mt-1 h-5 w-5 rounded-full border-2 flex items-center justify-center transition-colors ${
                           reminder.done
                             ? 'bg-green-500 border-green-500 text-white'
                             : 'border-gray-300 hover:border-green-400'
@@ -476,7 +477,7 @@ export function RemindersCard({
                             e.preventDefault()
                             openQuickDialog(undefined, reminder)
                           }}
-                          className="h-8 w-8 p-0"
+                          className="min-h-[44px] min-w-[44px] md:h-8 md:w-8 p-0"
                           disabled={loading}
                         >
                           <Edit className="h-4 w-4" />
@@ -488,7 +489,7 @@ export function RemindersCard({
                             e.preventDefault()
                             handleDelete(reminder)
                           }}
-                          className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                          className="min-h-[44px] min-w-[44px] md:h-8 md:w-8 p-0 text-destructive hover:text-destructive"
                           disabled={loading}
                         >
                           <Trash2 className="h-4 w-4" />
@@ -790,6 +791,10 @@ export function RemindersCard({
     </Card>
   )
 }
+
+
+
+
 
 
 

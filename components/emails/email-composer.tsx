@@ -17,8 +17,8 @@ import { getTemplates, ensureDefaultBasicTemplate } from '@/app/actions/email-te
 import { renderTemplate } from '@/lib/email-template-utils'
 import { useToast } from '@/components/ui/toaster'
 import { Client } from '@/types/database'
-import { EmailSignature, EmailTemplate } from '@/app/actions/email-signatures'
-import type { EmailTemplate as TemplateType } from '@/app/actions/email-templates'
+import { EmailSignature } from '@/app/actions/email-signatures'
+import type { EmailTemplate } from '@/app/actions/email-templates'
 import { Calendar, Send, Clock, X, Mail, Paperclip, XCircle } from 'lucide-react'
 import { format } from 'date-fns'
 
@@ -38,7 +38,7 @@ export function EmailComposer({ clientId, initialSubject, initialBody, initialTo
   const [loadingData, setLoadingData] = useState(true)
   const [clients, setClients] = useState<Client[]>([])
   const [signatures, setSignatures] = useState<EmailSignature[]>([])
-  const [templates, setTemplates] = useState<TemplateType[]>([])
+  const [templates, setTemplates] = useState<EmailTemplate[]>([])
   const [selectedClient, setSelectedClient] = useState<string>(clientId || '')
   const [selectedTemplate, setSelectedTemplate] = useState<string>(templateId || '')
   const [selectedSignature, setSelectedSignature] = useState<string>('')
@@ -986,6 +986,10 @@ export function EmailComposer({ clientId, initialSubject, initialBody, initialTo
     </div>
   )
 }
+
+
+
+
 
 
 

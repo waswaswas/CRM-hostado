@@ -352,31 +352,35 @@ export function EmailList({ initialEmails = [], clientId }: EmailListProps) {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold">Emails</h1>
-        <div className="flex items-center gap-2">
-          <Link href="/emails/templates">
-            <Button variant="outline">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <h1 className="text-2xl md:text-3xl font-bold">Emails</h1>
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+          <Link href="/emails/templates" className="flex-1 sm:flex-initial">
+            <Button variant="outline" className="w-full sm:w-auto min-h-[44px]">
               <FileText className="mr-2 h-4 w-4" />
-              Templates
+              <span className="hidden sm:inline">Templates</span>
+              <span className="sm:hidden">Templates</span>
             </Button>
           </Link>
           <Button
             variant="outline"
             onClick={handleCheckForEmails}
             disabled={checkingEmails}
+            className="flex-1 sm:flex-initial min-h-[44px]"
           >
             <RefreshCw className={`mr-2 h-4 w-4 ${checkingEmails ? 'animate-spin' : ''}`} />
-            {checkingEmails ? 'Checking...' : 'Check for Emails'}
+            <span className="hidden sm:inline">{checkingEmails ? 'Checking...' : 'Check for Emails'}</span>
+            <span className="sm:hidden">Check</span>
           </Button>
-          <Link href="/emails/receive">
-            <Button variant="outline">
+          <Link href="/emails/receive" className="flex-1 sm:flex-initial">
+            <Button variant="outline" className="w-full sm:w-auto min-h-[44px]">
               <Mail className="mr-2 h-4 w-4" />
-              Add Received
+              <span className="hidden sm:inline">Add Received</span>
+              <span className="sm:hidden">Receive</span>
             </Button>
           </Link>
-          <Link href="/emails/compose">
-            <Button>
+          <Link href="/emails/compose" className="flex-1 sm:flex-initial">
+            <Button className="w-full sm:w-auto min-h-[44px]">
               <Mail className="mr-2 h-4 w-4" />
               Compose
             </Button>
@@ -384,13 +388,13 @@ export function EmailList({ initialEmails = [], clientId }: EmailListProps) {
         </div>
       </div>
 
-      <div className="flex items-center gap-4">
-        <div className="flex-1">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4">
+        <div className="flex-1 sm:flex-initial">
           <label className="text-sm font-medium">Folder</label>
           <Select
             value={folderFilter}
             onChange={(e) => setFolderFilter(e.target.value as EmailFolder | 'all')}
-            className="mt-1"
+            className="mt-1 w-full sm:w-auto min-h-[44px]"
           >
             <option value="all">All</option>
             <option value="inbox">Inbox</option>
@@ -399,12 +403,12 @@ export function EmailList({ initialEmails = [], clientId }: EmailListProps) {
             <option value="trash">Trash</option>
           </Select>
         </div>
-        <div>
+        <div className="flex-1 sm:flex-initial">
           <label className="text-sm font-medium">Sort</label>
           <Select
             value={sortOrder}
             onChange={(e) => setSortOrder(e.target.value as 'newest' | 'oldest')}
-            className="mt-1"
+            className="mt-1 w-full sm:w-auto min-h-[44px]"
           >
             <option value="newest">Newest</option>
             <option value="oldest">Oldest</option>
@@ -427,65 +431,71 @@ export function EmailList({ initialEmails = [], clientId }: EmailListProps) {
               key={email.id}
               className={`transition-colors hover:bg-accent ${!email.is_read ? 'bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800' : ''}`}
             >
-              <CardContent className="p-4">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2">
-                      {!email.is_read && (
-                        <div className="w-2 h-2 bg-blue-600 rounded-full" />
-                      )}
-                      <Link href={`/emails/${email.id}`} className="font-semibold hover:underline">
-                        {email.subject}
-                      </Link>
-                      {/* Direction/Type Badge */}
-                      <Badge className={getStatusColor(email.status, email.direction)}>
-                        <span className="flex items-center gap-1">
-                          {getStatusIcon(email.status, email.direction)}
-                          {getStatusLabel(email.status, email.direction)}
-                        </span>
-                      </Badge>
-                      {/* Status Badge (only for outbound emails) */}
-                      {email.direction === 'outbound' && (
-                        <Badge className={getStatusOnlyColor(email.status)}>
-                          <span className="flex items-center gap-1">
-                            {getStatusIcon(email.status)}
-                            {email.status}
+              <CardContent className="p-3 md:p-4">
+                <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-col sm:flex-row sm:items-start sm:flex-wrap gap-2 mb-2">
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        {!email.is_read && (
+                          <div className="w-2 h-2 bg-blue-600 rounded-full flex-shrink-0" />
+                        )}
+                        <Link href={`/emails/${email.id}`} className="font-semibold hover:underline truncate text-sm md:text-base">
+                          {email.subject}
+                        </Link>
+                      </div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {/* Direction/Type Badge */}
+                        <Badge className={getStatusColor(email.status, email.direction || undefined)}>
+                          <span className="flex items-center gap-1 text-xs">
+                            {getStatusIcon(email.status, email.direction || undefined)}
+                            <span className="hidden sm:inline">{getStatusLabel(email.status, email.direction || undefined)}</span>
                           </span>
                         </Badge>
-                      )}
+                        {/* Status Badge (only for outbound emails) */}
+                        {email.direction === 'outbound' && (
+                          <Badge className={getStatusOnlyColor(email.status)}>
+                            <span className="flex items-center gap-1 text-xs">
+                              {getStatusIcon(email.status)}
+                              <span className="hidden sm:inline">{email.status}</span>
+                            </span>
+                          </Badge>
+                        )}
+                      </div>
                     </div>
-                    <div className="text-sm text-muted-foreground mb-2">
+                    <div className="text-xs md:text-sm text-muted-foreground mb-2">
                       {email.direction === 'inbound' ? (
                         <>
-                          <span>From: {email.from_email}</span>
-                          {email.from_name && <span> ({email.from_name})</span>}
+                          <span className="font-medium">From:</span> <span className="truncate block sm:inline">{email.from_email}</span>
+                          {email.from_name && <span className="hidden sm:inline"> ({email.from_name})</span>}
                         </>
                       ) : (
                         <>
-                          <span>To: {email.to_email}</span>
-                          {email.to_name && <span> ({email.to_name})</span>}
+                          <span className="font-medium">To:</span> <span className="truncate block sm:inline">{email.to_email}</span>
+                          {email.to_name && <span className="hidden sm:inline"> ({email.to_name})</span>}
                         </>
                       )}
                     </div>
-                    <div className="text-xs text-muted-foreground">
-                      <span>Created: {format(new Date(email.created_at), 'MMM d, yyyy HH:mm')}</span>
-                      {email.sent_at && (
-                        <span> • Sent: {format(new Date(email.sent_at), 'MMM d, yyyy HH:mm')}</span>
-                      )}
-                      {email.scheduled_at && (
-                        <span> • Scheduled: {format(new Date(email.scheduled_at), 'MMM d, yyyy HH:mm')}</span>
-                      )}
-                      {email.deleted_at && (
-                        <span> • Deleted: {format(new Date(email.deleted_at), 'MMM d, yyyy HH:mm')}</span>
-                      )}
+                    <div className="text-xs text-muted-foreground space-y-1 sm:space-y-0">
+                      <div className="flex flex-wrap gap-x-2 gap-y-1">
+                        <span>Created: {format(new Date(email.created_at), 'MMM d, yyyy')}</span>
+                        {email.sent_at && (
+                          <span>• Sent: {format(new Date(email.sent_at), 'MMM d, yyyy')}</span>
+                        )}
+                        {email.scheduled_at && (
+                          <span className="hidden md:inline">• Scheduled: {format(new Date(email.scheduled_at), 'MMM d, yyyy')}</span>
+                        )}
+                        {email.deleted_at && (
+                          <span className="hidden md:inline">• Deleted: {format(new Date(email.deleted_at), 'MMM d, yyyy')}</span>
+                        )}
+                      </div>
                     </div>
                     {email.error_message && (
-                      <div className="mt-2 text-sm text-red-600">
+                      <div className="mt-2 text-xs md:text-sm text-red-600">
                         Error: {email.error_message}
                       </div>
                     )}
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1 md:gap-2 flex-shrink-0">
                     {folderFilter !== 'trash' && (
                       <>
                         {(email.status === 'sent' || email.direction === 'inbound') && (
@@ -495,6 +505,7 @@ export function EmailList({ initialEmails = [], clientId }: EmailListProps) {
                               size="sm"
                               onClick={() => router.push(`/emails/${email.id}/reply`)}
                               title="Reply"
+                              className="min-h-[44px] min-w-[44px] md:h-8 md:w-8 p-0"
                             >
                               <Reply className="h-4 w-4" />
                             </Button>
@@ -503,6 +514,7 @@ export function EmailList({ initialEmails = [], clientId }: EmailListProps) {
                               size="sm"
                               onClick={() => router.push(`/emails/${email.id}/forward`)}
                               title="Forward"
+                              className="min-h-[44px] min-w-[44px] md:h-8 md:w-8 p-0"
                             >
                               <Forward className="h-4 w-4" />
                             </Button>
@@ -513,6 +525,7 @@ export function EmailList({ initialEmails = [], clientId }: EmailListProps) {
                           size="sm"
                           onClick={() => handleMarkAsRead(email.id, !email.is_read)}
                           title={email.is_read ? 'Mark as unread' : 'Mark as read'}
+                          className="min-h-[44px] min-w-[44px] md:h-8 md:w-8 p-0"
                         >
                           {email.is_read ? (
                             <MailOpen className="h-4 w-4" />
@@ -523,7 +536,7 @@ export function EmailList({ initialEmails = [], clientId }: EmailListProps) {
                       </>
                     )}
                     <Link href={`/emails/${email.id}`}>
-                      <Button variant="ghost" size="sm" title="View">
+                      <Button variant="ghost" size="sm" title="View" className="min-h-[44px] min-w-[44px] md:h-8 md:w-8 p-0">
                         <Eye className="h-4 w-4" />
                       </Button>
                     </Link>
@@ -534,6 +547,7 @@ export function EmailList({ initialEmails = [], clientId }: EmailListProps) {
                           size="sm"
                           onClick={() => handleRestore(email.id)}
                           title="Restore"
+                          className="min-h-[44px] min-w-[44px] md:h-8 md:w-8 p-0"
                         >
                           <Archive className="h-4 w-4" />
                         </Button>
@@ -542,6 +556,7 @@ export function EmailList({ initialEmails = [], clientId }: EmailListProps) {
                           size="sm"
                           onClick={() => handlePermanentlyDelete(email.id)}
                           title="Permanently delete"
+                          className="min-h-[44px] min-w-[44px] md:h-8 md:w-8 p-0"
                         >
                           <Trash2 className="h-4 w-4 text-red-600" />
                         </Button>
@@ -552,6 +567,7 @@ export function EmailList({ initialEmails = [], clientId }: EmailListProps) {
                         size="sm"
                         onClick={() => handleDelete(email.id)}
                         title="Move to trash"
+                        className="min-h-[44px] min-w-[44px] md:h-8 md:w-8 p-0"
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -566,6 +582,10 @@ export function EmailList({ initialEmails = [], clientId }: EmailListProps) {
     </div>
   )
 }
+
+
+
+
 
 
 

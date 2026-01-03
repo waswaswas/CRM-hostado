@@ -178,8 +178,8 @@ export function OfferDetail({ initialOffer }: OfferDetailProps) {
     }
   }
 
-  function getStatusLabel(status: OfferStatus) {
-    const statusLabels: Record<OfferStatus, string> = {
+  function getStatusLabel(status: Offer['status']) {
+    const statusLabels: Record<Offer['status'], string> = {
       draft: 'Draft',
       sent: 'Sent',
       accepted: 'Accepted',
@@ -508,6 +508,10 @@ export function OfferDetail({ initialOffer }: OfferDetailProps) {
     </div>
   )
 }
+
+
+
+
 
 
 

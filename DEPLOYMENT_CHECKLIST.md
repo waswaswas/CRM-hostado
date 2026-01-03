@@ -113,3 +113,7 @@ Use this checklist before deploying to cPanel:
 - [ ] Code repository backed up
 - [ ] Environment variables documented securely
 
+
+
+
+

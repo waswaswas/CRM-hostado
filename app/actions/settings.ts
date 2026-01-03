@@ -144,7 +144,7 @@ export async function getStatusChangeHistory(clientId?: string, limit: number = 
   }
 
   // Get client names
-  const clientIds = [...new Set(historyData.map(h => h.client_id))]
+  const clientIds = Array.from(new Set(historyData.map(h => h.client_id)))
   const { data: clientsData } = await supabase
     .from('clients')
     .select('id, name')
@@ -153,7 +153,7 @@ export async function getStatusChangeHistory(clientId?: string, limit: number = 
   const clientsMap = new Map(clientsData?.map(c => [c.id, c]) || [])
 
   // Get user emails for changed_by from user_profiles table
-  const userIds = [...new Set(historyData.map(h => h.changed_by).filter(Boolean) as string[])]
+  const userIds = Array.from(new Set(historyData.map(h => h.changed_by).filter(Boolean) as string[]))
   const userEmailsMap = new Map<string, string>()
 
   if (userIds.length > 0) {

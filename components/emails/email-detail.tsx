@@ -144,8 +144,8 @@ export function EmailDetail({ initialEmail }: EmailDetailProps) {
           <h1 className="text-3xl font-bold">{email.subject}</h1>
         </div>
         <div className="flex items-center gap-2">
-          <Badge className={getStatusColor(email.status, email.direction)}>
-            {getStatusLabel(email.status, email.direction)}
+          <Badge className={getStatusColor(email.status, email.direction || undefined)}>
+            {getStatusLabel(email.status, email.direction || undefined)}
           </Badge>
           {email.status === 'sent' && email.direction === 'outbound' && (
             <>
@@ -293,6 +293,10 @@ export function EmailDetail({ initialEmail }: EmailDetailProps) {
     </div>
   )
 }
+
+
+
+
 
 
 

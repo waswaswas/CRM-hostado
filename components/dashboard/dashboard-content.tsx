@@ -110,9 +110,9 @@ export function DashboardContent({ reminders, clients, stats, dbError }: Dashboa
         </Card>
       )}
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold">{t.dashboard.title}</h1>
-        <Link href="/clients/new">
-          <Button size="lg" className="h-12 w-12 rounded-full p-0">
+        <h1 className="text-2xl md:text-3xl font-bold">{t.dashboard.title}</h1>
+        <Link href="/clients/new" className="hidden md:block">
+          <Button size="lg" className="h-12 w-12 rounded-full p-0 min-h-[44px] min-w-[44px]">
             <Plus className="h-6 w-6" />
           </Button>
         </Link>
@@ -134,19 +134,19 @@ export function DashboardContent({ reminders, clients, stats, dbError }: Dashboa
                   variant={viewMode === 'list' ? 'default' : 'ghost'}
                   size="sm"
                   onClick={() => setViewMode('list')}
-                  className="h-8 px-3"
+                  className="min-h-[44px] px-3 md:h-8"
                 >
                   <List className="h-4 w-4 mr-1.5" />
-                  List
+                  <span className="hidden sm:inline">List</span>
                 </Button>
                 <Button
                   variant={viewMode === 'calendar' ? 'default' : 'ghost'}
                   size="sm"
                   onClick={() => setViewMode('calendar')}
-                  className="h-8 px-3"
+                  className="min-h-[44px] px-3 md:h-8"
                 >
                   <Calendar className="h-4 w-4 mr-1.5" />
-                  Calendar
+                  <span className="hidden sm:inline">Calendar</span>
                 </Button>
               </div>
             </div>
@@ -164,7 +164,7 @@ export function DashboardContent({ reminders, clients, stats, dbError }: Dashboa
                     <Link
                       key={reminder.id}
                       href={`/clients/${reminder.client_id}`}
-                      className="block rounded-lg border p-3 transition-colors hover:bg-accent"
+                      className="block rounded-lg border p-3 md:p-3 transition-colors hover:bg-accent min-h-[60px]"
                     >
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
@@ -191,7 +191,7 @@ export function DashboardContent({ reminders, clients, stats, dbError }: Dashboa
                     <Link
                       key={reminder.id}
                       href={`/clients/${reminder.client_id}`}
-                      className="block rounded-lg border p-3 transition-colors hover:bg-accent"
+                      className="block rounded-lg border p-3 md:p-3 transition-colors hover:bg-accent min-h-[60px]"
                     >
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
@@ -218,7 +218,7 @@ export function DashboardContent({ reminders, clients, stats, dbError }: Dashboa
                     <Link
                       key={reminder.id}
                       href={`/clients/${reminder.client_id}`}
-                      className="block rounded-lg border p-3 transition-colors hover:bg-accent"
+                      className="block rounded-lg border p-3 md:p-3 transition-colors hover:bg-accent min-h-[60px]"
                     >
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
@@ -246,20 +246,22 @@ export function DashboardContent({ reminders, clients, stats, dbError }: Dashboa
             {viewMode === 'calendar' && (
                 <div className="space-y-4">
                   {/* Month Navigation */}
-                  <div className="flex items-center justify-between">
-                    <Button variant="outline" size="sm" onClick={prevMonth}>
-                      ← Prev
+                  <div className="flex items-center justify-between gap-2">
+                    <Button variant="outline" size="sm" onClick={prevMonth} className="min-h-[44px] px-3 md:h-8">
+                      <span className="hidden sm:inline">← Prev</span>
+                      <span className="sm:hidden">←</span>
                     </Button>
-                    <h3 className="text-lg font-semibold">
+                    <h3 className="text-base md:text-lg font-semibold text-center flex-1">
                       {format(currentMonth, 'MMMM yyyy')}
                     </h3>
-                    <Button variant="outline" size="sm" onClick={nextMonth}>
-                      Next →
+                    <Button variant="outline" size="sm" onClick={nextMonth} className="min-h-[44px] px-3 md:h-8">
+                      <span className="hidden sm:inline">Next →</span>
+                      <span className="sm:hidden">→</span>
                     </Button>
                   </div>
 
                   {/* Calendar Grid */}
-                  <div className="grid grid-cols-7 gap-1">
+                  <div className="grid grid-cols-7 gap-1 text-xs md:text-sm">
                     {/* Day Headers */}
                     {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
                       <div key={day} className="p-2 text-center text-sm font-medium text-muted-foreground">
@@ -277,7 +279,7 @@ export function DashboardContent({ reminders, clients, stats, dbError }: Dashboa
                       return (
                         <div
                           key={idx}
-                          className={`min-h-[80px] border rounded-md p-1 ${
+                          className={`min-h-[60px] md:min-h-[80px] border rounded-md p-1 ${
                             !isCurrentMonth ? 'opacity-40 bg-muted/30' : ''
                           } ${isToday ? 'ring-2 ring-primary' : ''} ${
                             isPast ? 'bg-muted/20' : ''
@@ -293,7 +295,7 @@ export function DashboardContent({ reminders, clients, stats, dbError }: Dashboa
                                 <Link
                                   key={reminder.id}
                                   href={`/clients/${reminder.client_id}`}
-                                  className={`block text-xs p-1 rounded truncate transition-colors hover:opacity-80 ${
+                                  className={`block text-xs p-1.5 md:p-1 rounded truncate transition-colors hover:opacity-80 min-h-[32px] ${
                                     isOverdue
                                       ? 'bg-destructive/20 text-destructive border border-destructive/30'
                                       : 'bg-primary/10 text-primary border border-primary/20'
@@ -334,7 +336,7 @@ export function DashboardContent({ reminders, clients, stats, dbError }: Dashboa
                   <Link
                     key={client.id}
                     href={`/clients/${client.id}`}
-                    className="block rounded-lg border p-3 transition-colors hover:bg-accent"
+                    className="block rounded-lg border p-3 md:p-3 transition-colors hover:bg-accent min-h-[60px]"
                   >
                     <p className="font-medium">{client.name}</p>
                     {client.company && (
@@ -399,6 +401,10 @@ export function DashboardContent({ reminders, clients, stats, dbError }: Dashboa
     </div>
   )
 }
+
+
+
+
 
 
 

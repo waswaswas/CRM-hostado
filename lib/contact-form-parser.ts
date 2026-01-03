@@ -73,7 +73,7 @@ export function parseContactFormEmail(emailBody: string): ContactFormData | null
       // Extract only the name part, stopping before "Имейл адрес"
       const namePart = fullMatch[1].split(/(?:Имейл\s+адрес|Имейл|Email)/i)[0].trim()
       if (namePart && namePart.match(/^[А-Яа-яA-Za-z]+(?:\s+[А-Яа-яA-Za-z]+)*$/)) {
-        nameMatch = [null, namePart]
+        nameMatch = ['', namePart] as RegExpMatchArray
       }
     }
   }
@@ -319,6 +319,10 @@ export function parseContactFormEmail(emailBody: string): ContactFormData | null
     message: message || textBody, // Fallback to full body if no message extracted
   }
 }
+
+
+
+
 
 
 

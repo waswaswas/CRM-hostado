@@ -128,9 +128,9 @@ export async function getTransactions(filters?: {
     }
 
     // Manually fetch related accounts, clients, and accounting customers
-    const accountIds = [...new Set(simpleData?.map((t: any) => t.account_id).filter(Boolean) || [])]
-    const contactIds = [...new Set(simpleData?.map((t: any) => t.contact_id).filter(Boolean) || [])]
-    const accountingCustomerIds = [...new Set(simpleData?.map((t: any) => t.accounting_customer_id).filter(Boolean) || [])]
+    const accountIds = Array.from(new Set(simpleData?.map((t: any) => t.account_id).filter(Boolean) || []))
+    const contactIds = Array.from(new Set(simpleData?.map((t: any) => t.contact_id).filter(Boolean) || []))
+    const accountingCustomerIds = Array.from(new Set(simpleData?.map((t: any) => t.accounting_customer_id).filter(Boolean) || []))
 
     const accountsMap = new Map()
     const contactsMap = new Map()
@@ -563,6 +563,10 @@ export async function deleteTransaction(id: string): Promise<void> {
 
   revalidatePath('/accounting/transactions')
 }
+
+
+
+
 
 
 

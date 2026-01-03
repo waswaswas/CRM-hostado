@@ -1,4 +1,4 @@
-import * as Imap from 'imap'
+import Imap from 'imap'
 import { simpleParser, ParsedMail } from 'mailparser'
 import { createInboundEmail } from '@/app/actions/emails'
 import { parseContactFormEmail } from './contact-form-parser'
@@ -163,7 +163,7 @@ export async function checkForNewEmails(): Promise<{
       })
     })
 
-    imap.once('error', (err) => {
+    imap.once('error', (err: any) => {
       errors.push(`IMAP connection error: ${err.message}`)
       console.error(`[IMAP] Connection error:`, err)
       resolve({ success: false, processed: processedCount.value, errors })
@@ -185,9 +185,9 @@ async function processEmailBatch(
 
   const emailPromises: Promise<void>[] = []
 
-  fetch.on('message', (msg, seqno) => {
+  fetch.on('message', (msg: any, seqno: number) => {
     const emailPromise = new Promise<void>((resolve) => {
-      msg.on('body', async (stream: NodeJS.ReadableStream, info) => {
+      msg.on('body', async (stream: NodeJS.ReadableStream, info: any) => {
         try {
           const parsed = await simpleParser(stream as any)
           const processedEmail: ProcessedEmail = {
@@ -197,12 +197,12 @@ async function processEmailBatch(
               name: parsed.from?.text || parsed.from?.value?.[0]?.name || '',
               address: parsed.from?.value?.[0]?.address || parsed.from?.text || '',
             },
-            to: (parsed.to?.value || []).map((addr: any) => ({
+            to: (Array.isArray(parsed.to) ? parsed.to : (parsed.to as any)?.value || []).map((addr: any) => ({
               name: addr.name || '',
               address: addr.address || '',
             })),
-            cc: parsed.cc?.value
-              ? (parsed.cc.value as any[]).map((addr: any) => ({
+            cc: parsed.cc
+              ? (Array.isArray(parsed.cc) ? parsed.cc : (parsed.cc as any)?.value || []).map((addr: any) => ({
                   name: addr.name || '',
                   address: addr.address || '',
                 }))
@@ -226,7 +226,7 @@ async function processEmailBatch(
 
               // Mark as read (SEEN) after successful processing
               // This prevents the email from being processed again
-              imap.addFlags(results[seqno - 1], '\\Seen', (flagErr) => {
+              imap.addFlags(results[seqno - 1], '\\Seen', (flagErr: any) => {
                 if (flagErr) {
                   console.error(`[IMAP] Failed to mark email ${results[seqno - 1]} as read:`, flagErr)
                 }
@@ -235,7 +235,7 @@ async function processEmailBatch(
               // Email was a duplicate or already processed
               console.log(`[IMAP] Email was duplicate or already processed: ${processedEmail.subject}`)
               // Mark as read anyway to avoid checking it repeatedly
-              imap.addFlags(results[seqno - 1], '\\Seen', (flagErr) => {
+              imap.addFlags(results[seqno - 1], '\\Seen', (flagErr: any) => {
                 if (flagErr) {
                   console.error(`[IMAP] Failed to mark email ${results[seqno - 1]} as read:`, flagErr)
                 }
@@ -275,7 +275,7 @@ async function processEmailBatch(
     resolve({ success: true, processed: processedCount.value, errors })
   })
 
-  fetch.once('error', (fetchErr) => {
+  fetch.once('error', (fetchErr: any) => {
     errors.push(`Fetch error: ${fetchErr.message}`)
     console.error(`[IMAP] Fetch error:`, fetchErr)
     imap.end()
@@ -471,7 +471,7 @@ async function processContactFormInquiry(
   
   const { data: existingClients } = await supabase
     .from('clients')
-    .select('id, name, email')
+    .select('id, name, email, phone')
     .eq('owner_id', user.id)
     .eq('email', formData.email)
 
@@ -577,8 +577,9 @@ async function processContactFormInquiry(
   }
 
   // Only create interaction if client_id exists and it doesn't already exist
+  let existingInteraction = null
   if (clientId) {
-    const { data: existingInteraction } = await supabase
+    const { data: interactionData } = await supabase
       .from('interactions')
       .select('id')
       .eq('client_id', clientId)
@@ -587,6 +588,8 @@ async function processContactFormInquiry(
       .eq('type', 'email')
       .eq('direction', 'inbound')
       .single()
+
+    existingInteraction = interactionData
 
     // Only create interaction if it doesn't exist
     if (!existingInteraction) {
@@ -613,6 +616,10 @@ async function processContactFormInquiry(
 export function isImapConfigured(): boolean {
   return getImapConfig() !== null
 }
+
+
+
+
 
 
 

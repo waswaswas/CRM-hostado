@@ -58,3 +58,7 @@ CREATE POLICY "Users can delete their own notifications"
   USING (auth.uid() = owner_id);
 
 
+
+
+
+

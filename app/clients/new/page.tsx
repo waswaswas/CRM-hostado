@@ -88,7 +88,7 @@ export default function NewClientPage() {
         email: formData.email || undefined,
         phone: formData.phone || undefined,
         status: formData.status,
-        client_type: clientType,
+        client_type: clientType || undefined,
         source: formData.source || undefined,
         notes_summary: formData.notes_summary || undefined,
       })

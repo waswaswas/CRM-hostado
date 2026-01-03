@@ -1,12 +1,15 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { usePathname } from 'next/navigation'
 import { Sidebar } from './sidebar'
 import { Topbar } from './topbar'
+import { BottomNav } from './bottom-nav'
 import { createClient } from '@/lib/supabase/client'
 
 export function AppLayoutClient({ children }: { children: React.ReactNode }) {
   const [userEmail, setUserEmail] = useState<string | undefined>()
+  const pathname = usePathname()
 
   useEffect(() => {
     async function getUser() {
@@ -21,10 +24,10 @@ export function AppLayoutClient({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex h-screen">
-      <Sidebar />
+      <Sidebar userName={userEmail} />
       <div className="flex flex-1 flex-col overflow-hidden">
         <Topbar userName={userEmail} />
-        <main className="flex-1 overflow-y-auto bg-muted/50 p-6">
+        <main className="flex-1 overflow-y-auto bg-muted/50 p-4 md:p-6">
           {children}
         </main>
       </div>

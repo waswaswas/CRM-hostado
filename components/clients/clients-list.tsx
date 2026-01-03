@@ -8,7 +8,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Select } from '@/components/ui/select'
 import { Client, ClientStatus, ClientType } from '@/types/database'
 import Link from 'next/link'
-import { Plus, Search, Trash2, Calendar, Link as LinkIcon } from 'lucide-react'
+import { Plus, Search, Trash2, Calendar, Link as LinkIcon, Mail, Phone } from 'lucide-react'
 import { format, subDays, isAfter, startOfDay, endOfDay } from 'date-fns'
 import { getStatusesForType, getStatusColor, formatStatus, STATUS_DESCRIPTIONS, isClientNew } from '@/lib/status-utils'
 import { deleteClient, updateClient } from '@/app/actions/clients'
@@ -292,12 +292,13 @@ export function ClientsList({ initialClients, linkedClientIds = [] }: ClientsLis
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold">Clients</h1>
-        <Link href="/clients/new">
-          <Button>
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <h1 className="text-2xl md:text-3xl font-bold">Clients</h1>
+        <Link href="/clients/new" className="w-full sm:w-auto">
+          <Button className="w-full sm:w-auto min-h-[44px]">
             <Plus className="mr-2 h-4 w-4" />
-            Add Client
+            <span className="hidden sm:inline">Add Client</span>
+            <span className="sm:hidden">Add</span>
           </Button>
         </Link>
       </div>
@@ -313,7 +314,7 @@ export function ClientsList({ initialClients, linkedClientIds = [] }: ClientsLis
           />
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
           <div className="space-y-2">
             <label className="text-sm font-medium">Client Type</label>
             <Select
@@ -350,7 +351,7 @@ export function ClientsList({ initialClients, linkedClientIds = [] }: ClientsLis
                   id="new-toggle"
                   checked={newFilter === 'new'}
                   onChange={(e) => setNewFilter(e.target.checked ? 'new' : 'all')}
-                  className="h-4 w-4 rounded border-gray-300"
+                  className="h-5 w-5 rounded-full border-2 border-gray-300 cursor-pointer appearance-none checked:bg-primary checked:border-primary checked:after:content-['✓'] checked:after:text-white checked:after:flex checked:after:items-center checked:after:justify-center checked:after:text-xs transition-colors"
                 />
                 <label htmlFor="new-toggle" className="text-sm cursor-pointer">
                   New only (within 14 days)
@@ -425,7 +426,7 @@ export function ClientsList({ initialClients, linkedClientIds = [] }: ClientsLis
               type="checkbox"
               checked={filteredClients.length > 0 && selectedClients.size === filteredClients.length}
               onChange={handleSelectAll}
-              className="h-4 w-4 rounded border-gray-300 cursor-pointer"
+              className="h-5 w-5 rounded-full border-2 border-gray-300 cursor-pointer appearance-none checked:bg-primary checked:border-primary checked:after:content-['✓'] checked:after:text-white checked:after:flex checked:after:items-center checked:after:justify-center checked:after:text-xs transition-colors"
             />
             <label className="text-sm font-medium cursor-pointer" onClick={handleSelectAll}>
               Select All ({filteredClients.length})
@@ -435,123 +436,156 @@ export function ClientsList({ initialClients, linkedClientIds = [] }: ClientsLis
           <div className="grid gap-4">
             {filteredClients.map((client) => (
               <Card key={client.id} className="transition-colors hover:bg-accent">
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3 flex-1">
+                <CardContent className="p-3 md:p-4">
+                  <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                    <div className="flex items-start gap-3 flex-1 min-w-0">
                       {/* Checkbox */}
                       <input
                         type="checkbox"
                         checked={selectedClients.has(client.id)}
                         onChange={() => handleToggleSelect(client.id)}
                         onClick={(e) => e.stopPropagation()}
-                        className="h-4 w-4 rounded border-gray-300 cursor-pointer flex-shrink-0"
+                        className="h-5 w-5 rounded-full border-2 border-gray-300 cursor-pointer flex-shrink-0 mt-0.5 appearance-none checked:bg-primary checked:border-primary checked:after:content-['✓'] checked:after:text-white checked:after:flex checked:after:items-center checked:after:justify-center checked:after:text-xs transition-colors"
                       />
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-3 flex-wrap">
-                          <Link href={`/clients/${client.id}`} className="text-lg font-semibold hover:underline">
+                        {/* Name and Primary Tags */}
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-2 mb-2">
+                          <Link href={`/clients/${client.id}`} className="text-base md:text-lg font-semibold hover:underline truncate">
                             {client.name}
                           </Link>
-                          {/* "New" tag - separate, non-editable, auto-removed after 14 days */}
-                          {client.client_type === 'presales' && isClientNew(client.created_at) && (
-                            <Badge 
-                              className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
-                              title="Added within the last 14 days"
-                            >
-                              New
-                            </Badge>
-                          )}
-                          {linkedClientIds.includes(client.id) && (
-                            <Badge 
-                              className="bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200 flex items-center gap-1"
-                              title="Linked to accounting customer"
-                            >
-                              <LinkIcon className="h-3 w-3" />
-                              Accounting
-                            </Badge>
-                          )}
-                          {editingClient?.id === client.id && editingClient.field === 'type' ? (
-                            <Select
-                              value={client.client_type || 'presales'}
-                              onChange={(e) => {
-                                handleTypeChange(client.id, e.target.value as ClientType, client.status)
-                              }}
-                              onBlur={() => setEditingClient(null)}
-                              className="w-32 text-xs"
-                              autoFocus
-                            >
-                              <option value="presales">Presales</option>
-                              <option value="customer">Customer</option>
-                            </Select>
-                          ) : (
-                            <Badge 
-                              className={`text-xs cursor-pointer hover:opacity-80 ${
-                                client.client_type === 'presales' 
-                                  ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' 
-                                  : client.client_type === 'customer'
-                                  ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-                                  : 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200'
-                              }`}
-                              onClick={(e) => {
-                                e.preventDefault()
-                                e.stopPropagation()
-                                setEditingClient({ id: client.id, field: 'type' })
-                              }}
-                              title="Click to change client type"
-                            >
-                              {client.client_type === 'presales' ? 'Presales' : client.client_type === 'customer' ? 'Customer' : 'Unknown'}
-                            </Badge>
-                          )}
-                          {editingClient?.id === client.id && editingClient.field === 'status' ? (
-                            <Select
-                              value={client.status}
-                              onChange={(e) => {
-                                handleStatusChange(client.id, e.target.value as ClientStatus)
-                              }}
-                              onBlur={() => setEditingClient(null)}
-                              className="w-40 text-xs"
-                              autoFocus
-                            >
-                              {getStatusesForType(client.client_type, customStatuses).map((status) => (
-                                <option key={status} value={status}>
-                                  {formatStatus(status, customStatuses)}
-                                </option>
-                              ))}
-                            </Select>
-                          ) : (
-                            <Badge 
-                              className={`${getStatusColor(client.status, client.client_type)} cursor-pointer hover:opacity-80`}
-                              title={STATUS_DESCRIPTIONS[client.status as keyof typeof STATUS_DESCRIPTIONS] || ''}
-                              onClick={(e) => {
-                                e.preventDefault()
-                                e.stopPropagation()
-                                setEditingClient({ id: client.id, field: 'status' })
-                              }}
-                            >
-                              {formatStatus(client.status, customStatuses)}
-                            </Badge>
-                          )}
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {/* "New" tag */}
+                            {client.client_type === 'presales' && isClientNew(client.created_at) && (
+                              <Badge 
+                                className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 text-xs"
+                                title="Added within the last 14 days"
+                              >
+                                New
+                              </Badge>
+                            )}
+                            {/* Accounting link badge */}
+                            {linkedClientIds.includes(client.id) && (
+                              <Badge 
+                                className="bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200 flex items-center gap-1 text-xs"
+                                title="Linked to accounting customer"
+                              >
+                                <LinkIcon className="h-3 w-3" />
+                                <span className="hidden sm:inline">Accounting</span>
+                              </Badge>
+                            )}
+                            {/* Type badge */}
+                            {editingClient?.id === client.id && editingClient.field === 'type' ? (
+                              <Select
+                                value={client.client_type || 'presales'}
+                                onChange={(e) => {
+                                  handleTypeChange(client.id, e.target.value as ClientType, client.status)
+                                }}
+                                onBlur={() => setEditingClient(null)}
+                                className="w-32 text-xs min-h-[44px]"
+                                autoFocus
+                              >
+                                <option value="presales">Presales</option>
+                                <option value="customer">Customer</option>
+                              </Select>
+                            ) : (
+                              <Badge 
+                                className={`text-xs cursor-pointer hover:opacity-80 min-h-[24px] ${
+                                  client.client_type === 'presales' 
+                                    ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' 
+                                    : client.client_type === 'customer'
+                                    ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                                    : 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200'
+                                }`}
+                                onClick={(e) => {
+                                  e.preventDefault()
+                                  e.stopPropagation()
+                                  setEditingClient({ id: client.id, field: 'type' })
+                                }}
+                                title="Click to change client type"
+                              >
+                                {client.client_type === 'presales' ? 'Presales' : client.client_type === 'customer' ? 'Customer' : 'Unknown'}
+                              </Badge>
+                            )}
+                            {/* Status badge */}
+                            {editingClient?.id === client.id && editingClient.field === 'status' ? (
+                              <Select
+                                value={client.status}
+                                onChange={(e) => {
+                                  handleStatusChange(client.id, e.target.value as ClientStatus)
+                                }}
+                                onBlur={() => setEditingClient(null)}
+                                className="w-40 text-xs min-h-[44px]"
+                                autoFocus
+                              >
+                                {getStatusesForType(client.client_type, customStatuses).map((status) => (
+                                  <option key={status} value={status}>
+                                    {formatStatus(status, customStatuses)}
+                                  </option>
+                                ))}
+                              </Select>
+                            ) : (
+                              <Badge 
+                                className={`${getStatusColor(client.status, client.client_type)} cursor-pointer hover:opacity-80 text-xs min-h-[24px]`}
+                                title={STATUS_DESCRIPTIONS[client.status as keyof typeof STATUS_DESCRIPTIONS] || ''}
+                                onClick={(e) => {
+                                  e.preventDefault()
+                                  e.stopPropagation()
+                                  setEditingClient({ id: client.id, field: 'status' })
+                                }}
+                              >
+                                {formatStatus(client.status, customStatuses)}
+                              </Badge>
+                            )}
+                          </div>
                         </div>
+                        {/* Company */}
                         {client.company && (
-                          <p className="mt-1 text-sm text-muted-foreground">
+                          <p className="text-xs md:text-sm text-muted-foreground mb-2">
                             {client.company}
                           </p>
                         )}
-                        <div className="mt-2 flex gap-4 text-sm text-muted-foreground">
-                          {client.email && <span>{client.email}</span>}
-                          {client.phone && <span>{client.phone}</span>}
+                        {/* Contact Info */}
+                        <div className="flex flex-col sm:flex-row sm:gap-4 gap-1 text-xs md:text-sm text-muted-foreground">
+                          {client.email && (
+                            <span className="truncate">
+                              <Mail className="h-3 w-3 inline mr-1" />
+                              {client.email}
+                            </span>
+                          )}
+                          {client.phone && (
+                            <span className="truncate">
+                              <Phone className="h-3 w-3 inline mr-1" />
+                              {client.phone}
+                            </span>
+                          )}
+                        </div>
+                        {/* Date - Mobile only */}
+                        <div className="mt-2 sm:hidden text-xs text-muted-foreground">
+                          Added {format(new Date(client.created_at), 'MMM d, yyyy')}
                         </div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-3">
+                    {/* Desktop: Date and Delete */}
+                    <div className="hidden sm:flex items-center gap-3 flex-shrink-0">
                       <div className="text-right text-sm text-muted-foreground">
                         <p>Added {format(new Date(client.created_at), 'MMM d, yyyy')}</p>
                       </div>
                       <button
                         onClick={(e) => handleDeleteClient(client.id, client.name, e)}
-                        className="p-2 text-muted-foreground hover:text-destructive transition-colors"
+                        className="p-2 text-muted-foreground hover:text-destructive transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
                         title="Delete client"
                       >
                         <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                    {/* Mobile: Delete button */}
+                    <div className="sm:hidden flex justify-end">
+                      <button
+                        onClick={(e) => handleDeleteClient(client.id, client.name, e)}
+                        className="p-2 text-muted-foreground hover:text-destructive transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
+                        title="Delete client"
+                      >
+                        <Trash2 className="h-5 w-5" />
                       </button>
                     </div>
                   </div>

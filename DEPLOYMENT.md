@@ -222,3 +222,7 @@ If you encounter issues:
 3. Verify Supabase connection
 4. Review this deployment guide
 
+
+
+
+

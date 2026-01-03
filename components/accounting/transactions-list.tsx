@@ -135,7 +135,7 @@ export function TransactionsList({ initialTransactions, accounts }: Transactions
     let successCount = 0
     let failCount = 0
 
-    for (const transactionId of selectedTransactions) {
+    for (const transactionId of Array.from(selectedTransactions)) {
       try {
         await deleteTransaction(transactionId)
         setTransactions((prev) => prev.filter((t) => t.id !== transactionId))
@@ -378,6 +378,10 @@ export function TransactionsList({ initialTransactions, accounts }: Transactions
     </div>
   )
 }
+
+
+
+
 
 
 

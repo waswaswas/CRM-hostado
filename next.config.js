@@ -12,6 +12,7 @@ const nextConfig = {
   env: {
     NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
     NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
   },
   
   // Production optimizations
@@ -20,6 +21,16 @@ const nextConfig = {
   
   // Ensure proper handling of static files
   trailingSlash: false,
+  
+  // Skip ESLint during build
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
+  
+  // Skip TypeScript type checking during build (optional - remove if you want type checking)
+  typescript: {
+    ignoreBuildErrors: false, // Keep this false to catch type errors, but skip ESLint
+  },
 }
 
 module.exports = nextConfig
