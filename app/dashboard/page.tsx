@@ -8,7 +8,7 @@ import { getDashboardStats } from '@/app/actions/stats'
 import { getSettings } from '@/app/actions/settings'
 import { formatStatus, getStatusColor } from '@/lib/status-utils'
 import Link from 'next/link'
-import { Calendar, Users, Plus, AlertCircle, TrendingUp, Clock, Tag, List } from 'lucide-react'
+import { Calendar, Users, AlertCircle, TrendingUp, Clock, Tag, List } from 'lucide-react'
 import { RemindersCard } from '@/components/dashboard/reminders-card'
 import { format, parseISO } from 'date-fns'
 
@@ -112,11 +112,6 @@ export default async function DashboardPage() {
         )}
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold">Dashboard</h1>
-          <Link href="/clients/new">
-            <Button size="lg" className="h-12 w-12 rounded-full p-0">
-              <Plus className="h-6 w-6" />
-            </Button>
-          </Link>
         </div>
 
         <div className="grid gap-6 md:grid-cols-2">

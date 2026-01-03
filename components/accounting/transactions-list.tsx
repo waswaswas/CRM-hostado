@@ -262,7 +262,7 @@ export function TransactionsList({ initialTransactions, accounts }: Transactions
             type="checkbox"
             checked={selectedTransactions.size > 0 && selectedTransactions.size === filteredAndSorted.length}
             onChange={handleSelectAll}
-            className="h-4 w-4 rounded border-gray-300 cursor-pointer"
+            className="h-5 w-5 rounded-full border-2 border-gray-300 cursor-pointer appearance-none checked:bg-primary checked:border-primary checked:after:content-['✓'] checked:after:text-white checked:after:flex checked:after:items-center checked:after:justify-center checked:after:text-xs transition-colors"
           />
           <label className="text-sm font-medium cursor-pointer" onClick={handleSelectAll}>
             Select All ({filteredAndSorted.length})
@@ -274,76 +274,94 @@ export function TransactionsList({ initialTransactions, accounts }: Transactions
         {filteredAndSorted.length > 0 ? (
           <div className="space-y-2">
             {filteredAndSorted.map((transaction) => (
-              <Card key={transaction.id} className="hover:shadow-md transition-shadow">
-                <CardContent className="p-4">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex items-center gap-3 flex-1">
+              <Card key={transaction.id} className="hover:shadow-md transition-shadow rounded-lg">
+                <CardContent className="p-3 sm:p-4">
+                  <div className="flex items-start justify-between gap-3 sm:gap-4">
+                    <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
                       {/* Checkbox for bulk selection */}
                       <input
                         type="checkbox"
                         checked={selectedTransactions.has(transaction.id)}
                         onChange={() => handleToggleSelect(transaction.id)}
                         onClick={(e) => e.stopPropagation()}
-                        className="h-4 w-4 rounded border-gray-300 cursor-pointer flex-shrink-0"
+                        className="h-5 w-5 rounded-full border-2 border-gray-300 cursor-pointer flex-shrink-0 mt-0.5 appearance-none checked:bg-primary checked:border-primary checked:after:content-['✓'] checked:after:text-white checked:after:flex checked:after:items-center checked:after:justify-center checked:after:text-xs transition-colors"
                       />
-                      <div className="flex-1 grid grid-cols-12 gap-3 items-center">
-                        <div className="col-span-2">
-                        <div className="text-sm font-medium">
-                          {format(new Date(transaction.date), 'dd MMM yyyy')}
+                      <div className="flex-1 grid grid-cols-1 sm:grid-cols-12 gap-2 sm:gap-3 items-start sm:items-center min-w-0">
+                        <div className="col-span-12 sm:col-span-2">
+                          <div className="text-sm font-medium">
+                            {format(new Date(transaction.date), 'dd MMM yyyy')}
+                          </div>
+                          <div className="text-xs text-muted-foreground truncate">{transaction.number}</div>
                         </div>
-                        <div className="text-xs text-muted-foreground truncate">{transaction.number}</div>
-                      </div>
-                      <div className="col-span-2">
-                        <div className="flex items-center gap-2">
-                          <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                            transaction.type === 'income' ? 'bg-green-500' : 
-                            transaction.type === 'expense' ? 'bg-red-500' : 
-                            'bg-blue-500'
-                          }`} />
-                          <span className="text-sm font-medium capitalize truncate">{transaction.type}</span>
+                        <div className="col-span-12 sm:col-span-2">
+                          <div className="flex items-center gap-2">
+                            <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                              transaction.type === 'income' ? 'bg-green-500' : 
+                              transaction.type === 'expense' ? 'bg-red-500' : 
+                              'bg-blue-500'
+                            }`} />
+                            <span className="text-sm font-medium capitalize truncate">{transaction.type}</span>
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-1 truncate">
+                            {transaction.category || 'N/A'}
+                          </div>
                         </div>
-                        <div className="text-xs text-muted-foreground mt-1 truncate">
-                          {transaction.category || 'N/A'}
+                        <div className="col-span-6 sm:col-span-2 text-sm truncate" title={transaction.account?.name || 'N/A'}>
+                          <span className="text-xs text-muted-foreground sm:hidden">Account: </span>
+                          {transaction.account?.name || 'N/A'}
                         </div>
-                      </div>
-                      <div className="col-span-2 text-sm truncate" title={transaction.account?.name || 'N/A'}>
-                        {transaction.account?.name || 'N/A'}
-                      </div>
-                      <div className="col-span-2 text-sm text-muted-foreground truncate" title={transaction.contact?.name || 'N/A'}>
-                        {transaction.contact?.name || 'N/A'}
-                      </div>
-                      <div className="col-span-1 text-sm text-muted-foreground truncate" title={transaction.reference || 'N/A'}>
-                        {transaction.reference || 'N/A'}
-                      </div>
-                      <div className="col-span-1 flex items-center justify-center flex-shrink-0 min-w-[120px]">
-                        <AssignCustomerDialog
-                          transactionId={transaction.id}
-                          currentCustomerId={(transaction as any).accounting_customer_id}
-                          currentCustomerName={(transaction as any).accounting_customer?.name}
-                        />
-                      </div>
-                      <div className="col-span-2 flex items-center justify-end">
-                        <div
-                          className={`font-semibold ${
-                            transaction.type === 'income' ? 'text-green-600' : 'text-red-600'
-                          }`}
-                        >
-                          {transaction.type === 'expense' ? '-' : '+'}
-                          {formatAmount(transaction.amount, transaction.currency)}
+                        <div className="col-span-6 sm:col-span-2 text-sm text-muted-foreground truncate" title={transaction.contact?.name || 'N/A'}>
+                          <span className="text-xs sm:hidden">Contact: </span>
+                          {transaction.contact?.name || 'N/A'}
                         </div>
-                      </div>
+                        <div className="hidden sm:block col-span-1 text-sm text-muted-foreground truncate" title={transaction.reference || 'N/A'}>
+                          {transaction.reference || 'N/A'}
+                        </div>
+                        <div className="col-span-12 sm:col-span-1 flex items-center justify-start sm:justify-center flex-shrink-0">
+                          <AssignCustomerDialog
+                            transactionId={transaction.id}
+                            currentCustomerId={(transaction as any).accounting_customer_id}
+                            currentCustomerName={(transaction as any).accounting_customer?.name}
+                          />
+                        </div>
+                        <div className="col-span-12 sm:col-span-2 flex items-center justify-between sm:justify-end">
+                          <div
+                            className={`font-semibold text-base sm:text-sm ${
+                              transaction.type === 'income' ? 'text-green-600' : 'text-red-600'
+                            }`}
+                          >
+                            {transaction.type === 'expense' ? '-' : '+'}
+                            {formatAmount(transaction.amount, transaction.currency)}
+                          </div>
+                          <div className="flex items-center gap-1 sm:hidden">
+                            <Link href={`/accounting/transactions/${transaction.id}`}>
+                              <Button variant="ghost" size="sm" className="min-h-[44px] min-w-[44px] p-0">
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                            </Link>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="min-h-[44px] min-w-[44px] p-0 text-destructive hover:text-destructive"
+                              onClick={() => handleDelete(transaction.id)}
+                              title="Delete transaction"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-1 flex-shrink-0">
+                    <div className="hidden sm:flex items-center gap-1 flex-shrink-0">
                       <Link href={`/accounting/transactions/${transaction.id}`}>
-                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                        <Button variant="ghost" size="sm" className="min-h-[44px] min-w-[44px] md:h-8 md:w-8 p-0">
                           <Eye className="h-4 w-4" />
                         </Button>
                       </Link>
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                        className="min-h-[44px] min-w-[44px] md:h-8 md:w-8 p-0 text-destructive hover:text-destructive"
                         onClick={() => handleDelete(transaction.id)}
                         title="Delete transaction"
                       >

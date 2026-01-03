@@ -134,16 +134,16 @@ export function EmailDetail({ initialEmail }: EmailDetailProps) {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" onClick={() => router.back()}>
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back
+    <div className="max-w-4xl mx-auto space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-1">
+          <Button variant="ghost" onClick={() => router.back()} className="min-h-[44px] min-w-[44px] md:h-9 md:w-auto flex-shrink-0">
+            <ArrowLeft className="h-4 w-4 sm:mr-2" />
+            <span className="hidden sm:inline">Back</span>
           </Button>
-          <h1 className="text-3xl font-bold">{email.subject}</h1>
+          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold truncate">{email.subject}</h1>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Badge className={getStatusColor(email.status, email.direction || undefined)}>
             {getStatusLabel(email.status, email.direction || undefined)}
           </Badge>
@@ -153,17 +153,19 @@ export function EmailDetail({ initialEmail }: EmailDetailProps) {
                 variant="outline"
                 onClick={() => router.push(`/emails/${email.id}/reply`)}
                 disabled={loading}
+                className="min-h-[44px] md:h-9"
               >
-                <Reply className="h-4 w-4 mr-2" />
-                Reply
+                <Reply className="h-4 w-4 sm:mr-2" />
+                <span className="hidden sm:inline">Reply</span>
               </Button>
               <Button
                 variant="outline"
                 onClick={() => router.push(`/emails/${email.id}/forward`)}
                 disabled={loading}
+                className="min-h-[44px] md:h-9"
               >
-                <Forward className="h-4 w-4 mr-2" />
-                Forward
+                <Forward className="h-4 w-4 sm:mr-2" />
+                <span className="hidden sm:inline">Forward</span>
               </Button>
             </>
           )}
@@ -172,43 +174,45 @@ export function EmailDetail({ initialEmail }: EmailDetailProps) {
               variant="outline"
               onClick={() => handleMarkAsRead(!email.is_read)}
               disabled={loading}
+              className="min-h-[44px] md:h-9"
             >
               {email.is_read ? (
                 <>
-                  <MailOpen className="h-4 w-4 mr-2" />
-                  Mark as Unread
+                  <MailOpen className="h-4 w-4 sm:mr-2" />
+                  <span className="hidden sm:inline">Mark as Unread</span>
                 </>
               ) : (
                 <>
-                  <Mail className="h-4 w-4 mr-2" />
-                  Mark as Read
+                  <Mail className="h-4 w-4 sm:mr-2" />
+                  <span className="hidden sm:inline">Mark as Read</span>
                 </>
               )}
             </Button>
           )}
           {email.status === 'draft' && (
-            <Button onClick={handleSend} disabled={loading}>
-              <Send className="h-4 w-4 mr-2" />
-              Send Now
+            <Button onClick={handleSend} disabled={loading} className="min-h-[44px] md:h-9">
+              <Send className="h-4 w-4 sm:mr-2" />
+              <span className="hidden sm:inline">Send Now</span>
+              <span className="sm:hidden">Send</span>
             </Button>
           )}
-          <Button variant="destructive" onClick={handleDelete} disabled={loading}>
-            <Trash2 className="h-4 w-4 mr-2" />
-            Delete
+          <Button variant="destructive" onClick={handleDelete} disabled={loading} className="min-h-[44px] md:h-9">
+            <Trash2 className="h-4 w-4 sm:mr-2" />
+            <span className="hidden sm:inline">Delete</span>
           </Button>
         </div>
       </div>
 
-      <Card>
+      <Card className="rounded-lg">
         <CardHeader>
           <CardTitle>Email Details</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-4 p-4 sm:p-6">
           <div>
             <label className="text-sm font-medium text-muted-foreground">
               {email.direction === 'inbound' ? 'From' : 'From'}
             </label>
-            <p className="mt-1">
+            <p className="mt-1 text-sm break-words">
               {email.from_name} &lt;{email.from_email}&gt;
             </p>
           </div>
@@ -217,7 +221,7 @@ export function EmailDetail({ initialEmail }: EmailDetailProps) {
             <label className="text-sm font-medium text-muted-foreground">
               {email.direction === 'inbound' ? 'To' : 'To'}
             </label>
-            <p className="mt-1">
+            <p className="mt-1 text-sm break-words">
               {email.to_name ? `${email.to_name} ` : ''}&lt;{email.to_email}&gt;
             </p>
           </div>
@@ -244,7 +248,7 @@ export function EmailDetail({ initialEmail }: EmailDetailProps) {
           <div>
             <label className="text-sm font-medium text-muted-foreground">Body</label>
             <div
-              className="mt-1 p-4 border rounded-lg bg-white dark:bg-gray-900 email-body-preview"
+              className="mt-1 p-3 sm:p-4 border rounded-lg bg-white dark:bg-gray-900 email-body-preview max-h-[600px] overflow-y-auto"
               dangerouslySetInnerHTML={{ __html: email.body_html }}
             />
           </div>

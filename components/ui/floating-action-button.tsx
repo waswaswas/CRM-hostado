@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { usePathname } from 'next/navigation'
 import Link from 'next/link'
-import { Plus, X, User, FileText, Mail } from 'lucide-react'
+import { Plus, X, User, FileText, Mail, Bell } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
@@ -38,6 +38,7 @@ export function FloatingActionButton({ currentPath }: FloatingActionButtonProps)
     { href: '/clients/new', icon: User, label: 'New Client' },
     { href: '/offers/new', icon: FileText, label: 'New Offer' },
     { href: '/emails/compose', icon: Mail, label: 'New Email' },
+    { href: '/dashboard', icon: Bell, label: 'Add Reminder' },
   ]
 
   if (shouldHide) return null

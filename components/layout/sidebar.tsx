@@ -3,11 +3,10 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, Users, Settings, FileText, Mail, Building2, Menu, X, User, LogOut } from 'lucide-react'
+import { LayoutDashboard, Users, Settings, FileText, Mail, Building2, Menu, X, User } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { signOut } from '@/app/actions/auth'
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
@@ -24,16 +23,6 @@ interface SidebarProps {
 export function Sidebar({ userName }: SidebarProps) {
   const pathname = usePathname()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-
-  async function handleSignOut() {
-    try {
-      setMobileMenuOpen(false)
-      await signOut()
-      // signOut already redirects to /login
-    } catch (error) {
-      console.error('Failed to sign out:', error)
-    }
-  }
 
   return (
     <>
@@ -104,24 +93,17 @@ export function Sidebar({ userName }: SidebarProps) {
             )
           })}
         </nav>
-        {/* User Email and Logout - Below feature list */}
-        <div className="border-t p-4 space-y-2">
-          {userName && (
+        {/* User Email - Below feature list */}
+        {userName && (
+          <div className="border-t p-4">
             <div className="flex items-center gap-2 px-3 py-2">
               <User className="h-4 w-4 text-muted-foreground flex-shrink-0" />
               <span className="text-sm text-muted-foreground truncate">
                 {userName}
               </span>
             </div>
-          )}
-          <button
-            onClick={handleSignOut}
-            className="w-full flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium transition-colors min-h-[44px] text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-          >
-            <LogOut className="h-5 w-5" />
-            Log out
-          </button>
-        </div>
+          </div>
+        )}
         <div className="border-t p-4">
           <Link
             href="/settings"
