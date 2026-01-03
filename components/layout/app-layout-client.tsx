@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 import { Sidebar } from './sidebar'
 import { Topbar } from './topbar'
 import { BottomNav } from './bottom-nav'
+import { FloatingActionButton } from '@/components/ui/floating-action-button'
 import { createClient } from '@/lib/supabase/client'
 
 export function AppLayoutClient({ children }: { children: React.ReactNode }) {
@@ -30,6 +31,7 @@ export function AppLayoutClient({ children }: { children: React.ReactNode }) {
         <main className="flex-1 overflow-y-auto bg-muted/50 p-4 md:p-6">
           {children}
         </main>
+        <FloatingActionButton currentPath={pathname} />
       </div>
     </div>
   )

@@ -48,11 +48,12 @@ export function FloatingActionButton({ currentPath }: FloatingActionButtonProps)
       {/* Overlay when menu is open */}
       {isOpen && (
         <div
-          className="fixed inset-0 z-40 bg-black/50 md:hidden"
+          className="fixed inset-0 z-40 bg-black/50"
           onClick={() => setIsOpen(false)}
         />
       )}
       
+      {/* Mobile FAB - Top Right */}
       <div className="relative z-50 md:hidden" data-fab>
         {/* Quick Action Buttons - Expand downward from top */}
         <div
@@ -74,7 +75,7 @@ export function FloatingActionButton({ currentPath }: FloatingActionButtonProps)
           ))}
         </div>
 
-        {/* Main FAB Button - Top Right */}
+        {/* Main FAB Button - Top Right (Mobile) */}
         <Button
           onClick={() => setIsOpen(!isOpen)}
           size="lg"
@@ -85,6 +86,43 @@ export function FloatingActionButton({ currentPath }: FloatingActionButtonProps)
             <X className="h-5 w-5" />
           ) : (
             <Plus className="h-5 w-5" />
+          )}
+        </Button>
+      </div>
+
+      {/* Desktop FAB - Bottom Right */}
+      <div className="hidden md:block fixed bottom-6 right-6 z-50" data-fab>
+        {/* Quick Action Buttons - Expand upward from bottom */}
+        <div
+          className={cn(
+            'absolute bottom-16 right-0 flex flex-col-reverse gap-3 transition-all duration-300',
+            isOpen ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'
+          )}
+        >
+          {quickActions.map((action) => (
+            <Link
+              key={action.href}
+              href={action.href}
+              onClick={() => setIsOpen(false)}
+              className="flex items-center gap-3 bg-primary text-primary-foreground rounded-full px-4 py-3 shadow-lg min-h-[56px] min-w-[140px]"
+            >
+              <action.icon className="h-5 w-5 flex-shrink-0" />
+              <span className="text-sm font-medium">{action.label}</span>
+            </Link>
+          ))}
+        </div>
+
+        {/* Main FAB Button - Bottom Right (Desktop) */}
+        <Button
+          onClick={() => setIsOpen(!isOpen)}
+          size="lg"
+          className="h-14 w-14 rounded-full shadow-lg p-0"
+          aria-label={isOpen ? 'Close menu' : 'Open quick actions'}
+        >
+          {isOpen ? (
+            <X className="h-6 w-6" />
+          ) : (
+            <Plus className="h-6 w-6" />
           )}
         </Button>
       </div>
