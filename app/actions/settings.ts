@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import type { StatusConfig, Settings } from '@/types/settings'
+import { getCurrentOrganizationId } from './organizations'
 
 export async function getSettings() {
   const supabase = await createClient()
@@ -14,10 +15,21 @@ export async function getSettings() {
     throw new Error('Not authenticated')
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    // Return defaults if no organization selected
+    return {
+      new_tag_days: 14,
+      custom_statuses: [],
+      timezone: 'Europe/Sofia',
+    }
+  }
+
   const { data, error } = await supabase
     .from('settings')
     .select('*')
     .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
     .single()
 
   if (error) {
@@ -52,11 +64,17 @@ export async function updateSettings(settings: Partial<Settings>) {
     throw new Error('Not authenticated')
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    throw new Error('No organization selected')
+  }
+
   // Check if settings exist
   const { data: existing, error: checkError } = await supabase
     .from('settings')
     .select('id')
     .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
     .single()
 
   // If table doesn't exist, throw a helpful error
@@ -86,6 +104,7 @@ export async function updateSettings(settings: Partial<Settings>) {
       .from('settings')
       .update(updateData)
       .eq('owner_id', user.id)
+      .eq('organization_id', organizationId)
 
     if (error) {
       throw new Error(error.message)
@@ -96,6 +115,7 @@ export async function updateSettings(settings: Partial<Settings>) {
       .from('settings')
       .insert({
         owner_id: user.id,
+        organization_id: organizationId,
         ...updateData,
       })
 
@@ -118,10 +138,16 @@ export async function getStatusChangeHistory(clientId?: string, limit: number = 
     throw new Error('Not authenticated')
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    return []
+  }
+
   // First, get the history entries
   let query = supabase
     .from('status_change_history')
     .select('*')
+    .eq('organization_id', organizationId)
     .order('created_at', { ascending: false })
     .limit(limit)
 
@@ -149,6 +175,7 @@ export async function getStatusChangeHistory(clientId?: string, limit: number = 
     .from('clients')
     .select('id, name')
     .in('id', clientIds)
+    .eq('organization_id', organizationId)
 
   const clientsMap = new Map(clientsData?.map(c => [c.id, c]) || [])
 
@@ -200,6 +227,12 @@ export async function logStatusChange(
     return
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    // Don't log if no organization selected
+    return
+  }
+
   // Check if table exists first
   const { error: checkError } = await supabase
     .from('status_change_history')
@@ -217,6 +250,7 @@ export async function logStatusChange(
     .from('status_change_history')
     .insert({
       client_id: clientId,
+      organization_id: organizationId,
       changed_by: changeType === 'manual' ? user.id : null,
       old_status: oldStatus,
       new_status: newStatus,

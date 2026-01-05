@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { renderTemplate, type TemplateVariables } from '@/lib/email-template-utils'
+import { getCurrentOrganizationId } from './organizations'
 
 export type TemplateCategory = 'follow_up' | 'offer' | 'welcome' | 'custom'
 
@@ -40,10 +41,16 @@ export async function createTemplate(input: CreateTemplateInput): Promise<EmailT
     throw new Error('Unauthorized')
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    throw new Error('No organization selected')
+  }
+
   const { data, error } = await supabase
     .from('email_templates')
     .insert({
       owner_id: user.id,
+      organization_id: organizationId,
       name: input.name,
       category: input.category || null,
       subject: input.subject,
@@ -75,11 +82,17 @@ export async function updateTemplate(
     throw new Error('Unauthorized')
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    throw new Error('No organization selected')
+  }
+
   const { data, error } = await supabase
     .from('email_templates')
     .update(updates)
     .eq('id', templateId)
     .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
     .select()
     .single()
 
@@ -100,11 +113,17 @@ export async function deleteTemplate(templateId: string): Promise<void> {
     throw new Error('Unauthorized')
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    throw new Error('No organization selected')
+  }
+
   const { error } = await supabase
     .from('email_templates')
     .delete()
     .eq('id', templateId)
     .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
 
   if (error) {
     throw new Error(`Failed to delete template: ${error.message}`)
@@ -121,9 +140,15 @@ export async function getTemplates(category?: TemplateCategory): Promise<EmailTe
     throw new Error('Unauthorized')
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    return []
+  }
+
   let query = supabase
     .from('email_templates')
     .select('*')
+    .eq('organization_id', organizationId)
     .or(`owner_id.eq.${user.id},is_shared.eq.true`)
     .order('created_at', { ascending: false })
 
@@ -150,10 +175,16 @@ export async function getTemplate(templateId: string): Promise<EmailTemplate> {
     throw new Error('Unauthorized')
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    throw new Error('No organization selected')
+  }
+
   const { data, error } = await supabase
     .from('email_templates')
     .select('*')
     .eq('id', templateId)
+    .eq('organization_id', organizationId)
     .or(`owner_id.eq.${user.id},is_shared.eq.true`)
     .single()
 
@@ -174,12 +205,18 @@ export async function ensureDefaultBasicTemplate(): Promise<EmailTemplate | null
     return null
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    return null
+  }
+
   // Check if "Basic" template already exists
   const { data: existing } = await supabase
     .from('email_templates')
     .select('*')
     .eq('name', 'Basic')
     .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
     .single()
 
   if (existing) {

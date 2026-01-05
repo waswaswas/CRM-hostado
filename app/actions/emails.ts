@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { sendEmail } from '@/lib/email-provider'
 import { createInteraction } from './interactions'
+import { getCurrentOrganizationId } from './organizations'
 
 export type EmailStatus = 'draft' | 'scheduled' | 'sending' | 'sent' | 'failed' | 'bounced'
 
@@ -82,6 +83,11 @@ export async function createEmail(input: CreateEmailInput): Promise<Email> {
     throw new Error('Unauthorized')
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    throw new Error('No organization selected')
+  }
+
   // Get default signature if signature_id is not provided
   let signatureId = input.signature_id
   if (!signatureId) {
@@ -89,6 +95,7 @@ export async function createEmail(input: CreateEmailInput): Promise<Email> {
       .from('email_signatures')
       .select('id')
       .eq('owner_id', user.id)
+      .eq('organization_id', organizationId)
       .eq('is_default', true)
       .single()
 
@@ -127,6 +134,7 @@ export async function createEmail(input: CreateEmailInput): Promise<Email> {
     .from('emails')
     .insert({
       owner_id: user.id,
+      organization_id: organizationId,
       client_id: input.client_id,
       subject: input.subject,
       body_html: bodyHtml,
@@ -178,6 +186,7 @@ export async function createInboundEmail(input: CreateInboundEmailInput): Promis
     .from('emails')
     .select('id, client_id, from_email, sent_at')
     .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
     .eq('from_email', input.from_email)
     .eq('subject', input.subject)
     .eq('direction', 'inbound')
@@ -193,6 +202,7 @@ export async function createInboundEmail(input: CreateInboundEmailInput): Promis
       .from('emails')
       .select('id, client_id, from_email, sent_at')
       .eq('owner_id', user.id)
+      .eq('organization_id', organizationId)
       .eq('from_email', input.from_email)
       .eq('subject', input.subject)
       .eq('direction', 'inbound')
@@ -228,6 +238,7 @@ export async function createInboundEmail(input: CreateInboundEmailInput): Promis
       .from('emails')
       .select('id, from_email, sent_at, client_id')
       .eq('owner_id', user.id)
+      .eq('organization_id', organizationId)
       .eq('from_email', input.from_email)
       .eq('direction', 'inbound')
       .order('sent_at', { ascending: false })
@@ -242,6 +253,7 @@ export async function createInboundEmail(input: CreateInboundEmailInput): Promis
         .from('clients')
         .select('id')
         .eq('owner_id', user.id)
+        .eq('organization_id', organizationId)
         .eq('email', input.from_email)
         .single()
 
@@ -267,6 +279,7 @@ export async function createInboundEmail(input: CreateInboundEmailInput): Promis
       .select('id')
       .eq('email', input.from_email)
       .eq('owner_id', user.id)
+      .eq('organization_id', organizationId)
       .single()
 
     if (client) {
@@ -303,6 +316,7 @@ export async function createInboundEmail(input: CreateInboundEmailInput): Promis
   // Prepare insert data - client_id may be null if migration was run
   const insertData: any = {
       owner_id: user.id,
+      organization_id: organizationId,
       subject: input.subject,
       body_html: input.body_html,
       body_text: input.body_text || input.body_html.replace(/<[^>]*>/g, ''),
@@ -384,12 +398,18 @@ export async function sendEmailNow(emailId: string): Promise<Email> {
     throw new Error('Unauthorized')
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    throw new Error('No organization selected')
+  }
+
   // Get email
   const { data: email, error: fetchError } = await supabase
     .from('emails')
     .select('*')
     .eq('id', emailId)
     .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
     .single()
 
   if (fetchError || !email) {
@@ -516,6 +536,11 @@ export async function scheduleEmail(emailId: string, scheduledAt: string): Promi
     throw new Error('Unauthorized')
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    throw new Error('No organization selected')
+  }
+
   const { data, error } = await supabase
     .from('emails')
     .update({
@@ -524,6 +549,7 @@ export async function scheduleEmail(emailId: string, scheduledAt: string): Promi
     })
     .eq('id', emailId)
     .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
     .select()
     .single()
 
@@ -542,6 +568,11 @@ export async function updateEmail(emailId: string, updates: Partial<CreateEmailI
 
   if (!user) {
     throw new Error('Unauthorized')
+  }
+
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    throw new Error('No organization selected')
   }
 
   // If signature is updated, append it to body_html
@@ -571,6 +602,7 @@ export async function updateEmail(emailId: string, updates: Partial<CreateEmailI
     .update(updateData)
     .eq('id', emailId)
     .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
     .select()
     .single()
 
@@ -591,6 +623,11 @@ export async function deleteEmail(emailId: string): Promise<void> {
     throw new Error('Unauthorized')
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    throw new Error('No organization selected')
+  }
+
   // Move to trash instead of permanent delete
   const { error } = await supabase
     .from('emails')
@@ -601,6 +638,7 @@ export async function deleteEmail(emailId: string): Promise<void> {
     })
     .eq('id', emailId)
     .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
 
   if (error) {
     throw new Error(`Failed to delete email: ${error.message}`)
@@ -617,11 +655,17 @@ export async function permanentlyDeleteEmail(emailId: string): Promise<void> {
     throw new Error('Unauthorized')
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    throw new Error('No organization selected')
+  }
+
   const { error } = await supabase
     .from('emails')
     .delete()
     .eq('id', emailId)
     .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
 
   if (error) {
     throw new Error(`Failed to permanently delete email: ${error.message}`)
@@ -638,12 +682,18 @@ export async function restoreEmail(emailId: string): Promise<Email> {
     throw new Error('Unauthorized')
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    throw new Error('No organization selected')
+  }
+
   // Get the email to determine original folder
   const { data: email } = await supabase
     .from('emails')
     .select('*')
     .eq('id', emailId)
     .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
     .single()
 
   if (!email) {
@@ -662,6 +712,7 @@ export async function restoreEmail(emailId: string): Promise<Email> {
     })
     .eq('id', emailId)
     .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
     .select()
     .single()
 
@@ -682,11 +733,17 @@ export async function markEmailAsRead(emailId: string, isRead: boolean = true): 
     throw new Error('Unauthorized')
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    throw new Error('No organization selected')
+  }
+
   const { data, error } = await supabase
     .from('emails')
     .update({ is_read: isRead })
     .eq('id', emailId)
     .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
     .select()
     .single()
 
@@ -749,6 +806,7 @@ export async function replyToEmail(
     .from('emails')
     .update({ in_reply_to: originalEmailId, folder: 'sent', direction: 'outbound' })
     .eq('id', reply.id)
+    .eq('organization_id', organizationId)
 
   // Mark original as read
   await markEmailAsRead(originalEmailId, true)
@@ -845,6 +903,11 @@ export async function cleanupOldTrashEmails(): Promise<number> {
     throw new Error('Unauthorized')
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    return 0
+  }
+
   // Delete emails in trash older than 150 days
   const cutoffDate = new Date()
   cutoffDate.setDate(cutoffDate.getDate() - 150)
@@ -853,6 +916,7 @@ export async function cleanupOldTrashEmails(): Promise<number> {
     .from('emails')
     .delete()
     .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
     .eq('is_deleted', true)
     .lt('deleted_at', cutoffDate.toISOString())
     .select('id')
@@ -879,10 +943,16 @@ export async function getEmails(filters?: {
     throw new Error('Unauthorized')
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    return []
+  }
+
   let query = supabase
     .from('emails')
     .select('*')
     .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
     .eq('is_deleted', false)
     .order('created_at', { ascending: false })
 
@@ -921,10 +991,16 @@ export async function getTrashEmails(): Promise<Email[]> {
     throw new Error('Unauthorized')
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    return []
+  }
+
   const { data, error } = await supabase
     .from('emails')
     .select('*')
     .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
     .eq('is_deleted', true)
     .order('deleted_at', { ascending: false })
 
@@ -945,11 +1021,17 @@ export async function getEmail(emailId: string): Promise<Email> {
     throw new Error('Unauthorized')
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    throw new Error('No organization selected')
+  }
+
   const { data, error } = await supabase
     .from('emails')
     .select('*')
     .eq('id', emailId)
     .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
     .single()
 
   if (error) {

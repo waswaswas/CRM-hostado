@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { getCurrentOrganizationId } from './organizations'
 
 export type NotificationType = 'email' | 'reminder' | 'tag_removed' | 'other'
 
@@ -36,10 +37,15 @@ export async function createNotification(data: {
     throw new Error('Not authenticated')
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  // Notifications are scoped to organization, but if no org selected, still create notification
+  // (for system notifications that might not have org context)
+
   const { data: notification, error } = await supabase
     .from('notifications')
     .insert({
       owner_id: user.id,
+      organization_id: organizationId || null,
       type: data.type,
       title: data.title,
       message: data.message || null,
@@ -70,10 +76,17 @@ export async function getNotifications(limit: number = 50): Promise<Notification
     return []
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  // If no organization selected, return empty (notifications are scoped to org)
+  if (!organizationId) {
+    return []
+  }
+
   const { data, error } = await supabase
     .from('notifications')
     .select('*')
     .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
     .order('created_at', { ascending: false })
     .limit(limit)
 
@@ -94,10 +107,16 @@ export async function getUnreadNotificationCount(): Promise<number> {
     return 0
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    return 0
+  }
+
   const { count, error } = await supabase
     .from('notifications')
     .select('*', { count: 'exact', head: true })
     .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
     .eq('is_read', false)
 
   if (error) {
@@ -117,6 +136,11 @@ export async function markNotificationAsRead(id: string) {
     throw new Error('Not authenticated')
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    throw new Error('No organization selected')
+  }
+
   const { error } = await supabase
     .from('notifications')
     .update({
@@ -125,6 +149,7 @@ export async function markNotificationAsRead(id: string) {
     })
     .eq('id', id)
     .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
 
   if (error) {
     throw new Error(error.message)
@@ -144,6 +169,11 @@ export async function markNotificationAsUnread(id: string) {
     throw new Error('Not authenticated')
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    throw new Error('No organization selected')
+  }
+
   const { error } = await supabase
     .from('notifications')
     .update({
@@ -152,6 +182,7 @@ export async function markNotificationAsUnread(id: string) {
     })
     .eq('id', id)
     .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
 
   if (error) {
     throw new Error(error.message)
@@ -171,11 +202,17 @@ export async function deleteNotification(id: string) {
     throw new Error('Not authenticated')
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    throw new Error('No organization selected')
+  }
+
   const { error } = await supabase
     .from('notifications')
     .delete()
     .eq('id', id)
     .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
 
   if (error) {
     throw new Error(error.message)
@@ -195,6 +232,11 @@ export async function markAllNotificationsAsRead() {
     throw new Error('Not authenticated')
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    throw new Error('No organization selected')
+  }
+
   const { error } = await supabase
     .from('notifications')
     .update({
@@ -202,6 +244,7 @@ export async function markAllNotificationsAsRead() {
       read_at: new Date().toISOString(),
     })
     .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
     .eq('is_read', false)
 
   if (error) {

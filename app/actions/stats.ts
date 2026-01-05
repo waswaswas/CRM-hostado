@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { startOfWeek, startOfMonth, subDays, isAfter } from 'date-fns'
+import { getCurrentOrganizationId } from './organizations'
 
 export async function getDashboardStats() {
   try {
@@ -19,11 +20,22 @@ export async function getDashboardStats() {
       }
     }
 
+    const organizationId = await getCurrentOrganizationId()
+    if (!organizationId) {
+      return {
+        newLeadsWeek: 0,
+        newLeadsMonth: 0,
+        newTagLeads: 0,
+        waitingForOffer: 0,
+      }
+    }
+
     // Get all user's clients
     const { data: clients, error } = await supabase
       .from('clients')
       .select('*')
       .eq('owner_id', user.id)
+      .eq('organization_id', organizationId)
 
     if (error) {
       if (error.message.includes('Could not find the table') || error.message.includes('relation') || error.message.includes('does not exist')) {

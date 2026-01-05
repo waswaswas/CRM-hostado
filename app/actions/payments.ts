@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import type { Payment, PaymentStatus, PaymentProvider } from '@/types/database'
+import { getCurrentOrganizationId } from './organizations'
 
 export async function getPaymentHistory(offerId: string) {
   const supabase = await createClient()
@@ -14,12 +15,18 @@ export async function getPaymentHistory(offerId: string) {
     return []
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    return []
+  }
+
   // Verify user owns the offer
   const { data: offer } = await supabase
     .from('offers')
     .select('id')
     .eq('id', offerId)
     .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
     .single()
 
   if (!offer) {
@@ -30,6 +37,7 @@ export async function getPaymentHistory(offerId: string) {
     .from('payments')
     .select('*')
     .eq('offer_id', offerId)
+    .eq('organization_id', organizationId)
     .order('created_at', { ascending: false })
 
   if (error) {
@@ -63,12 +71,18 @@ export async function createPaymentRecord(data: {
     throw new Error('Not authenticated')
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    throw new Error('No organization selected')
+  }
+
   // Verify user owns the offer
   const { data: offer } = await supabase
     .from('offers')
     .select('id, owner_id')
     .eq('id', data.offer_id)
     .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
     .single()
 
   if (!offer) {
@@ -77,6 +91,7 @@ export async function createPaymentRecord(data: {
 
   const insertData: any = {
     ...data,
+    organization_id: organizationId,
   }
 
   if (data.status === 'completed') {

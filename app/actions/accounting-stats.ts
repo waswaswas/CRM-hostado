@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { getCurrentOrganizationId } from './organizations'
 
 export interface CashFlowData {
   date: string
@@ -38,10 +39,16 @@ export async function getCashFlow(
     throw new Error('Unauthorized')
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    return []
+  }
+
   const { data, error } = await supabase
     .from('transactions')
     .select('date, type, amount')
     .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
     .gte('date', startDate)
     .lte('date', endDate)
     .in('type', ['income', 'expense'])
@@ -150,6 +157,7 @@ export async function getExpensesByCategory(
     .from('transactions')
     .select('category, amount')
     .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
     .eq('type', 'expense')
     .gte('date', startDate)
     .lte('date', endDate)
@@ -193,10 +201,16 @@ export async function getTopPayers(
     throw new Error('Unauthorized')
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    return []
+  }
+
   let query = supabase
     .from('transactions')
     .select('contact_id, amount, contact:clients(name)')
     .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
     .eq('type', 'income')
     .not('contact_id', 'is', null)
 
@@ -250,10 +264,16 @@ export async function getAccountBalances(): Promise<
     throw new Error('Unauthorized')
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    return []
+  }
+
   const { data, error } = await supabase
     .from('accounts')
     .select('id, name, current_balance')
     .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
     .order('name', { ascending: true })
 
   if (error) {
@@ -287,10 +307,20 @@ export async function getAccountingSummary(
     throw new Error('Unauthorized')
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    return {
+      totalIncome: 0,
+      totalExpense: 0,
+      profit: 0,
+    }
+  }
+
   const { data, error } = await supabase
     .from('transactions')
     .select('type, amount')
     .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
     .gte('date', startDate)
     .lte('date', endDate)
     .in('type', ['income', 'expense'])

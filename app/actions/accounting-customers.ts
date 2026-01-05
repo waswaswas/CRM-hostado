@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { AccountingCustomer, AccountingCustomerWithRelations } from '@/types/database'
 import { revalidatePath } from 'next/cache'
+import { getCurrentOrganizationId } from './organizations'
 
 export async function getAccountingCustomers(): Promise<AccountingCustomerWithRelations[]> {
   try {
@@ -15,6 +16,11 @@ export async function getAccountingCustomers(): Promise<AccountingCustomerWithRe
       return []
     }
 
+    const organizationId = await getCurrentOrganizationId()
+    if (!organizationId) {
+      return []
+    }
+
     const { data, error } = await supabase
       .from('accounting_customers')
       .select(`
@@ -22,6 +28,7 @@ export async function getAccountingCustomers(): Promise<AccountingCustomerWithRe
         linked_client:clients(*)
       `)
       .eq('owner_id', user.id)
+      .eq('organization_id', organizationId)
       .order('created_at', { ascending: false })
 
     if (error) {
@@ -47,6 +54,11 @@ export async function getAccountingCustomer(id: string): Promise<AccountingCusto
     throw new Error('Not authenticated')
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    return null
+  }
+
   const { data, error } = await supabase
     .from('accounting_customers')
     .select(`
@@ -55,6 +67,7 @@ export async function getAccountingCustomer(id: string): Promise<AccountingCusto
     `)
     .eq('id', id)
     .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
     .single()
 
   if (error) {
@@ -87,11 +100,17 @@ export async function createAccountingCustomer(data: {
     throw new Error('Not authenticated')
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    throw new Error('No organization selected')
+  }
+
   const { data: customer, error } = await supabase
     .from('accounting_customers')
     .insert({
       ...data,
       owner_id: user.id,
+      organization_id: organizationId,
     })
     .select()
     .single()
@@ -117,6 +136,11 @@ export async function updateAccountingCustomer(
     throw new Error('Not authenticated')
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    throw new Error('No organization selected')
+  }
+
   const { data: customer, error } = await supabase
     .from('accounting_customers')
     .update({
@@ -125,6 +149,7 @@ export async function updateAccountingCustomer(
     })
     .eq('id', id)
     .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
     .select()
     .single()
 
@@ -147,11 +172,17 @@ export async function deleteAccountingCustomer(id: string): Promise<void> {
     throw new Error('Not authenticated')
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    throw new Error('No organization selected')
+  }
+
   const { error } = await supabase
     .from('accounting_customers')
     .delete()
     .eq('id', id)
     .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
 
   if (error) {
     throw new Error(error.message)
@@ -180,6 +211,11 @@ export async function getAccountingCustomersByClientId(clientId: string): Promis
       return []
     }
 
+    const organizationId = await getCurrentOrganizationId()
+    if (!organizationId) {
+      return []
+    }
+
     const { data, error } = await supabase
       .from('accounting_customers')
       .select(`
@@ -187,6 +223,7 @@ export async function getAccountingCustomersByClientId(clientId: string): Promis
         linked_client:clients(*)
       `)
       .eq('owner_id', user.id)
+      .eq('organization_id', organizationId)
       .eq('linked_client_id', clientId)
       .order('created_at', { ascending: false })
 
@@ -214,10 +251,16 @@ export async function getLinkedClientIds(): Promise<string[]> {
       return []
     }
 
+    const organizationId = await getCurrentOrganizationId()
+    if (!organizationId) {
+      return []
+    }
+
     const { data, error } = await supabase
       .from('accounting_customers')
       .select('linked_client_id')
       .eq('owner_id', user.id)
+      .eq('organization_id', organizationId)
       .not('linked_client_id', 'is', null)
 
     if (error) {

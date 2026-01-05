@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { ClientNote } from '@/types/database'
 import { revalidatePath } from 'next/cache'
+import { getCurrentOrganizationId } from './organizations'
 
 export async function createNote(data: {
   client_id: string
@@ -18,12 +19,18 @@ export async function createNote(data: {
     throw new Error('Not authenticated')
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    throw new Error('No organization selected')
+  }
+
   // Verify client ownership
   const { data: client } = await supabase
     .from('clients')
     .select('id')
     .eq('id', data.client_id)
     .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
     .single()
 
   if (!client) {
@@ -34,6 +41,7 @@ export async function createNote(data: {
     .from('client_notes')
     .insert({
       ...data,
+      organization_id: organizationId,
       pinned: data.pinned || false,
     })
     .select()
@@ -57,12 +65,18 @@ export async function getNotesForClient(clientId: string) {
     return []
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    return []
+  }
+
   // Verify client ownership
   const { data: client } = await supabase
     .from('clients')
     .select('id')
     .eq('id', clientId)
     .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
     .single()
 
   if (!client) {
@@ -73,6 +87,7 @@ export async function getNotesForClient(clientId: string) {
     .from('client_notes')
     .select('*')
     .eq('client_id', clientId)
+    .eq('organization_id', organizationId)
     .order('pinned', { ascending: false })
     .order('created_at', { ascending: false })
 
@@ -93,10 +108,16 @@ export async function toggleNotePin(id: string, clientId: string, pinned: boolea
     throw new Error('Not authenticated')
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    throw new Error('No organization selected')
+  }
+
   const { error } = await supabase
     .from('client_notes')
     .update({ pinned })
     .eq('id', id)
+    .eq('organization_id', organizationId)
 
   if (error) {
     throw new Error(error.message)
@@ -115,10 +136,16 @@ export async function deleteNote(id: string, clientId: string) {
     throw new Error('Not authenticated')
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    throw new Error('No organization selected')
+  }
+
   const { error } = await supabase
     .from('client_notes')
     .delete()
     .eq('id', id)
+    .eq('organization_id', organizationId)
 
   if (error) {
     throw new Error(error.message)

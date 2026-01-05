@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { getCurrentOrganizationId } from './organizations'
 
 export interface EmailSignature {
   id: string
@@ -36,12 +37,18 @@ export async function createSignature(input: CreateSignatureInput): Promise<Emai
     throw new Error('Unauthorized')
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    throw new Error('No organization selected')
+  }
+
   // If this is set as default, unset other defaults
   if (input.is_default) {
     await supabase
       .from('email_signatures')
       .update({ is_default: false })
       .eq('owner_id', user.id)
+      .eq('organization_id', organizationId)
       .eq('is_default', true)
   }
 
@@ -49,6 +56,7 @@ export async function createSignature(input: CreateSignatureInput): Promise<Emai
     .from('email_signatures')
     .insert({
       owner_id: user.id,
+      organization_id: organizationId,
       name: input.name,
       html_content: input.html_content,
       text_content: input.text_content,
@@ -77,11 +85,17 @@ export async function createDefaultHostadoSignature(): Promise<EmailSignature> {
     throw new Error('Unauthorized')
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    throw new Error('No organization selected')
+  }
+
   // Check if Krasimir signature already exists
   const { data: existing } = await supabase
     .from('email_signatures')
     .select('*')
     .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
     .eq('name', 'Krasimir')
     .maybeSingle()
 
@@ -93,6 +107,7 @@ export async function createDefaultHostadoSignature(): Promise<EmailSignature> {
         .from('email_signatures')
         .update({ is_default: false })
         .eq('owner_id', user.id)
+        .eq('organization_id', organizationId)
         .eq('is_default', true)
       
       const { data: updated } = await supabase
@@ -170,12 +185,14 @@ www.hostado.net`
     .from('email_signatures')
     .update({ is_default: false })
     .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
     .eq('is_default', true)
 
   const { data, error } = await supabase
     .from('email_signatures')
     .insert({
       owner_id: user.id,
+      organization_id: organizationId,
       name: 'Krasimir',
       html_content: hostadoSignatureHtml,
       text_content: hostadoSignatureText,
@@ -211,12 +228,18 @@ export async function updateSignature(
     throw new Error('Unauthorized')
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    throw new Error('No organization selected')
+  }
+
   // If setting as default, unset other defaults
   if (updates.is_default) {
     await supabase
       .from('email_signatures')
       .update({ is_default: false })
       .eq('owner_id', user.id)
+      .eq('organization_id', organizationId)
       .eq('is_default', true)
       .neq('id', signatureId)
   }
@@ -226,6 +249,7 @@ export async function updateSignature(
     .update(updates)
     .eq('id', signatureId)
     .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
     .select()
     .single()
 
@@ -246,11 +270,17 @@ export async function deleteSignature(signatureId: string): Promise<void> {
     throw new Error('Unauthorized')
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    throw new Error('No organization selected')
+  }
+
   const { error } = await supabase
     .from('email_signatures')
     .delete()
     .eq('id', signatureId)
     .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
 
   if (error) {
     throw new Error(`Failed to delete signature: ${error.message}`)
@@ -267,10 +297,16 @@ export async function getSignatures(): Promise<EmailSignature[]> {
     throw new Error('Unauthorized')
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    return []
+  }
+
   const { data, error } = await supabase
     .from('email_signatures')
     .select('*')
     .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
     .order('is_default', { ascending: false })
     .order('created_at', { ascending: false })
 
@@ -294,6 +330,7 @@ export async function getSignatures(): Promise<EmailSignature[]> {
         .from('email_signatures')
         .select('*')
         .eq('owner_id', user.id)
+        .eq('organization_id', organizationId)
         .order('is_default', { ascending: false })
         .order('created_at', { ascending: false })
 
@@ -329,11 +366,17 @@ export async function getSignature(signatureId: string): Promise<EmailSignature>
     throw new Error('Unauthorized')
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    throw new Error('No organization selected')
+  }
+
   const { data, error } = await supabase
     .from('email_signatures')
     .select('*')
     .eq('id', signatureId)
     .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
     .single()
 
   if (error) {

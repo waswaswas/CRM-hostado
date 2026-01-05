@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import type { Account } from '@/types/database'
 import { revalidatePath } from 'next/cache'
+import { getCurrentOrganizationId } from './organizations'
 
 export async function getAccounts(): Promise<Account[]> {
   const supabase = await createClient()
@@ -14,10 +15,16 @@ export async function getAccounts(): Promise<Account[]> {
     throw new Error('Unauthorized')
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    return []
+  }
+
   const { data, error } = await supabase
     .from('accounts')
     .select('*')
     .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
     .order('name', { ascending: true })
 
   if (error) {
@@ -46,11 +53,17 @@ export async function getAccount(id: string): Promise<Account | null> {
     throw new Error('Unauthorized')
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    return null
+  }
+
   const { data, error } = await supabase
     .from('accounts')
     .select('*')
     .eq('id', id)
     .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
     .single()
 
   if (error) {
@@ -80,10 +93,16 @@ export async function createAccount(data: {
     throw new Error('Unauthorized')
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    throw new Error('No organization selected')
+  }
+
   const { data: account, error } = await supabase
     .from('accounts')
     .insert({
       owner_id: user.id,
+      organization_id: organizationId,
       name: data.name,
       account_number: data.account_number || null,
       bank_name: data.bank_name || null,
@@ -140,6 +159,11 @@ export async function updateAccount(
   if (data.currency !== undefined) updateData.currency = data.currency
   if (data.notes !== undefined) updateData.notes = data.notes
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    throw new Error('No organization selected')
+  }
+
   // If opening_balance changes, adjust current_balance accordingly
   if (data.opening_balance !== undefined) {
     const { data: currentAccount } = await supabase
@@ -147,6 +171,7 @@ export async function updateAccount(
       .select('opening_balance, current_balance')
       .eq('id', id)
       .eq('owner_id', user.id)
+      .eq('organization_id', organizationId)
       .single()
 
     if (currentAccount) {
@@ -161,6 +186,7 @@ export async function updateAccount(
     .update(updateData)
     .eq('id', id)
     .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
     .select()
     .single()
 
@@ -184,12 +210,18 @@ export async function deleteAccount(id: string): Promise<void> {
     throw new Error('Unauthorized')
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    throw new Error('No organization selected')
+  }
+
   // Check if account has transactions
   const { data: transactions } = await supabase
     .from('transactions')
     .select('id')
     .eq('account_id', id)
     .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
     .limit(1)
 
   if (transactions && transactions.length > 0) {
@@ -201,6 +233,7 @@ export async function deleteAccount(id: string): Promise<void> {
     .delete()
     .eq('id', id)
     .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
 
   if (error) {
     console.error('Error deleting account:', error)

@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { Interaction, InteractionType, InteractionDirection } from '@/types/database'
 import { revalidatePath } from 'next/cache'
+import { getCurrentOrganizationId } from './organizations'
 
 export async function createInteraction(data: {
   client_id: string
@@ -23,12 +24,18 @@ export async function createInteraction(data: {
     throw new Error('Not authenticated')
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    throw new Error('No organization selected')
+  }
+
   // Verify client ownership
   const { data: client } = await supabase
     .from('clients')
     .select('id')
     .eq('id', data.client_id)
     .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
     .single()
 
   if (!client) {
@@ -39,6 +46,7 @@ export async function createInteraction(data: {
     .from('interactions')
     .insert({
       ...data,
+      organization_id: organizationId,
       date: new Date(data.date).toISOString(),
     })
     .select()
@@ -62,12 +70,18 @@ export async function getInteractionsForClient(clientId: string) {
     return []
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    return []
+  }
+
   // Verify client ownership
   const { data: client } = await supabase
     .from('clients')
     .select('id')
     .eq('id', clientId)
     .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
     .single()
 
   if (!client) {
@@ -78,6 +92,7 @@ export async function getInteractionsForClient(clientId: string) {
     .from('interactions')
     .select('*')
     .eq('client_id', clientId)
+    .eq('organization_id', organizationId)
     .order('date', { ascending: false })
 
   if (error) {
@@ -97,10 +112,16 @@ export async function deleteInteraction(id: string, clientId: string) {
     throw new Error('Not authenticated')
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    throw new Error('No organization selected')
+  }
+
   const { error } = await supabase
     .from('interactions')
     .delete()
     .eq('id', id)
+    .eq('organization_id', organizationId)
 
   if (error) {
     throw new Error(error.message)

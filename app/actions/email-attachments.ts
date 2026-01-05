@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { getCurrentOrganizationId } from './organizations'
 
 export interface EmailAttachment {
   id: string
@@ -86,11 +87,30 @@ export async function uploadEmailAttachment(
     data: { publicUrl },
   } = supabase.storage.from('email-attachments').getPublicUrl(filePath)
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    throw new Error('No organization selected')
+  }
+
+  // Verify email ownership
+  const { data: email } = await supabase
+    .from('emails')
+    .select('owner_id')
+    .eq('id', emailId)
+    .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
+    .single()
+
+  if (!email) {
+    throw new Error('Email not found or unauthorized')
+  }
+
   // Save attachment record to database
   const { data: attachment, error: dbError } = await supabase
     .from('email_attachments')
     .insert({
       email_id: emailId,
+      organization_id: organizationId,
       file_name: file.name,
       file_path: filePath,
       file_size: file.size,
@@ -118,12 +138,18 @@ export async function getEmailAttachments(emailId: string): Promise<EmailAttachm
     throw new Error('Unauthorized')
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    throw new Error('No organization selected')
+  }
+
   // Verify user owns the email
   const { data: email } = await supabase
     .from('emails')
     .select('owner_id')
     .eq('id', emailId)
     .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
     .single()
 
   if (!email) {
@@ -134,6 +160,7 @@ export async function getEmailAttachments(emailId: string): Promise<EmailAttachm
     .from('email_attachments')
     .select('*')
     .eq('email_id', emailId)
+    .eq('organization_id', organizationId)
     .order('created_at', { ascending: true })
 
   if (error) {
@@ -153,11 +180,17 @@ export async function deleteEmailAttachment(attachmentId: string): Promise<void>
     throw new Error('Unauthorized')
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    throw new Error('No organization selected')
+  }
+
   // Get attachment to verify ownership and get file path
   const { data: attachment, error: fetchError } = await supabase
     .from('email_attachments')
-    .select('*, emails!inner(owner_id)')
+    .select('*, emails!inner(owner_id, organization_id)')
     .eq('id', attachmentId)
+    .eq('organization_id', organizationId)
     .single()
 
   if (fetchError || !attachment) {

@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import type { Transaction, TransactionWithRelations } from '@/types/database'
 import { revalidatePath } from 'next/cache'
+import { getCurrentOrganizationId } from './organizations'
 
 export async function getTransactions(filters?: {
   account_id?: string
@@ -39,6 +40,11 @@ export async function getTransactions(filters?: {
     throw new Error(`Database error: ${tableCheckError.message || tableCheckError.code || 'Unknown error'}`)
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    return []
+  }
+
   // Try with foreign key relationships first
   let query = supabase
     .from('transactions')
@@ -49,6 +55,7 @@ export async function getTransactions(filters?: {
       accounting_customer:accounting_customers!left(*)
     `)
     .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
 
   if (filters?.account_id) {
     query = query.eq('account_id', filters.account_id)
@@ -88,6 +95,7 @@ export async function getTransactions(filters?: {
       .from('transactions')
       .select('*')
       .eq('owner_id', user.id)
+      .eq('organization_id', organizationId)
 
     // Apply the same filters to fallback query
     if (filters?.account_id) {
@@ -142,6 +150,7 @@ export async function getTransactions(filters?: {
         .select('*')
         .in('id', accountIds)
         .eq('owner_id', user.id)
+        .eq('organization_id', organizationId)
 
       accounts?.forEach((acc: any) => accountsMap.set(acc.id, acc))
     }
@@ -151,6 +160,7 @@ export async function getTransactions(filters?: {
         .from('clients')
         .select('*')
         .in('id', contactIds)
+        .eq('organization_id', organizationId)
 
       contacts?.forEach((client: any) => contactsMap.set(client.id, client))
     }
@@ -161,6 +171,7 @@ export async function getTransactions(filters?: {
         .select('*')
         .in('id', accountingCustomerIds)
         .eq('owner_id', user.id)
+        .eq('organization_id', organizationId)
 
       accountingCustomers?.forEach((customer: any) => accountingCustomersMap.set(customer.id, customer))
     }
@@ -196,6 +207,11 @@ export async function getTransaction(id: string): Promise<TransactionWithRelatio
     throw new Error('Unauthorized')
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    return null
+  }
+
   const { data, error } = await supabase
     .from('transactions')
     .select(`
@@ -205,6 +221,7 @@ export async function getTransaction(id: string): Promise<TransactionWithRelatio
     `)
     .eq('id', id)
     .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
     .single()
 
   if (error) {
@@ -225,11 +242,17 @@ async function generateTransactionNumber(): Promise<string> {
     throw new Error('Unauthorized')
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    throw new Error('No organization selected')
+  }
+
   // Get the highest transaction number
   const { data: lastTransaction } = await supabase
     .from('transactions')
     .select('number')
     .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
     .like('number', 'TRA-%')
     .order('number', { ascending: false })
     .limit(1)
@@ -281,12 +304,18 @@ export async function createTransaction(data: {
     throw new Error('Unauthorized - User ID not found')
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    throw new Error('No organization selected')
+  }
+
   // Verify account ownership before creating transaction
   const { data: account, error: accountError } = await supabase
     .from('accounts')
     .select('id, owner_id')
     .eq('id', data.account_id)
     .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
     .single()
 
   if (accountError || !account) {
@@ -302,6 +331,7 @@ export async function createTransaction(data: {
       .from('transactions')
       .insert({
         owner_id: user.id,
+        organization_id: organizationId,
         account_id: data.account_id,
         type: 'expense',
         number: transactionNumber,
@@ -332,6 +362,7 @@ export async function createTransaction(data: {
       .from('transactions')
       .insert({
         owner_id: user.id,
+        organization_id: organizationId,
         account_id: data.transfer_to_account_id,
         type: 'income',
         number: toNumber,
@@ -353,7 +384,7 @@ export async function createTransaction(data: {
 
     if (toError) {
       // Rollback: delete the from transaction
-      await supabase.from('transactions').delete().eq('id', fromTransaction.id)
+      await supabase.from('transactions').delete().eq('id', fromTransaction.id).eq('organization_id', organizationId)
       console.error('Error creating transfer (to):', toError)
       throw new Error('Failed to create transfer transaction')
     }
@@ -363,6 +394,7 @@ export async function createTransaction(data: {
       .from('transactions')
       .update({ transfer_transaction_id: toTransaction.id })
       .eq('id', fromTransaction.id)
+      .eq('organization_id', organizationId)
 
     revalidatePath('/accounting/transactions')
     return fromTransaction
@@ -372,6 +404,7 @@ export async function createTransaction(data: {
   // Prepare insert data
   const insertData = {
     owner_id: user.id,
+    organization_id: organizationId,
     account_id: data.account_id,
     type: data.type,
     number: transactionNumber,
@@ -446,6 +479,11 @@ export async function updateTransaction(
     throw new Error('Unauthorized')
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    throw new Error('No organization selected')
+  }
+
   const updateData: any = {
     updated_at: new Date().toISOString(),
   }
@@ -466,6 +504,7 @@ export async function updateTransaction(
     .update(updateData)
     .eq('id', id)
     .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
     .select()
     .single()
 
@@ -492,12 +531,18 @@ export async function assignCustomerToTransaction(
     throw new Error('Unauthorized')
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    throw new Error('No organization selected')
+  }
+
   // Get the current customer ID before updating (for revalidation)
   const { data: currentTransaction } = await supabase
     .from('transactions')
     .select('accounting_customer_id')
     .eq('id', transactionId)
     .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
     .single()
 
   const { error } = await supabase
@@ -505,6 +550,7 @@ export async function assignCustomerToTransaction(
     .update({ accounting_customer_id: customerId })
     .eq('id', transactionId)
     .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
 
   if (error) {
     throw new Error(error.message)
@@ -534,12 +580,18 @@ export async function deleteTransaction(id: string): Promise<void> {
     throw new Error('Unauthorized')
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    throw new Error('No organization selected')
+  }
+
   // If this is a transfer transaction, delete the linked transaction too
   const { data: transaction } = await supabase
     .from('transactions')
     .select('transfer_transaction_id')
     .eq('id', id)
     .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
     .single()
 
   if (transaction?.transfer_transaction_id) {
@@ -548,6 +600,7 @@ export async function deleteTransaction(id: string): Promise<void> {
       .delete()
       .eq('id', transaction.transfer_transaction_id)
       .eq('owner_id', user.id)
+      .eq('organization_id', organizationId)
   }
 
   const { error } = await supabase
@@ -555,6 +608,7 @@ export async function deleteTransaction(id: string): Promise<void> {
     .delete()
     .eq('id', id)
     .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
 
   if (error) {
     console.error('Error deleting transaction:', error)

@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { Reminder } from '@/types/database'
 import { revalidatePath } from 'next/cache'
+import { getCurrentOrganizationId } from './organizations'
 
 export async function createReminder(data: {
   client_id: string | null
@@ -19,6 +20,11 @@ export async function createReminder(data: {
     throw new Error('Not authenticated')
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    throw new Error('No organization selected')
+  }
+
   // Verify client ownership if client_id is provided
   if (data.client_id) {
     const { data: client } = await supabase
@@ -26,6 +32,7 @@ export async function createReminder(data: {
       .select('id')
       .eq('id', data.client_id)
       .eq('owner_id', user.id)
+      .eq('organization_id', organizationId)
       .single()
 
     if (!client) {
@@ -38,6 +45,7 @@ export async function createReminder(data: {
     .insert({
       ...data,
       client_id: data.client_id || null,
+      organization_id: organizationId,
       due_at: new Date(data.due_at).toISOString(),
     })
     .select()
@@ -89,12 +97,18 @@ export async function getRemindersForClient(clientId: string) {
     return []
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    return []
+  }
+
   // Verify client ownership
   const { data: client } = await supabase
     .from('clients')
     .select('id')
     .eq('id', clientId)
     .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
     .single()
 
   if (!client) {
@@ -105,6 +119,7 @@ export async function getRemindersForClient(clientId: string) {
     .from('reminders')
     .select('*')
     .eq('client_id', clientId)
+    .eq('organization_id', organizationId)
     .order('due_at', { ascending: true })
 
   if (error) {
@@ -125,6 +140,11 @@ export async function getUpcomingReminders() {
       return []
     }
 
+    const organizationId = await getCurrentOrganizationId()
+    if (!organizationId) {
+      return []
+    }
+
     const now = new Date().toISOString()
 
     // First get all reminders for user's clients
@@ -132,6 +152,7 @@ export async function getUpcomingReminders() {
       .from('clients')
       .select('id')
       .eq('owner_id', user.id)
+      .eq('organization_id', organizationId)
 
     if (clientsError) {
       // Check if it's a table not found error
@@ -154,6 +175,7 @@ export async function getUpcomingReminders() {
           .from('reminders')
           .select('*')
           .in('client_id', clientIds)
+          .eq('organization_id', organizationId)
           .eq('done', false)
           .order('due_at', { ascending: true })
       )
@@ -165,6 +187,7 @@ export async function getUpcomingReminders() {
         .from('reminders')
         .select('*')
         .is('client_id', null)
+        .eq('organization_id', organizationId)
         .eq('done', false)
         .order('due_at', { ascending: true })
     )
@@ -201,6 +224,7 @@ export async function getUpcomingReminders() {
         .from('clients')
         .select('id, name, company')
         .in('id', reminderClientIds)
+        .eq('organization_id', organizationId)
 
       clientsMap = new Map(allClients?.map(c => [c.id, c]) || [])
     }
@@ -228,17 +252,24 @@ export async function markReminderDone(id: string, clientId: string | null) {
     throw new Error('Not authenticated')
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    throw new Error('No organization selected')
+  }
+
   // Get reminder details before updating
   const { data: reminder } = await supabase
     .from('reminders')
     .select('*')
     .eq('id', id)
+    .eq('organization_id', organizationId)
     .single()
 
   const { error } = await supabase
     .from('reminders')
     .update({ done: true })
     .eq('id', id)
+    .eq('organization_id', organizationId)
 
   if (error) {
     throw new Error(error.message)
@@ -284,10 +315,16 @@ export async function unmarkReminderDone(id: string, clientId: string | null) {
     throw new Error('Not authenticated')
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    throw new Error('No organization selected')
+  }
+
   const { error } = await supabase
     .from('reminders')
     .update({ done: false })
     .eq('id', id)
+    .eq('organization_id', organizationId)
 
   if (error) {
     throw new Error(error.message)
@@ -335,6 +372,7 @@ export async function getCompletedReminders() {
           .from('reminders')
           .select('*')
           .in('client_id', clientIds)
+          .eq('organization_id', organizationId)
           .eq('done', true)
           .order('due_at', { ascending: false })
       )
@@ -346,6 +384,7 @@ export async function getCompletedReminders() {
         .from('reminders')
         .select('*')
         .is('client_id', null)
+        .eq('organization_id', organizationId)
         .eq('done', true)
         .order('due_at', { ascending: false })
     )
@@ -380,6 +419,7 @@ export async function getCompletedReminders() {
         .from('clients')
         .select('id, name, company')
         .in('id', reminderClientIds)
+        .eq('organization_id', organizationId)
 
       clientsMap = new Map(allClients?.map(c => [c.id, c]) || [])
     }
@@ -424,6 +464,11 @@ export async function updateReminder(
     updateData.client_id = clientId
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    throw new Error('No organization selected')
+  }
+
   // Verify client ownership if clientId is provided
   if (clientId) {
     const { data: client } = await supabase
@@ -431,6 +476,7 @@ export async function updateReminder(
       .select('id')
       .eq('id', clientId)
       .eq('owner_id', user.id)
+      .eq('organization_id', organizationId)
       .single()
 
     if (!client) {
@@ -442,6 +488,7 @@ export async function updateReminder(
     .from('reminders')
     .update(updateData)
     .eq('id', id)
+    .eq('organization_id', organizationId)
 
   if (error) {
     throw new Error(error.message)
@@ -463,10 +510,16 @@ export async function deleteReminder(id: string, clientId: string) {
     throw new Error('Not authenticated')
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    throw new Error('No organization selected')
+  }
+
   const { error } = await supabase
     .from('reminders')
     .delete()
     .eq('id', id)
+    .eq('organization_id', organizationId)
 
   if (error) {
     throw new Error(error.message)
