@@ -199,5 +199,58 @@ export interface Notification {
   metadata: Record<string, any>
 }
 
+// Organizations
+export interface Organization {
+  id: string
+  created_at: string
+  updated_at: string
+  name: string
+  slug: string
+  owner_id: string
+  settings: Record<string, any>
+  is_active: boolean
+}
+
+export interface OrganizationMember {
+  id: string
+  created_at: string
+  updated_at: string
+  organization_id: string
+  user_id: string
+  role: 'owner' | 'admin' | 'moderator' | 'viewer'
+  invited_by: string | null
+  joined_at: string | null
+  is_active: boolean
+  user_email?: string
+  user_name?: string
+}
+
+export interface OrganizationPermission {
+  id: string
+  created_at: string
+  updated_at: string
+  organization_id: string
+  user_id: string
+  feature: 'email' | 'accounting' | 'users' | 'reminders' | 'offers' | 'clients' | 'settings' | 'dashboard'
+  has_access: boolean
+}
+
+export interface OrganizationInvitation {
+  id: string
+  created_at: string
+  updated_at: string
+  organization_id: string
+  email: string
+  invited_by: string
+  role: 'owner' | 'admin' | 'moderator' | 'viewer'
+  token: string
+  expires_at: string
+  accepted_at: string | null
+  status: 'pending' | 'accepted' | 'declined' | 'expired'
+  feature_permissions: Record<string, boolean>
+  organization_name?: string
+  inviter_name?: string
+}
+
 
 

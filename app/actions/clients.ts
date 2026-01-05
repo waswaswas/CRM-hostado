@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { Client, ClientStatus } from '@/types/database'
 import { revalidatePath } from 'next/cache'
+import { getCurrentOrganizationId } from './organizations'
 
 export async function createClientRecord(data: {
   name: string
@@ -23,9 +24,15 @@ export async function createClientRecord(data: {
     throw new Error('Not authenticated')
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    throw new Error('No organization selected')
+  }
+
   const insertData: any = {
     ...data,
     owner_id: user.id,
+    organization_id: organizationId,
     status: data.status || (data.client_type === 'customer' ? 'active' : 'contacted'), // Default status based on type
   }
   
@@ -73,12 +80,18 @@ export async function updateClient(
     throw new Error('Not authenticated')
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    throw new Error('No organization selected')
+  }
+
   // Get current client to check for status change
   const { data: currentClient } = await supabase
     .from('clients')
     .select('status')
     .eq('id', id)
     .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
     .single()
 
   const { data: client, error } = await supabase
@@ -86,6 +99,7 @@ export async function updateClient(
     .update(data)
     .eq('id', id)
     .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
     .select()
     .single()
 
@@ -125,11 +139,17 @@ export async function deleteClient(id: string) {
     throw new Error('Not authenticated')
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    throw new Error('No organization selected')
+  }
+
   const { error } = await supabase
     .from('clients')
     .delete()
     .eq('id', id)
     .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
 
   if (error) {
     throw new Error(error.message)
@@ -150,10 +170,16 @@ export async function getClients() {
       return []
     }
 
+    const organizationId = await getCurrentOrganizationId()
+    if (!organizationId) {
+      return []
+    }
+
     const { data, error } = await supabase
       .from('clients')
       .select('*')
       .eq('owner_id', user.id)
+      .eq('organization_id', organizationId)
       .order('created_at', { ascending: false })
 
     if (error) {
@@ -192,11 +218,17 @@ export async function getClient(id: string) {
     throw new Error('Not authenticated')
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    throw new Error('No organization selected')
+  }
+
   const { data, error } = await supabase
     .from('clients')
     .select('*')
     .eq('id', id)
     .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
     .single()
 
   if (error) {

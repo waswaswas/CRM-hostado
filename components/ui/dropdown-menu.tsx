@@ -136,6 +136,20 @@ export function DropdownMenuItem({
   )
 }
 
+export function DropdownMenuLabel({
+  children,
+  className,
+}: {
+  children: React.ReactNode
+  className?: string
+}) {
+  return (
+    <div className={cn('px-2 py-1.5 text-sm font-semibold', className)}>
+      {children}
+    </div>
+  )
+}
+
 export function DropdownMenuSeparator({ className }: { className?: string }) {
   return <div className={cn('-mx-1 my-1 h-px bg-muted', className)} />
 }

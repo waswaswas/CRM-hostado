@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import type { Offer, OfferStatus, PaymentProvider } from '@/types/database'
 import { randomBytes } from 'crypto'
+import { getCurrentOrganizationId } from './organizations'
 
 export async function getOffers() {
   const supabase = await createClient()
@@ -15,10 +16,16 @@ export async function getOffers() {
     return []
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    return []
+  }
+
   const { data, error } = await supabase
     .from('offers')
     .select('*')
     .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
     .order('created_at', { ascending: false })
 
   if (error) {
@@ -41,11 +48,17 @@ export async function getOffer(id: string) {
     throw new Error('Not authenticated')
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    throw new Error('No organization selected')
+  }
+
   const { data, error } = await supabase
     .from('offers')
     .select('*')
     .eq('id', id)
     .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
     .single()
 
   if (error) {
@@ -87,10 +100,16 @@ export async function getOffersForClient(clientId: string) {
     return []
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    return []
+  }
+
   const { data, error } = await supabase
     .from('offers')
     .select('*')
     .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
     .eq('client_id', clientId)
     .order('created_at', { ascending: false })
 
@@ -131,12 +150,18 @@ export async function createOffer(data: {
     throw new Error('Not authenticated')
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    throw new Error('No organization selected')
+  }
+
   // Generate secure payment token
   const paymentToken = randomBytes(32).toString('hex')
 
   const insertData: any = {
     ...data,
     owner_id: user.id,
+    organization_id: organizationId,
     currency: data.currency || 'BGN',
     status: data.status || 'draft',
     payment_enabled: data.payment_enabled !== false,
@@ -182,11 +207,17 @@ export async function updateOffer(
     throw new Error('Not authenticated')
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    throw new Error('No organization selected')
+  }
+
   const { data: offer, error } = await supabase
     .from('offers')
     .update(data)
     .eq('id', id)
     .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
     .select()
     .single()
 
@@ -212,11 +243,17 @@ export async function deleteOffer(id: string) {
     throw new Error('Not authenticated')
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    throw new Error('No organization selected')
+  }
+
   const { error } = await supabase
     .from('offers')
     .delete()
     .eq('id', id)
     .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
 
   if (error) {
     throw new Error(error.message)
@@ -235,12 +272,18 @@ export async function duplicateOffer(id: string) {
     throw new Error('Not authenticated')
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    throw new Error('No organization selected')
+  }
+
   // Get original offer
   const { data: original, error: fetchError } = await supabase
     .from('offers')
     .select('*')
     .eq('id', id)
     .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
     .single()
 
   if (fetchError || !original) {
@@ -255,6 +298,7 @@ export async function duplicateOffer(id: string) {
     .from('offers')
     .insert({
       owner_id: user.id,
+      organization_id: organizationId,
       client_id: original.client_id,
       title: `${original.title} (Copy)`,
       description: original.description,
@@ -288,12 +332,18 @@ export async function generatePaymentLink(offerId: string) {
     throw new Error('Not authenticated')
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    throw new Error('No organization selected')
+  }
+
   // Get offer
   const { data: offer, error: fetchError } = await supabase
     .from('offers')
     .select('*')
     .eq('id', offerId)
     .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
     .single()
 
   if (fetchError || !offer) {
@@ -349,6 +399,7 @@ export async function markOfferAsPaid(offerId: string, paymentData?: {
     .update(updateData)
     .eq('id', offerId)
     .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
     .select()
     .single()
 

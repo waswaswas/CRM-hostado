@@ -9,6 +9,7 @@ import { TimezoneSelector } from '@/components/timezone-selector'
 import { FeedbackDialog } from '@/components/feedback/feedback-dialog'
 import { NotificationBadge } from '@/components/notifications/notification-badge'
 import { FloatingActionButton } from '@/components/ui/floating-action-button'
+import { OrganizationSelector } from '@/components/organizations/organization-selector'
 import { usePathname } from 'next/navigation'
 import {
   DropdownMenu,
@@ -26,7 +27,7 @@ export function Topbar({ userName }: { userName?: string }) {
     <>
       <div className="flex h-16 items-center justify-between border-b bg-background px-4 md:px-6">
         <div className="flex items-center gap-2 min-w-0 flex-1">
-          {/* Email removed - now only in mobile sidebar burger menu */}
+          <OrganizationSelector />
         </div>
         <div className="flex items-center gap-1 md:gap-2">
           {/* Theme Toggle - Always visible, before bell */}
