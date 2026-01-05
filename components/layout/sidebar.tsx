@@ -7,13 +7,14 @@ import { LayoutDashboard, Users, Settings, FileText, Mail, Building2, Menu, X, U
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { useFeaturePermissions } from '@/lib/hooks/use-feature-permissions'
 
-const navigation = [
-  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-  { name: 'Clients', href: '/clients', icon: Users },
-  { name: 'Offers', href: '/offers', icon: FileText },
-  { name: 'Emails', href: '/emails', icon: Mail },
-  { name: 'Accounting', href: '/accounting', icon: Building2 },
+const allNavigation = [
+  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, feature: 'dashboard' as const },
+  { name: 'Clients', href: '/clients', icon: Users, feature: 'clients' as const },
+  { name: 'Offers', href: '/offers', icon: FileText, feature: 'offers' as const },
+  { name: 'Emails', href: '/emails', icon: Mail, feature: 'emails' as const },
+  { name: 'Accounting', href: '/accounting', icon: Building2, feature: 'accounting' as const },
 ]
 
 interface SidebarProps {
@@ -23,6 +24,10 @@ interface SidebarProps {
 export function Sidebar({ userName }: SidebarProps) {
   const pathname = usePathname()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const { permissions } = useFeaturePermissions()
+
+  // Filter navigation based on permissions
+  const navigation = allNavigation.filter(item => permissions[item.feature])
 
   return (
     <>

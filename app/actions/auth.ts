@@ -38,7 +38,10 @@ export async function signUp(email: string, password: string) {
       throw new Error(error.message)
     }
 
-    redirect('/dashboard')
+    // Always redirect to join-organization for new signups
+    // The dashboard will check and redirect if needed, but this ensures
+    // new users always see the join/create page first
+    redirect('/join-organization')
   } catch (error) {
     if (error instanceof Error && error.message.includes('Supabase is not configured')) {
       throw new Error('Please configure Supabase in your .env.local file. See README.md for instructions.')

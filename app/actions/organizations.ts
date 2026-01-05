@@ -471,6 +471,240 @@ export async function getUserRole(
   return (member?.role as any) || null
 }
 
+export async function generateInvitationCode(organizationId: string): Promise<{
+  code: string
+  expires_at: string
+}> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    throw new Error('Not authenticated')
+  }
+
+  // Check user is owner/admin
+  const { data: member } = await supabase
+    .from('organization_members')
+    .select('role')
+    .eq('organization_id', organizationId)
+    .eq('user_id', user.id)
+    .eq('is_active', true)
+    .single()
+
+  if (!member || (member.role !== 'owner' && member.role !== 'admin')) {
+    throw new Error('Insufficient permissions')
+  }
+
+  // Generate a unique 8-character alphanumeric code
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789' // Exclude confusing chars
+  let code = ''
+  for (let i = 0; i < 8; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length))
+  }
+
+  // Set expiration to 60 minutes from now
+  const expiresAt = new Date()
+  expiresAt.setMinutes(expiresAt.getMinutes() + 60)
+
+  // Get current organization settings
+  const { data: currentOrg } = await supabase
+    .from('organizations')
+    .select('settings')
+    .eq('id', organizationId)
+    .single()
+
+  if (!currentOrg) {
+    throw new Error('Organization not found')
+  }
+
+  // Store invitation code in settings
+  const updatedSettings = {
+    ...(currentOrg.settings || {}),
+    invitation_code: code,
+    invitation_code_expires_at: expiresAt.toISOString(),
+    invitation_code_created_by: user.id,
+  }
+
+  const { error } = await supabase
+    .from('organizations')
+    .update({
+      settings: updatedSettings,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', organizationId)
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  revalidatePath('/organizations')
+  revalidatePath(`/organizations/${organizationId}`)
+
+  return {
+    code,
+    expires_at: expiresAt.toISOString(),
+  }
+}
+
+export async function validateInvitationCode(code: string): Promise<{
+  valid: boolean
+  organizationId?: string
+  organizationName?: string
+  expiresAt?: string
+  error?: string
+}> {
+  const supabase = await createClient()
+
+  // Search for organization with this invitation code
+  const { data: organizations, error } = await supabase
+    .from('organizations')
+    .select('id, name, settings')
+    .eq('is_active', true)
+
+  if (error) {
+    return { valid: false, error: 'Failed to validate code' }
+  }
+
+  for (const org of organizations || []) {
+    const settings = org.settings as any
+    if (settings?.invitation_code === code) {
+      const expiresAt = settings?.invitation_code_expires_at
+      if (expiresAt) {
+        const expirationDate = new Date(expiresAt)
+        if (expirationDate < new Date()) {
+          return { valid: false, error: 'Invitation code has expired' }
+        }
+      }
+      return {
+        valid: true,
+        organizationId: org.id,
+        organizationName: org.name,
+        expiresAt,
+      }
+    }
+  }
+
+  return { valid: false, error: 'Invalid invitation code' }
+}
+
+export async function joinOrganizationByCode(code: string): Promise<Organization> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    throw new Error('Not authenticated')
+  }
+
+  // Validate code
+  const validation = await validateInvitationCode(code)
+  if (!validation.valid || !validation.organizationId) {
+    throw new Error(validation.error || 'Invalid invitation code')
+  }
+
+  // Check if user is already a member
+  const { data: existingMember } = await supabase
+    .from('organization_members')
+    .select('id')
+    .eq('organization_id', validation.organizationId)
+    .eq('user_id', user.id)
+    .eq('is_active', true)
+    .single()
+
+  if (existingMember) {
+    throw new Error('You are already a member of this organization')
+  }
+
+  // Add user as member with viewer role (default, can be changed by owner)
+  const { data: member, error: memberError } = await supabase
+    .from('organization_members')
+    .insert({
+      organization_id: validation.organizationId,
+      user_id: user.id,
+      role: 'viewer',
+      joined_at: new Date().toISOString(),
+      is_active: true,
+    })
+    .select()
+    .single()
+
+  if (memberError) {
+    throw new Error(memberError.message)
+  }
+
+  // Set default permissions - only dashboard access for new members
+  const defaultPermissions = [
+    { feature: 'dashboard', has_access: true },
+    { feature: 'clients', has_access: false },
+    { feature: 'offers', has_access: false },
+    { feature: 'emails', has_access: false },
+    { feature: 'accounting', has_access: false },
+    { feature: 'reminders', has_access: false },
+    { feature: 'settings', has_access: false },
+    { feature: 'users', has_access: false },
+  ]
+
+  // Create permissions for each feature
+  for (const perm of defaultPermissions) {
+    // Check if permission already exists
+    const { data: existing } = await supabase
+      .from('organization_permissions')
+      .select('id')
+      .eq('organization_id', validation.organizationId)
+      .eq('user_id', user.id)
+      .eq('feature', perm.feature)
+      .single()
+
+    if (existing) {
+      // Update existing
+      const { error: permError } = await supabase
+        .from('organization_permissions')
+        .update({ has_access: perm.has_access })
+        .eq('id', existing.id)
+
+      if (permError) {
+        console.error(`Error updating permission for ${perm.feature}:`, permError)
+      }
+    } else {
+      // Insert new
+      const { error: permError } = await supabase
+        .from('organization_permissions')
+        .insert({
+          organization_id: validation.organizationId,
+          user_id: user.id,
+          feature: perm.feature,
+          has_access: perm.has_access,
+        })
+
+      if (permError) {
+        console.error(`Error creating permission for ${perm.feature}:`, permError)
+      }
+    }
+  }
+
+  // Get organization
+  const { data: organization } = await supabase
+    .from('organizations')
+    .select('*')
+    .eq('id', validation.organizationId)
+    .single()
+
+  if (!organization) {
+    throw new Error('Organization not found')
+  }
+
+  // Set as current organization
+  await setCurrentOrganizationId(validation.organizationId)
+
+  revalidatePath('/organizations')
+  revalidatePath('/dashboard')
+
+  return organization
+}
+
 export async function updateOrganizationEmailSettings(
   organizationId: string,
   emailSettings: {
@@ -585,4 +819,163 @@ export async function hasFeaturePermission(
     .single()
 
   return permission?.has_access || false
+}
+
+export async function getMemberPermissions(
+  organizationId: string,
+  userId: string
+): Promise<Record<string, boolean>> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    throw new Error('Not authenticated')
+  }
+
+  // Check requester is owner/admin
+  const { data: requesterMember } = await supabase
+    .from('organization_members')
+    .select('role')
+    .eq('organization_id', organizationId)
+    .eq('user_id', user.id)
+    .eq('is_active', true)
+    .single()
+
+  if (!requesterMember || (requesterMember.role !== 'owner' && requesterMember.role !== 'admin')) {
+    throw new Error('Insufficient permissions')
+  }
+
+  // Get target member's role
+  const { data: targetMember } = await supabase
+    .from('organization_members')
+    .select('role')
+    .eq('organization_id', organizationId)
+    .eq('user_id', userId)
+    .single()
+
+  if (!targetMember) {
+    throw new Error('Member not found')
+  }
+
+  // Owners and admins have all permissions
+  if (targetMember.role === 'owner' || targetMember.role === 'admin') {
+    return {
+      dashboard: true,
+      clients: true,
+      offers: true,
+      emails: true,
+      accounting: true,
+      reminders: true,
+      settings: true,
+      users: true,
+    }
+  }
+
+  // Get permissions from organization_permissions table
+  const { data: permissions } = await supabase
+    .from('organization_permissions')
+    .select('feature, has_access')
+    .eq('organization_id', organizationId)
+    .eq('user_id', userId)
+
+  const permMap: Record<string, boolean> = {
+    dashboard: true, // Always accessible
+    clients: false,
+    offers: false,
+    emails: false,
+    accounting: false,
+    reminders: false,
+    settings: false,
+    users: false,
+  }
+
+  permissions?.forEach((perm: any) => {
+    permMap[perm.feature] = perm.has_access || false
+  })
+
+  return permMap
+}
+
+export async function updateMemberPermissions(
+  organizationId: string,
+  userId: string,
+  permissions: Record<string, boolean>
+): Promise<void> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    throw new Error('Not authenticated')
+  }
+
+  // Check requester is owner/admin
+  const { data: requesterMember } = await supabase
+    .from('organization_members')
+    .select('role')
+    .eq('organization_id', organizationId)
+    .eq('user_id', user.id)
+    .eq('is_active', true)
+    .single()
+
+  if (!requesterMember || (requesterMember.role !== 'owner' && requesterMember.role !== 'admin')) {
+    throw new Error('Insufficient permissions')
+  }
+
+  // Prevent modifying owner permissions
+  const { data: targetMember } = await supabase
+    .from('organization_members')
+    .select('role')
+    .eq('organization_id', organizationId)
+    .eq('user_id', userId)
+    .single()
+
+  if (targetMember?.role === 'owner') {
+    throw new Error('Cannot modify owner permissions')
+  }
+
+  // Update permissions for each feature
+  for (const [feature, hasAccess] of Object.entries(permissions)) {
+    // Check if permission exists
+    const { data: existing } = await supabase
+      .from('organization_permissions')
+      .select('id')
+      .eq('organization_id', organizationId)
+      .eq('user_id', userId)
+      .eq('feature', feature)
+      .single()
+
+    if (existing) {
+      // Update existing
+      const { error } = await supabase
+        .from('organization_permissions')
+        .update({ has_access: hasAccess })
+        .eq('id', existing.id)
+
+      if (error) {
+        console.error(`Error updating permission for ${feature}:`, error)
+        throw new Error(`Failed to update permission for ${feature}`)
+      }
+    } else {
+      // Insert new
+      const { error } = await supabase
+        .from('organization_permissions')
+        .insert({
+          organization_id: organizationId,
+          user_id: userId,
+          feature: feature as any,
+          has_access: hasAccess,
+        })
+
+      if (error) {
+        console.error(`Error creating permission for ${feature}:`, error)
+        throw new Error(`Failed to create permission for ${feature}`)
+      }
+    }
+  }
+
+  revalidatePath(`/organizations/${organizationId}`)
 }

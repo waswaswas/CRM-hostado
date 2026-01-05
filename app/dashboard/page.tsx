@@ -11,6 +11,8 @@ import Link from 'next/link'
 import { Calendar, Users, AlertCircle, TrendingUp, Clock, Tag, List } from 'lucide-react'
 import { RemindersCard } from '@/components/dashboard/reminders-card'
 import { format, parseISO } from 'date-fns'
+import { redirect } from 'next/navigation'
+import { createClient } from '@/lib/supabase/server'
 
 function formatDateTime(dateString: string) {
   try {
@@ -21,6 +23,26 @@ function formatDateTime(dateString: string) {
 }
 
 export default async function DashboardPage() {
+  // Check if user has any organizations
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (user) {
+    const { data: members } = await supabase
+      .from('organization_members')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('is_active', true)
+      .limit(1)
+
+    // If user has no organizations, redirect to join/create page
+    if (!members || members.length === 0) {
+      redirect('/join-organization')
+    }
+  }
+
   let reminders = []
   let clients = []
   let stats = { newLeadsWeek: 0, newLeadsMonth: 0, newTagLeads: 0, waitingForOffer: 0 }

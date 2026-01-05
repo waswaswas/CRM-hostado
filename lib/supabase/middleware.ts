@@ -84,6 +84,7 @@ export async function updateSession(request: NextRequest) {
     !request.nextUrl.pathname.startsWith('/login') &&
     !request.nextUrl.pathname.startsWith('/signup') &&
     !request.nextUrl.pathname.startsWith('/setup') &&
+    !request.nextUrl.pathname.startsWith('/join-organization') &&
     !request.nextUrl.pathname.startsWith('/_next')
   ) {
     const url = request.nextUrl.clone()
@@ -91,10 +92,82 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
+  // Redirect authenticated users from login/signup pages
   if (user && (request.nextUrl.pathname === '/login' || request.nextUrl.pathname === '/signup')) {
+    // Check if user has organizations
+    try {
+      const supabase = createServerClient(
+        supabaseUrl!,
+        supabaseAnonKey!,
+        {
+          cookies: {
+            get(name: string) {
+              return request.cookies.get(name)?.value
+            },
+            set() {},
+            remove() {},
+          },
+        }
+      )
+      const { data: members } = await supabase
+        .from('organization_members')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('is_active', true)
+        .limit(1)
+
+      // If user has no organizations, redirect to join/create page
+      if (!members || members.length === 0) {
+        const url = request.nextUrl.clone()
+        url.pathname = '/join-organization'
+        return NextResponse.redirect(url)
+      }
+    } catch (error) {
+      // If check fails, redirect to join-organization to be safe
+      console.error('Error checking organizations:', error)
+      const url = request.nextUrl.clone()
+      url.pathname = '/join-organization'
+      return NextResponse.redirect(url)
+    }
+    
     const url = request.nextUrl.clone()
     url.pathname = '/dashboard'
     return NextResponse.redirect(url)
+  }
+
+  // Redirect authenticated users trying to access dashboard without organizations
+  if (user && request.nextUrl.pathname === '/dashboard') {
+    try {
+      const supabase = createServerClient(
+        supabaseUrl!,
+        supabaseAnonKey!,
+        {
+          cookies: {
+            get(name: string) {
+              return request.cookies.get(name)?.value
+            },
+            set() {},
+            remove() {},
+          },
+        }
+      )
+      const { data: members } = await supabase
+        .from('organization_members')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('is_active', true)
+        .limit(1)
+
+      // If user has no organizations, redirect to join/create page
+      if (!members || members.length === 0) {
+        const url = request.nextUrl.clone()
+        url.pathname = '/join-organization'
+        return NextResponse.redirect(url)
+      }
+    } catch (error) {
+      // If check fails, allow access (dashboard will handle it)
+      console.error('Error checking organizations in middleware:', error)
+    }
   }
 
   return supabaseResponse
