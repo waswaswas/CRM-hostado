@@ -471,6 +471,79 @@ export async function getUserRole(
   return (member?.role as any) || null
 }
 
+export async function updateOrganizationEmailSettings(
+  organizationId: string,
+  emailSettings: {
+    from_email?: string
+    from_name?: string
+    smtp_host?: string
+    smtp_port?: string
+    smtp_user?: string
+    smtp_password?: string
+    smtp_secure?: boolean
+  }
+): Promise<Organization> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    throw new Error('Not authenticated')
+  }
+
+  // Check user is owner/admin
+  const { data: member } = await supabase
+    .from('organization_members')
+    .select('role')
+    .eq('organization_id', organizationId)
+    .eq('user_id', user.id)
+    .eq('is_active', true)
+    .single()
+
+  if (!member || (member.role !== 'owner' && member.role !== 'admin')) {
+    throw new Error('Insufficient permissions')
+  }
+
+  // Get current organization settings
+  const { data: currentOrg } = await supabase
+    .from('organizations')
+    .select('settings')
+    .eq('id', organizationId)
+    .single()
+
+  if (!currentOrg) {
+    throw new Error('Organization not found')
+  }
+
+  // Merge email settings into existing settings
+  const updatedSettings = {
+    ...(currentOrg.settings || {}),
+    email: {
+      ...((currentOrg.settings as any)?.email || {}),
+      ...emailSettings,
+    },
+  }
+
+  const { data: organization, error } = await supabase
+    .from('organizations')
+    .update({
+      settings: updatedSettings,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', organizationId)
+    .select()
+    .single()
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  revalidatePath('/organizations')
+  revalidatePath(`/organizations/${organizationId}`)
+  return organization
+}
+
 export async function hasFeaturePermission(
   organizationId: string,
   feature: string
