@@ -214,3 +214,4 @@ The invitation system has been fully implemented with the following features:
 - All data properly scoped to organizations
 
 The system is ready for production use!
+

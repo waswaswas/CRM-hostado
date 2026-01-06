@@ -6,9 +6,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Building2, Plus, Users, ArrowRight, CheckCircle, XCircle, ArrowLeft } from 'lucide-react'
+import { Building2, Plus, Users, ArrowRight, CheckCircle, XCircle, ArrowLeft, LogOut } from 'lucide-react'
 import { joinOrganizationByCode, validateInvitationCode } from '@/app/actions/organizations'
 import { createOrganization } from '@/app/actions/organizations'
+import { signOut } from '@/app/actions/auth'
 import { useToast } from '@/components/ui/toaster'
 
 export default function JoinOrganizationPage() {
@@ -190,6 +191,17 @@ export default function JoinOrganizationPage() {
               </div>
             </CardContent>
           </Card>
+
+          <div className="flex justify-center pt-4">
+            <Button
+              variant="ghost"
+              onClick={() => signOut()}
+              className="flex items-center gap-2"
+            >
+              <LogOut className="h-4 w-4" />
+              Log Out
+            </Button>
+          </div>
         </div>
       </div>
     )
@@ -360,3 +372,4 @@ export default function JoinOrganizationPage() {
 
   return null
 }
+

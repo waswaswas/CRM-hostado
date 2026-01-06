@@ -238,3 +238,4 @@ export function TransactionDetail({ transaction }: TransactionDetailProps) {
 
 
 
+

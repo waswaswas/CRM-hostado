@@ -252,3 +252,4 @@ Users can:
 - Implement permission management UI (optional)
 
 The foundation is solid - the remaining updates follow the same pattern already established in `clients.ts` and `offers.ts`.
+

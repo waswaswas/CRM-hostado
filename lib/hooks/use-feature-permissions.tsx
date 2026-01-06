@@ -74,3 +74,4 @@ export function useFeaturePermissions() {
 
   return { permissions, loading }
 }
+

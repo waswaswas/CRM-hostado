@@ -387,3 +387,4 @@ WHERE om.user_id = (SELECT id FROM auth.users WHERE email = 'waswaswas28@gmail.c
 5. Add organization selector to UI
 
 The database is ready - the application code needs to be re-implemented to use it.
+
