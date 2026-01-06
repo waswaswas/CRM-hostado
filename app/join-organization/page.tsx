@@ -6,11 +6,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Building2, Plus, Users, ArrowRight, CheckCircle, XCircle, ArrowLeft, LogOut } from 'lucide-react'
-import { joinOrganizationByCode, validateInvitationCode } from '@/app/actions/organizations'
+import { Building2, Plus, Users, ArrowRight, CheckCircle, XCircle, ArrowLeft, LogOut, Building } from 'lucide-react'
+import { joinOrganizationByCode, validateInvitationCode, getOrganizations } from '@/app/actions/organizations'
 import { createOrganization } from '@/app/actions/organizations'
 import { signOut } from '@/app/actions/auth'
 import { useToast } from '@/components/ui/toaster'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog'
+import type { Organization } from '@/types/database'
 
 export default function JoinOrganizationPage() {
   const router = useRouter()
@@ -28,6 +30,10 @@ export default function JoinOrganizationPage() {
     expiresAt?: string
     error?: string
   } | null>(null)
+  const [organizations, setOrganizations] = useState<Organization[]>([])
+  const [hasOrganizations, setHasOrganizations] = useState<boolean | null>(null)
+  const [showMyOrganizations, setShowMyOrganizations] = useState(false)
+  const [loadingOrganizations, setLoadingOrganizations] = useState(false)
 
   async function handleValidateCode() {
     if (!invitationCode.trim()) {
@@ -138,6 +144,40 @@ export default function JoinOrganizationPage() {
     }
   }, [orgName, step])
 
+  // Check if user has organizations on mount
+  useEffect(() => {
+    async function checkOrganizations() {
+      try {
+        setLoadingOrganizations(true)
+        const orgs = await getOrganizations()
+        setOrganizations(orgs)
+        setHasOrganizations(orgs.length > 0)
+      } catch (error) {
+        console.error('Error fetching organizations:', error)
+        setHasOrganizations(false)
+        setOrganizations([])
+      } finally {
+        setLoadingOrganizations(false)
+      }
+    }
+    checkOrganizations()
+  }, [])
+
+  async function handleMyOrganizations() {
+    try {
+      setLoadingOrganizations(true)
+      const orgs = await getOrganizations()
+      setOrganizations(orgs)
+      setShowMyOrganizations(true)
+    } catch (error) {
+      console.error('Error fetching organizations:', error)
+      setOrganizations([])
+      setShowMyOrganizations(true)
+    } finally {
+      setLoadingOrganizations(false)
+    }
+  }
+
   if (step === 'choose') {
     return (
       <div className="flex min-h-screen items-center justify-center bg-muted/50 p-4">
@@ -192,6 +232,20 @@ export default function JoinOrganizationPage() {
             </CardContent>
           </Card>
 
+          {hasOrganizations !== null && hasOrganizations && (
+            <div className="flex justify-center">
+              <Button
+                variant="outline"
+                onClick={handleMyOrganizations}
+                disabled={loadingOrganizations}
+                className="flex items-center gap-2"
+              >
+                <Building className="h-4 w-4" />
+                {loadingOrganizations ? 'Loading...' : 'My Organizations'}
+              </Button>
+            </div>
+          )}
+
           <div className="flex justify-center pt-4">
             <Button
               variant="ghost"
@@ -202,6 +256,54 @@ export default function JoinOrganizationPage() {
               Log Out
             </Button>
           </div>
+
+          <Dialog open={showMyOrganizations} onOpenChange={setShowMyOrganizations}>
+            <DialogContent>
+              <DialogClose onClose={() => setShowMyOrganizations(false)} />
+              <DialogHeader>
+                <DialogTitle>My Organizations</DialogTitle>
+                <DialogDescription>
+                  {organizations.length === 0
+                    ? 'You are not a member of any organizations'
+                    : `You are a member of ${organizations.length} organization${organizations.length !== 1 ? 's' : ''}`}
+                </DialogDescription>
+              </DialogHeader>
+              {organizations.length === 0 ? (
+                <div className="py-8 text-center">
+                  <Building className="h-12 w-12 text-muted-foreground mx-auto mb-4 opacity-50" />
+                  <p className="text-lg font-medium">No organization</p>
+                  <p className="text-sm text-muted-foreground mt-2">
+                    Create a new organization or join an existing one using an invitation code.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                  {organizations.map((org) => (
+                    <div
+                      key={org.id}
+                      className="p-4 border rounded-lg hover:bg-accent cursor-pointer transition-colors"
+                      onClick={() => {
+                        router.push('/organizations')
+                      }}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="rounded-full bg-primary/10 p-2">
+                            <Building className="h-5 w-5 text-primary" />
+                          </div>
+                          <div>
+                            <h3 className="font-semibold">{org.name}</h3>
+                            <p className="text-sm text-muted-foreground">{org.slug}</p>
+                          </div>
+                        </div>
+                        <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
     )
