@@ -47,9 +47,7 @@ export default function SignUpPage() {
       const errorMessage = error instanceof Error ? error.message : 'Failed to sign up'
       toast({
         title: 'Error',
-        description: errorMessage.includes('Supabase is not configured') 
-          ? 'Please configure Supabase first. Visit /setup for instructions.'
-          : errorMessage,
+        description: errorMessage,
         variant: 'destructive',
       })
       setLoading(false)
@@ -118,11 +116,6 @@ export default function SignUpPage() {
               <span className="text-muted-foreground">Already have an account? </span>
               <Link href="/login" className="text-primary hover:underline">
                 Sign in
-              </Link>
-            </div>
-            <div className="text-center">
-              <Link href="/setup" className="text-sm text-muted-foreground hover:text-foreground">
-                Setup / Configuration
               </Link>
             </div>
           </div>
