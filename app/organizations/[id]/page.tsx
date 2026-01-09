@@ -10,8 +10,9 @@ export const dynamic = 'force-dynamic'
 export default async function OrganizationDetailPage({
   params,
 }: {
-  params: { id: string }
+  params: Promise<{ id: string }>
 }) {
+  const { id } = await params
   const supabase = await createClient()
   const {
     data: { user },
@@ -21,13 +22,13 @@ export default async function OrganizationDetailPage({
     redirect('/login')
   }
 
-  const organization = await getOrganization(params.id)
+  const organization = await getOrganization(id)
   if (!organization) {
     notFound()
   }
 
-  const members = await getOrganizationMembers(params.id)
-  const userRole = await getUserRole(params.id)
+  const members = await getOrganizationMembers(id)
+  const userRole = await getUserRole(id)
 
   return (
     <AppLayout>

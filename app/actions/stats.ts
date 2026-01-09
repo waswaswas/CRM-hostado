@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { startOfWeek, startOfMonth, subDays, isAfter } from 'date-fns'
 import { getCurrentOrganizationId } from './organizations'
+import type { Client } from '@/types/database'
 
 export async function getDashboardStats() {
   try {
@@ -64,28 +65,28 @@ export async function getDashboardStats() {
     const fourteenDaysAgo = subDays(now, 14)
 
     // New leads (week to date) - presales clients created this week
-    const newLeadsWeek = clients.filter((client) => {
+    const newLeadsWeek = clients.filter((client: Client) => {
       if (client.client_type !== 'presales') return false
       const createdDate = new Date(client.created_at)
       return createdDate >= weekStart
     }).length
 
     // New leads (this month) - presales clients created this month
-    const newLeadsMonth = clients.filter((client) => {
+    const newLeadsMonth = clients.filter((client: Client) => {
       if (client.client_type !== 'presales') return false
       const createdDate = new Date(client.created_at)
       return createdDate >= monthStart
     }).length
 
     // Leads with "New" tag - presales clients within 14 days
-    const newTagLeads = clients.filter((client) => {
+    const newTagLeads = clients.filter((client: Client) => {
       if (client.client_type !== 'presales') return false
       const createdDate = new Date(client.created_at)
       return isAfter(createdDate, fourteenDaysAgo)
     }).length
 
     // Customers waiting for offer - presales clients with "waits_for_offer" status
-    const waitingForOffer = clients.filter((client) => {
+    const waitingForOffer = clients.filter((client: Client) => {
       return client.client_type === 'presales' && client.status === 'waits_for_offer'
     }).length
 

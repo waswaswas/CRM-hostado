@@ -181,6 +181,11 @@ export async function createInboundEmail(input: CreateInboundEmailInput): Promis
   // FIRST: Check if this email already exists (prevent duplicates and client recreation)
   const receivedAt = input.received_at ? new Date(input.received_at).toISOString() : new Date().toISOString()
   
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    throw new Error('No organization selected')
+  }
+  
   // Check for existing email by from_email and subject (wider time window - 24 hours)
   const { data: existingEmail } = await supabase
     .from('emails')
@@ -774,6 +779,11 @@ export async function replyToEmail(
 
   if (!user) {
     throw new Error('Unauthorized')
+  }
+
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    throw new Error('No organization selected')
   }
 
   // Get original email

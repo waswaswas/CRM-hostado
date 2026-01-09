@@ -6,11 +6,12 @@ import { notFound } from 'next/navigation'
 export default async function EmailDetailPage({
   params,
 }: {
-  params: { id: string }
+  params: Promise<{ id: string }>
 }) {
+  const { id } = await params
   let email
   try {
-    email = await getEmail(params.id)
+    email = await getEmail(id)
   } catch (error) {
     notFound()
   }

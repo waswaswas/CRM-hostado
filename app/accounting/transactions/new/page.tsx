@@ -8,8 +8,9 @@ import { redirect } from 'next/navigation'
 export default async function NewTransactionPage({
   searchParams,
 }: {
-  searchParams: { contact_id?: string; accounting_customer_id?: string; type?: string }
+  searchParams: Promise<{ contact_id?: string; accounting_customer_id?: string; type?: string }>
 }) {
+  const params = await searchParams
   const supabase = await createClient()
   const {
     data: { user },
@@ -35,8 +36,8 @@ export default async function NewTransactionPage({
           <TransactionForm 
             accounts={accounts} 
             accountingCustomers={accountingCustomers}
-            initialCustomerId={searchParams.accounting_customer_id || searchParams.contact_id}
-            initialType={searchParams.type as 'income' | 'expense' | undefined}
+            initialCustomerId={params.accounting_customer_id || params.contact_id}
+            initialType={params.type as 'income' | 'expense' | undefined}
           />
         </div>
       </div>

@@ -162,7 +162,7 @@ export async function getUpcomingReminders() {
       throw new Error(clientsError.message)
     }
 
-    const clientIds = clients ? clients.map((c) => c.id) : []
+    const clientIds = clients ? clients.map((c: { id: string }) => c.id) : []
 
     // Get reminders for user's clients AND general reminders (where client_id is null)
     // We'll fetch both types and combine them
@@ -226,7 +226,7 @@ export async function getUpcomingReminders() {
         .in('id', reminderClientIds)
         .eq('organization_id', organizationId)
 
-      clientsMap = new Map(allClients?.map(c => [c.id, c]) || [])
+      clientsMap = new Map(allClients?.map((c: { id: string; name?: string | null; company?: string | null }) => [c.id, c]) || [])
     }
 
     // Attach client info to reminders
@@ -347,11 +347,17 @@ export async function getCompletedReminders() {
       return []
     }
 
+    const organizationId = await getCurrentOrganizationId()
+    if (!organizationId) {
+      return []
+    }
+
     // First get all reminders for user's clients
     const { data: clients, error: clientsError } = await supabase
       .from('clients')
       .select('id')
       .eq('owner_id', user.id)
+      .eq('organization_id', organizationId)
 
     if (clientsError) {
       if (clientsError.message.includes('Could not find the table') || clientsError.message.includes('relation') || clientsError.message.includes('does not exist')) {
@@ -360,7 +366,7 @@ export async function getCompletedReminders() {
       throw new Error(clientsError.message)
     }
 
-    const clientIds = clients ? clients.map((c) => c.id) : []
+    const clientIds = clients ? clients.map((c: { id: string }) => c.id) : []
 
     // Get completed reminders for user's clients AND general reminders (where client_id is null)
     const remindersPromises = []
@@ -421,7 +427,7 @@ export async function getCompletedReminders() {
         .in('id', reminderClientIds)
         .eq('organization_id', organizationId)
 
-      clientsMap = new Map(allClients?.map(c => [c.id, c]) || [])
+      clientsMap = new Map(allClients?.map((c: { id: string; name?: string | null; company?: string | null }) => [c.id, c]) || [])
     }
 
     // Attach client info to reminders

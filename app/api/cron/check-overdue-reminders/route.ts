@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ message: 'No clients found', processed: 0 })
     }
 
-    const clientIds = clients.map((c) => c.id)
+    const clientIds = clients.map((c: { id: string }) => c.id)
 
     // Get overdue reminders for user's clients
     const { data: overdueReminders } = await supabase
@@ -59,7 +59,7 @@ export async function GET(request: NextRequest) {
       .select('id, name')
       .in('id', clientIds)
 
-    const clientsMap = new Map(allClients?.map(c => [c.id, c]) || [])
+    const clientsMap = new Map(allClients?.map((c: { id: string; name?: string | null; company?: string | null }) => [c.id, c]) || [])
 
     for (const reminder of allOverdue) {
       // Check if notification already exists for this overdue reminder (within last 24 hours)
@@ -75,8 +75,9 @@ export async function GET(request: NextRequest) {
 
       if (!existingNotification) {
         // Create notification for overdue reminder
+        const clientData = clientsMap.get(reminder.client_id) as { id: string; name?: string | null } | undefined
         const clientName = reminder.client_id 
-          ? (clientsMap.get(reminder.client_id)?.name || 'Client')
+          ? (clientData?.name || 'Client')
           : 'General'
         
         await createNotification({

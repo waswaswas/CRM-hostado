@@ -271,8 +271,8 @@ export async function getLinkedClientIds(): Promise<string[]> {
     }
 
     return (data || [])
-      .map(customer => customer.linked_client_id)
-      .filter((id): id is string => id !== null)
+      .map((customer: { linked_client_id: string | null }) => customer.linked_client_id)
+      .filter((id: string | null): id is string => id !== null)
   } catch (error) {
     return []
   }

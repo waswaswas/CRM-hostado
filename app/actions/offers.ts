@@ -383,6 +383,11 @@ export async function markOfferAsPaid(offerId: string, paymentData?: {
     throw new Error('Not authenticated')
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    throw new Error('No organization selected')
+  }
+
   const updateData: any = {
     status: 'paid',
     payment_status: 'completed',

@@ -10,8 +10,9 @@ import { notFound } from 'next/navigation'
 export default async function EditTransactionPage({
   params,
 }: {
-  params: { id: string }
+  params: Promise<{ id: string }>
 }) {
+  const { id } = await params
   const supabase = await createClient()
   const {
     data: { user },
@@ -21,7 +22,7 @@ export default async function EditTransactionPage({
     redirect('/login')
   }
 
-  const transaction = await getTransaction(params.id)
+  const transaction = await getTransaction(id)
   if (!transaction) {
     notFound()
   }

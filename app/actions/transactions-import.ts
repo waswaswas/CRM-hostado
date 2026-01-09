@@ -196,7 +196,7 @@ export async function importTransactionsFromExcel(formData: FormData): Promise<{
       .eq('owner_id', user.id)
 
     const accountsMap = new Map<string, string>()
-    existingAccounts?.forEach((acc) => {
+    existingAccounts?.forEach((acc: { id: string; name: string }) => {
       accountsMap.set(acc.name.toLowerCase().trim(), acc.id)
     })
 
@@ -207,7 +207,7 @@ export async function importTransactionsFromExcel(formData: FormData): Promise<{
       .eq('owner_id', user.id)
 
     const clientsMap = new Map<string, string>()
-    existingClients?.forEach((client) => {
+    existingClients?.forEach((client: { id: string; name?: string | null; email?: string | null }) => {
       const key = client.name?.toLowerCase().trim() || ''
       if (key) clientsMap.set(key, client.id)
       if (client.email) {

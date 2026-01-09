@@ -9,8 +9,9 @@ import { redirect, notFound } from 'next/navigation'
 export default async function AccountingCustomerDetailPage({
   params,
 }: {
-  params: { id: string }
+  params: Promise<{ id: string }>
 }) {
+  const { id } = await params
   const supabase = await createClient()
   const {
     data: { user },
@@ -20,13 +21,13 @@ export default async function AccountingCustomerDetailPage({
     redirect('/login')
   }
 
-  const customer = await getAccountingCustomer(params.id)
+  const customer = await getAccountingCustomer(id)
   if (!customer) {
     notFound()
   }
 
   // Get customer's transactions (using accounting_customer_id)
-  const transactions = await getTransactions({ accounting_customer_id: params.id }).catch(() => [])
+  const transactions = await getTransactions({ accounting_customer_id: id }).catch(() => [])
 
   // Get offers if customer is linked to a CRM client
   let offers: any[] = []

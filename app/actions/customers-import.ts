@@ -106,7 +106,7 @@ export async function importCustomersFromExcel(formData: FormData): Promise<{
       .eq('owner_id', user.id)
 
     const customersMap = new Map<string, string>()
-    existingCustomers?.forEach(customer => {
+    existingCustomers?.forEach((customer: { id: string; email?: string | null; phone?: string | null; name?: string | null }) => {
       if (customer.email) customersMap.set(customer.email.toLowerCase(), customer.id)
       if (customer.phone) customersMap.set(customer.phone.replace(/\s/g, ''), customer.id)
       if (customer.name) customersMap.set(customer.name.toLowerCase(), customer.id)

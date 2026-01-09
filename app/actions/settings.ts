@@ -170,17 +170,17 @@ export async function getStatusChangeHistory(clientId?: string, limit: number = 
   }
 
   // Get client names
-  const clientIds = Array.from(new Set(historyData.map(h => h.client_id)))
+  const clientIds = Array.from(new Set(historyData.map((h: { client_id: string }) => h.client_id)))
   const { data: clientsData } = await supabase
     .from('clients')
     .select('id, name')
     .in('id', clientIds)
     .eq('organization_id', organizationId)
 
-  const clientsMap = new Map(clientsData?.map(c => [c.id, c]) || [])
+  const clientsMap = new Map(clientsData?.map((c: { id: string; name?: string | null }) => [c.id, c]) || [])
 
   // Get user emails for changed_by from user_profiles table
-  const userIds = Array.from(new Set(historyData.map(h => h.changed_by).filter(Boolean) as string[]))
+  const userIds = Array.from(new Set(historyData.map((h: { changed_by: string | null }) => h.changed_by).filter(Boolean) as string[]))
   const userEmailsMap = new Map<string, string>()
 
   if (userIds.length > 0) {
@@ -192,7 +192,7 @@ export async function getStatusChangeHistory(clientId?: string, limit: number = 
         .in('id', userIds)
 
       if (!profilesError && profilesData) {
-        profilesData.forEach(profile => {
+        profilesData.forEach((profile: { id: string; email: string }) => {
           userEmailsMap.set(profile.id, profile.email)
         })
       }
@@ -203,7 +203,7 @@ export async function getStatusChangeHistory(clientId?: string, limit: number = 
   }
 
   // Combine the data
-  return historyData.map(entry => ({
+  return historyData.map((entry: { client_id: string; changed_by: string | null; [key: string]: any }) => ({
     ...entry,
     clients: clientsMap.get(entry.client_id) || null,
     changed_by_email: entry.changed_by ? (userEmailsMap.get(entry.changed_by) || null) : null,

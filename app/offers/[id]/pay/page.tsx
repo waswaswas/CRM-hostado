@@ -6,16 +6,18 @@ export default async function PayOfferPage({
   params,
   searchParams,
 }: {
-  params: { id: string }
-  searchParams: { token?: string }
+  params: Promise<{ id: string }>
+  searchParams: Promise<{ token?: string }>
 }) {
-  if (!searchParams.token) {
+  const { id } = await params
+  const { token } = await searchParams
+  if (!token) {
     notFound()
   }
 
   try {
-    const offer = await getOfferByToken(searchParams.token)
-    if (offer.id !== params.id) {
+    const offer = await getOfferByToken(token)
+    if (offer.id !== id) {
       notFound()
     }
     return <PublicPaymentPage offer={offer} />

@@ -41,7 +41,7 @@ export function useFeaturePermissions() {
       setLoading(true)
       try {
         const features: Feature[] = ['clients', 'offers', 'emails', 'accounting', 'reminders', 'settings', 'users']
-        const permMap: Record<Feature, boolean> = {
+        const permMap: Partial<Record<Feature, boolean>> = {
           dashboard: true, // Always accessible
         }
 
@@ -61,7 +61,7 @@ export function useFeaturePermissions() {
           permMap[feature] = hasAccess
         })
 
-        setPermissions(permMap)
+        setPermissions(permMap as Record<Feature, boolean>)
       } catch (error) {
         console.error('Error loading permissions:', error)
       } finally {

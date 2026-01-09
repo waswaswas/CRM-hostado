@@ -9,6 +9,7 @@ import { getSettings } from '@/app/actions/settings'
 import { formatStatus, getStatusColor } from '@/lib/status-utils'
 import Link from 'next/link'
 import { Calendar, Users, AlertCircle, TrendingUp, Clock, Tag, List } from 'lucide-react'
+import type { Client } from '@/types/database'
 import { RemindersCard } from '@/components/dashboard/reminders-card'
 import { format, parseISO } from 'date-fns'
 import { redirect } from 'next/navigation'
@@ -171,7 +172,7 @@ export default async function DashboardPage() {
             <CardContent>
               {recentClients.length > 0 ? (
                 <div className="space-y-2">
-                  {recentClients.map((client) => (
+                  {recentClients.map((client: Client) => (
                     <Link
                       key={client.id}
                       href={`/clients/${client.id}`}

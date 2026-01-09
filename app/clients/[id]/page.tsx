@@ -7,17 +7,18 @@ import { ClientDetail } from '@/components/clients/client-detail'
 export default async function ClientDetailPage({
   params,
 }: {
-  params: { id: string }
+  params: Promise<{ id: string }>
 }) {
+  const { id } = await params
   let client
   try {
-    client = await getClient(params.id)
+    client = await getClient(id)
   } catch (error) {
     notFound()
   }
 
   // Get linked accounting customers
-  const linkedAccountingCustomers = await getAccountingCustomersByClientId(params.id).catch(() => [])
+  const linkedAccountingCustomers = await getAccountingCustomersByClientId(id).catch(() => [])
 
   return (
     <AppLayout>

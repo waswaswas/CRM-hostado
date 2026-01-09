@@ -62,7 +62,7 @@ export async function getCashFlow(
   // Group by date
   const grouped = new Map<string, { incoming: number; outgoing: number }>()
 
-  data?.forEach((transaction) => {
+  data?.forEach((transaction: { date: string; type: string; amount: number }) => {
     const date = transaction.date
     if (!grouped.has(date)) {
       grouped.set(date, { incoming: 0, outgoing: 0 })
@@ -116,7 +116,7 @@ export async function getProfitLoss(
   // Group by month
   const grouped = new Map<string, { income: number; expense: number }>()
 
-  data?.forEach((transaction) => {
+  data?.forEach((transaction: { date: string; type: string; amount: number }) => {
     const date = new Date(transaction.date)
     const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
     if (!grouped.has(monthKey)) {
@@ -153,6 +153,11 @@ export async function getExpensesByCategory(
     throw new Error('Unauthorized')
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    return []
+  }
+
   const { data, error } = await supabase
     .from('transactions')
     .select('category, amount')
@@ -171,7 +176,7 @@ export async function getExpensesByCategory(
   // Group by category
   const grouped = new Map<string, number>()
 
-  data?.forEach((transaction) => {
+  data?.forEach((transaction: { category: string | null; amount: number }) => {
     const category = transaction.category || 'Other'
     grouped.set(category, (grouped.get(category) || 0) + Number(transaction.amount))
   })
@@ -282,7 +287,7 @@ export async function getAccountBalances(): Promise<
   }
 
   return (
-    data?.map((account) => ({
+    data?.map((account: { id: string; name: string; current_balance: number }) => ({
       id: account.id,
       name: account.name,
       balance: Number(account.current_balance),
@@ -333,7 +338,7 @@ export async function getAccountingSummary(
   let totalIncome = 0
   let totalExpense = 0
 
-  data?.forEach((transaction) => {
+  data?.forEach((transaction: { type: string; amount: number }) => {
     if (transaction.type === 'income') {
       totalIncome += Number(transaction.amount)
     } else {

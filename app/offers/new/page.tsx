@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { AppLayoutClient } from '@/components/layout/app-layout-client'
 import { Button } from '@/components/ui/button'
@@ -15,7 +15,7 @@ import { getClients } from '@/app/actions/clients'
 import type { Client } from '@/types/database'
 import { ArrowLeft } from 'lucide-react'
 
-export default function NewOfferPage() {
+function NewOfferContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { toast } = useToast()
@@ -313,6 +313,16 @@ export default function NewOfferPage() {
           </CardContent>
         </Card>
       </div>
+    </AppLayoutClient>
+  )
+}
+
+export default function NewOfferPage() {
+  return (
+    <AppLayoutClient>
+      <Suspense fallback={<div>Loading...</div>}>
+        <NewOfferContent />
+      </Suspense>
     </AppLayoutClient>
   )
 }
