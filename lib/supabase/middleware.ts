@@ -135,8 +135,24 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  // Redirect authenticated users trying to access dashboard without organizations
-  if (user && request.nextUrl.pathname === '/dashboard') {
+  // Protected routes that require organization membership
+  // Allow access to: login, signup, join-organization, API routes, static files
+  const publicRoutes = [
+    '/login',
+    '/signup',
+    '/join-organization',
+  ]
+  
+  const isPublicRoute = publicRoutes.some(route => 
+    request.nextUrl.pathname === route || request.nextUrl.pathname.startsWith(route + '/')
+  )
+  const isApiRoute = request.nextUrl.pathname.startsWith('/api/')
+  const isStaticFile = request.nextUrl.pathname.startsWith('/_next/') || 
+                       request.nextUrl.pathname.startsWith('/favicon') ||
+                       /\.(ico|png|jpg|jpeg|svg|gif|webp)$/.test(request.nextUrl.pathname)
+
+  // If user is authenticated and trying to access a protected route
+  if (user && !isPublicRoute && !isApiRoute && !isStaticFile) {
     try {
       const supabase = createServerClient(
         supabaseUrl!,
@@ -165,8 +181,11 @@ export async function updateSession(request: NextRequest) {
         return NextResponse.redirect(url)
       }
     } catch (error) {
-      // If check fails, allow access (dashboard will handle it)
+      // If check fails, redirect to join-organization to be safe
       console.error('Error checking organizations in middleware:', error)
+      const url = request.nextUrl.clone()
+      url.pathname = '/join-organization'
+      return NextResponse.redirect(url)
     }
   }
 

@@ -11,14 +11,16 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Building2, Plus, Check, ChevronDown } from 'lucide-react'
+import { Building2, Plus, Check, ChevronDown, Users } from 'lucide-react'
 import { useOrganization } from '@/lib/organization-context'
+import { JoinOrganizationDialog } from '@/components/organizations/join-organization-dialog'
 import Link from 'next/link'
 
 export function OrganizationSelector() {
   const { currentOrganization, organizations, setCurrentOrganization, isLoading } = useOrganization()
   const router = useRouter()
   const [pendingInvitations, setPendingInvitations] = useState(0)
+  const [joinOrgOpen, setJoinOrgOpen] = useState(false)
 
   useEffect(() => {
     // Fetch pending invitations count
@@ -100,6 +102,10 @@ export function OrganizationSelector() {
               Create Organization
             </DropdownMenuItem>
           </Link>
+          <DropdownMenuItem onClick={() => setJoinOrgOpen(true)} className="cursor-pointer">
+            <Users className="h-4 w-4 mr-2" />
+            Join Organization
+          </DropdownMenuItem>
           <Link href="/organizations">
             <DropdownMenuItem className="cursor-pointer">
               <Building2 className="h-4 w-4 mr-2" />
@@ -119,6 +125,7 @@ export function OrganizationSelector() {
           <span className="hidden sm:inline">New</span>
         </Button>
       </Link>
+      <JoinOrganizationDialog open={joinOrgOpen} onOpenChange={setJoinOrgOpen} />
     </div>
   )
 }

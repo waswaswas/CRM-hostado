@@ -16,6 +16,26 @@ export async function signIn(email: string, password: string) {
       throw new Error(error.message)
     }
 
+    // Check if user has organizations after successful login
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    if (user) {
+      const { data: members } = await supabase
+        .from('organization_members')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('is_active', true)
+        .limit(1)
+
+      // If user has no organizations, redirect to join/create page
+      if (!members || members.length === 0) {
+        redirect('/join-organization')
+        return
+      }
+    }
+
     redirect('/dashboard')
   } catch (error) {
     if (error instanceof Error && error.message.includes('Supabase is not configured')) {

@@ -214,7 +214,7 @@ export async function deleteOrganization(id: string): Promise<void> {
     throw new Error('Not authenticated')
   }
 
-  // Verify user is owner
+  // Verify user is owner first
   const { data: org } = await supabase
     .from('organizations')
     .select('owner_id')
@@ -225,13 +225,97 @@ export async function deleteOrganization(id: string): Promise<void> {
     throw new Error('Only the owner can delete an organization')
   }
 
+  // Try using the database function first (if it exists)
+  // This function uses SECURITY DEFINER to bypass RLS and safely delete the org
+  try {
+    const { error: funcError, data: funcData } = await supabase.rpc('delete_organization_safe', {
+      org_id: id,
+      requesting_user_id: user.id,
+    })
+
+    if (!funcError) {
+      // Function exists and succeeded
+      // Clear cookie if it was current organization
+      const currentOrgId = await getCurrentOrganizationId()
+      if (currentOrgId === id) {
+        const cookieStore = await cookies()
+        cookieStore.delete(COOKIE_NAME)
+      }
+      revalidatePath('/organizations')
+      return
+    }
+
+    // Check if function doesn't exist (42883 error code)
+    const funcNotFound = 
+      funcError.code === '42883' || 
+      funcError.code === 'P0001' ||
+      funcError.message?.includes('function') || 
+      funcError.message?.includes('does not exist') ||
+      funcError.message?.includes('Could not find the function')
+
+    if (funcNotFound) {
+      // Function doesn't exist, fall through to direct deletion
+      console.log('Database function not found, using direct deletion')
+    } else {
+      // Function exists but returned an error - throw it with full details
+      console.error('Error from delete_organization_safe function:', funcError)
+      throw new Error(funcError.message || `Failed to delete organization: ${funcError.code || 'Unknown error'}`)
+    }
+  } catch (rpcError: any) {
+    // If RPC call itself fails (not just the function), check if function exists
+    if (rpcError?.code === '42883' || rpcError?.message?.includes('does not exist')) {
+      console.log('Database function not found, using direct deletion')
+      // Fall through to direct deletion
+    } else {
+      // Re-throw other errors
+      throw rpcError
+    }
+  }
+
+  // Fallback: Direct deletion (may fail due to RLS, but try anyway)
+  // Delete related records first (before organization deletion)
+  
+  // 1. Delete organization permissions
+  await supabase
+    .from('organization_permissions')
+    .delete()
+    .eq('organization_id', id)
+
+  // 2. Delete organization invitations
+  await supabase
+    .from('organization_invitations')
+    .delete()
+    .eq('organization_id', id)
+
+  // 3. Delete organization members
+  // Note: This might fail if RLS prevents deleting owner members
+  // In that case, the database function above should be used
+  const { error: membersError } = await supabase
+    .from('organization_members')
+    .delete()
+    .eq('organization_id', id)
+
+  if (membersError) {
+    // If deleting members fails (especially due to owner restriction),
+    // we cannot proceed - the function should have handled this
+    throw new Error(
+      `Cannot delete organization: ${membersError.message}. ` +
+      `The database function 'delete_organization_safe' should be used instead. ` +
+      `Please ensure it exists and is properly configured.`
+    )
+  }
+
+  // 4. Finally, delete the organization itself
   const { error } = await supabase
     .from('organizations')
     .delete()
     .eq('id', id)
 
   if (error) {
-    throw new Error(error.message)
+    throw new Error(
+      `Failed to delete organization: ${error.message}. ` +
+      `Please ensure the database function 'delete_organization_safe' exists and is properly configured.`
+    )
   }
 
   // Clear cookie if it was current organization
