@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
+import { getOrganizations, getCurrentOrganizationId, setCurrentOrganizationId } from './organizations'
 
 export async function signIn(email: string, password: string) {
   try {
@@ -33,6 +34,16 @@ export async function signIn(email: string, password: string) {
       if (!members || members.length === 0) {
         redirect('/join-organization')
         return
+      }
+
+      // Ensure a current organization is set before redirecting to dashboard
+      // This is critical to prevent the "hard refresh" issue
+      const currentOrgId = await getCurrentOrganizationId()
+      if (!currentOrgId) {
+        const organizations = await getOrganizations()
+        if (organizations && organizations.length > 0) {
+          await setCurrentOrganizationId(organizations[0].id)
+        }
       }
     }
 

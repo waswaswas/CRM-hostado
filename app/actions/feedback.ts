@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { getCurrentOrganizationId } from './organizations'
 
 export interface Feedback {
   id: string
@@ -26,12 +27,15 @@ export async function createFeedback(data: {
     throw new Error('Not authenticated')
   }
 
+  const organizationId = await getCurrentOrganizationId()
+
   const { data: feedback, error } = await supabase
     .from('feedback')
     .insert({
       owner_id: user.id,
       note: data.note,
       priority: data.priority || null,
+      organization_id: organizationId,
     })
     .select()
     .single()

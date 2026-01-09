@@ -13,6 +13,8 @@ import { RemindersCard } from '@/components/dashboard/reminders-card'
 import { format, parseISO } from 'date-fns'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { getOrganizations, getCurrentOrganizationId, setCurrentOrganizationId } from '@/app/actions/organizations'
+import { revalidatePath } from 'next/cache'
 
 function formatDateTime(dateString: string) {
   try {
@@ -40,6 +42,18 @@ export default async function DashboardPage() {
     // If user has no organizations, redirect to join/create page
     if (!members || members.length === 0) {
       redirect('/join-organization')
+    }
+
+    // Ensure a current organization is set - auto-select first one if none selected
+    // This is critical for server-side rendering to work correctly
+    const currentOrgId = await getCurrentOrganizationId()
+    if (!currentOrgId) {
+      const organizations = await getOrganizations()
+      if (organizations && organizations.length > 0) {
+        await setCurrentOrganizationId(organizations[0].id)
+        // Revalidate the layout to ensure organization context is updated
+        revalidatePath('/', 'layout')
+      }
     }
   }
 

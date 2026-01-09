@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge'
 import { createPaymentRecord } from '@/app/actions/payments'
 import { useToast } from '@/components/ui/toaster'
 import { format } from 'date-fns'
-import { CheckCircle2, XCircle, Loader2 } from 'lucide-react'
+import { CheckCircle2, XCircle, Loader2, ChevronDown } from 'lucide-react'
 interface PublicPaymentPageProps {
   offer: Offer
 }
@@ -237,17 +237,20 @@ export function PublicPaymentPage({ offer }: PublicPaymentPageProps) {
                       <label htmlFor="payment_method" className="text-sm font-medium">
                         Payment Method
                       </label>
-                      <select
-                        id="payment_method"
-                        value={formData.payment_method}
-                        onChange={(e) => setFormData({ ...formData, payment_method: e.target.value as any })}
-                        disabled={loading}
-                        className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                      >
-                        <option value="card">Card</option>
-                        <option value="bank_transfer">Bank Transfer</option>
-                        <option value="paypal">PayPal</option>
-                      </select>
+                      <div className="relative">
+                        <select
+                          id="payment_method"
+                          value={formData.payment_method}
+                          onChange={(e) => setFormData({ ...formData, payment_method: e.target.value as any })}
+                          disabled={loading}
+                          className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 pr-10 text-sm appearance-none"
+                        >
+                          <option value="card">Card</option>
+                          <option value="bank_transfer">Bank Transfer</option>
+                          <option value="paypal">PayPal</option>
+                        </select>
+                        <ChevronDown className="pointer-events-none absolute right-3 top-4 h-4 w-4 opacity-50" />
+                      </div>
                     </div>
                   </div>
                 </div>

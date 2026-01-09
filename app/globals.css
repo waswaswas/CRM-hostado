@@ -77,6 +77,18 @@
   body {
     @apply bg-background text-foreground;
   }
+  
+  /* Hide native select arrows to prevent double arrows */
+  select {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+  }
+  
+  /* Fix for Firefox */
+  select::-moz-focus-inner {
+    border: 0;
+  }
 }
 
 /* Email signature preview styles */

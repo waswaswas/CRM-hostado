@@ -7,7 +7,9 @@ import { LayoutDashboard, Users, Settings, FileText, Mail, Building2, Menu, X, U
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Skeleton } from '@/components/ui/skeleton'
 import { useFeaturePermissions } from '@/lib/hooks/use-feature-permissions'
+import { useOrganization } from '@/lib/organization-context'
 
 const allNavigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, feature: 'dashboard' as const },
@@ -24,7 +26,10 @@ interface SidebarProps {
 export function Sidebar({ userName }: SidebarProps) {
   const pathname = usePathname()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const { permissions } = useFeaturePermissions()
+  const { permissions, loading: permissionsLoading } = useFeaturePermissions()
+  const { isLoading: orgLoading } = useOrganization()
+
+  const isLoading = orgLoading || permissionsLoading
 
   // Filter navigation based on permissions
   const navigation = allNavigation.filter(item => permissions[item.feature])
@@ -62,41 +67,62 @@ export function Sidebar({ userName }: SidebarProps) {
         )}
       >
         <div className="flex flex-col border-b">
-          <div className="flex h-20 items-center justify-center px-6">
+          <div className="flex h-24 items-center justify-center px-4">
             <img 
               src="/hostado-logo.png" 
               alt="Hostado" 
-              className="h-12 w-auto"
+              className="h-16 w-full object-cover"
             />
           </div>
         </div>
         <nav className="flex-1 space-y-1 overflow-y-auto p-4">
-          {navigation.map((item) => {
-            const isActive = pathname === item.href || pathname?.startsWith(item.href + '/')
-            return (
-              <Link
-                key={item.name}
-                href={item.href}
-                onClick={() => setMobileMenuOpen(false)}
-                className={cn(
-                  'flex items-center justify-between gap-3 rounded-lg px-3 py-3 text-sm font-medium transition-colors min-h-[44px]',
-                  isActive
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
-                )}
-              >
-                <div className="flex items-center gap-3">
-                  <item.icon className="h-5 w-5" />
-                  {item.name}
+          {isLoading ? (
+            // Skeleton loading for navigation items
+            <>
+              {[
+                { width: 'w-24' },
+                { width: 'w-20' },
+                { width: 'w-28' },
+                { width: 'w-24' },
+                { width: 'w-32' },
+              ].map((item, i) => (
+                <div
+                  key={i}
+                  className="flex items-center gap-3 rounded-lg px-3 py-3 min-h-[44px]"
+                >
+                  <Skeleton className="h-5 w-5 rounded flex-shrink-0" />
+                  <Skeleton className={cn('h-4', item.width)} />
                 </div>
-                {item.name === 'Accounting' && (
-                  <Badge variant="secondary" className="text-xs">
-                    Beta
-                  </Badge>
-                )}
-              </Link>
-            )
-          })}
+              ))}
+            </>
+          ) : (
+            navigation.map((item) => {
+              const isActive = pathname === item.href || pathname?.startsWith(item.href + '/')
+              return (
+                <Link
+                  key={item.name}
+                  href={item.href}
+                  onClick={() => setMobileMenuOpen(false)}
+                  className={cn(
+                    'flex items-center justify-between gap-3 rounded-lg px-3 py-3 text-sm font-medium transition-colors min-h-[44px]',
+                    isActive
+                      ? 'bg-primary text-primary-foreground'
+                      : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                  )}
+                >
+                  <div className="flex items-center gap-3">
+                    <item.icon className="h-5 w-5" />
+                    {item.name}
+                  </div>
+                  {item.name === 'Accounting' && (
+                    <Badge variant="secondary" className="text-xs">
+                      Beta
+                    </Badge>
+                  )}
+                </Link>
+              )
+            })
+          )}
         </nav>
         {/* User Email - Below feature list */}
         {userName && (
@@ -110,19 +136,26 @@ export function Sidebar({ userName }: SidebarProps) {
           </div>
         )}
         <div className="border-t p-4">
-          <Link
-            href="/settings"
-            onClick={() => setMobileMenuOpen(false)}
-            className={cn(
-              'flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium transition-colors min-h-[44px]',
-              pathname === '/settings' || pathname?.startsWith('/settings')
-                ? 'bg-primary text-primary-foreground'
-                : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
-            )}
-          >
-            <Settings className="h-5 w-5" />
-            Settings
-          </Link>
+          {isLoading ? (
+            <div className="flex items-center gap-3 rounded-lg px-3 py-3 min-h-[44px]">
+              <Skeleton className="h-5 w-5 rounded flex-shrink-0" />
+              <Skeleton className="h-4 w-20" />
+            </div>
+          ) : (
+            <Link
+              href="/settings"
+              onClick={() => setMobileMenuOpen(false)}
+              className={cn(
+                'flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium transition-colors min-h-[44px]',
+                pathname === '/settings' || pathname?.startsWith('/settings')
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+              )}
+            >
+              <Settings className="h-5 w-5" />
+              Settings
+            </Link>
+          )}
         </div>
       </div>
     </>
