@@ -504,9 +504,9 @@ export async function generateInvitationCode(organizationId: string): Promise<{
     code += chars.charAt(Math.floor(Math.random() * chars.length))
   }
 
-  // Set expiration to 60 minutes from now
+  // Set expiration to 45 minutes from now
   const expiresAt = new Date()
-  expiresAt.setMinutes(expiresAt.getMinutes() + 60)
+  expiresAt.setMinutes(expiresAt.getMinutes() + 45)
 
   // Get current organization settings
   const { data: currentOrg } = await supabase
@@ -561,89 +561,78 @@ export async function validateInvitationCode(code: string): Promise<{
   const normalizedCode = code.toUpperCase().trim()
 
   if (!normalizedCode || normalizedCode.length !== 8) {
-    return { valid: false, error: 'Invalid invitation code format' }
+    return { valid: false, error: 'Invalid invitation code format. Code must be 8 characters.' }
   }
 
-  // Try using the database function first (if it exists)
   try {
-    const { data: result, error: funcError } = await supabase.rpc('validate_invitation_code', {
-      code_input: normalizedCode,
-    })
+    // Get all active organizations - RLS policy should allow this for validation
+    const { data: organizations, error } = await supabase
+      .from('organizations')
+      .select('id, name, settings')
+      .eq('is_active', true)
 
-    if (!funcError && result && result.length > 0) {
-      const validation = result[0]
-      if (validation.valid) {
-        return {
-          valid: true,
-          organizationId: validation.organization_id,
-          organizationName: validation.organization_name,
-          expiresAt: validation.expires_at,
-        }
-      } else {
+    if (error) {
+      console.error('Error fetching organizations for code validation:', error)
+      
+      // Check if it's an RLS/permission error
+      const isPermissionError = 
+        error.message.includes('permission') || 
+        error.message.includes('policy') || 
+        error.message.includes('row-level security') ||
+        error.code === '42501' ||
+        error.code === 'PGRST301'
+
+      if (isPermissionError) {
         return {
           valid: false,
-          error: validation.error_message || 'Invalid invitation code',
+          error: 'Unable to validate code due to permissions. Please run the RLS policy fix script in Supabase SQL Editor.',
+        }
+      }
+      
+      return { valid: false, error: 'Failed to validate code. Please try again.' }
+    }
+
+    if (!organizations || organizations.length === 0) {
+      return { valid: false, error: 'No active organizations found' }
+    }
+
+    // Search through all organizations for matching code
+    for (const org of organizations) {
+      const settings = org.settings as any
+
+      if (!settings || !settings.invitation_code) {
+        continue
+      }
+
+      const storedCode = String(settings.invitation_code).toUpperCase().trim()
+
+      // Compare codes (case-insensitive)
+      if (storedCode === normalizedCode) {
+        const expiresAt = settings?.invitation_code_expires_at
+        if (expiresAt) {
+          const expirationDate = new Date(expiresAt)
+          const now = new Date()
+          if (expirationDate < now) {
+            return { valid: false, error: 'Invitation code has expired' }
+          }
+        }
+        return {
+          valid: true,
+          organizationId: org.id,
+          organizationName: org.name,
+          expiresAt,
         }
       }
     }
+
+    return { valid: false, error: 'Invalid invitation code' }
   } catch (error) {
-    // Function might not exist, fall back to direct query
-    console.log('Database function not available, using direct query')
-  }
-
-  // Fallback: Search for organization with this invitation code
-  // Note: This might be limited by RLS, but we need to check all active organizations
-  const { data: organizations, error } = await supabase
-    .from('organizations')
-    .select('id, name, settings')
-    .eq('is_active', true)
-
-  if (error) {
-    console.error('Error fetching organizations for code validation:', error)
-    // If RLS is blocking, suggest running the migration
-    if (error.message.includes('permission') || error.message.includes('policy')) {
-      return {
-        valid: false,
-        error: 'Unable to validate code. Please contact support or ensure the database function is set up.',
-      }
-    }
-    return { valid: false, error: 'Failed to validate code. Please try again.' }
-  }
-
-  if (!organizations || organizations.length === 0) {
-    return { valid: false, error: 'No active organizations found' }
-  }
-
-  // Search through all organizations for matching code
-  for (const org of organizations) {
-    const settings = org.settings as any
-
-    if (!settings || !settings.invitation_code) {
-      continue
-    }
-
-    const storedCode = String(settings.invitation_code).toUpperCase().trim()
-
-    // Compare codes (case-insensitive)
-    if (storedCode === normalizedCode) {
-      const expiresAt = settings?.invitation_code_expires_at
-      if (expiresAt) {
-        const expirationDate = new Date(expiresAt)
-        const now = new Date()
-        if (expirationDate < now) {
-          return { valid: false, error: 'Invitation code has expired' }
-        }
-      }
-      return {
-        valid: true,
-        organizationId: org.id,
-        organizationName: org.name,
-        expiresAt,
-      }
+    console.error('Unexpected error validating invitation code:', error)
+    return { 
+      valid: false, 
+      error: error instanceof Error ? error.message : 'Failed to validate code' 
     }
   }
-
-  return { valid: false, error: 'Invalid invitation code' }
 }
 
 export async function joinOrganizationByCode(code: string): Promise<Organization> {
@@ -659,72 +648,7 @@ export async function joinOrganizationByCode(code: string): Promise<Organization
   // Normalize code
   const normalizedCode = code.toUpperCase().trim()
 
-  // Try using the database function first (if it exists)
-  try {
-    const { data: result, error: funcError } = await supabase.rpc('join_organization_by_code', {
-      code_input: normalizedCode,
-      user_id_input: user.id,
-    })
-
-    // If function doesn't exist (42883 error code), fall back to direct method
-    if (funcError) {
-      // Check if function doesn't exist
-      const funcNotFound = 
-        funcError.code === '42883' || 
-        funcError.code === 'P0001' ||
-        funcError.message?.includes('function') || 
-        funcError.message?.includes('does not exist') ||
-        funcError.message?.includes('Could not find the function')
-      
-      if (funcNotFound) {
-        console.log('Database function not available, using direct insert')
-        // Fall through to fallback method below
-      } else {
-        // Function exists but returned an error - throw it with more context
-        console.error('Error calling join_organization_by_code function:', funcError)
-        throw new Error(
-          funcError.message || 
-          `Failed to join organization: ${funcError.code || 'Unknown error'}`
-        )
-      }
-    } else if (result && result.length > 0) {
-      const joinResult = result[0]
-      if (joinResult.success) {
-        // Get organization
-        const { data: organization } = await supabase
-          .from('organizations')
-          .select('*')
-          .eq('id', joinResult.organization_id)
-          .single()
-
-        if (!organization) {
-          throw new Error('Organization not found')
-        }
-
-        // Set as current organization
-        await setCurrentOrganizationId(joinResult.organization_id)
-
-        revalidatePath('/organizations')
-        revalidatePath('/dashboard')
-
-        return organization
-      } else {
-        throw new Error(joinResult.error_message || 'Failed to join organization')
-      }
-    } else {
-      // No result returned - function might have failed silently
-      console.warn('Function returned no result, falling back to direct insert')
-    }
-  } catch (error) {
-    // If error is already thrown above, re-throw it
-    if (error instanceof Error && !error.message.includes('Database function not available')) {
-      throw error
-    }
-    // Function might not exist, fall back to direct insert
-    console.log('Database function not available, using direct insert')
-  }
-
-  // Fallback: Validate code and insert directly
+  // Validate code first
   const validation = await validateInvitationCode(code)
   if (!validation.valid || !validation.organizationId) {
     throw new Error(validation.error || 'Invalid invitation code')
@@ -757,10 +681,9 @@ export async function joinOrganizationByCode(code: string): Promise<Organization
     .single()
 
   if (memberError) {
-    // If RLS is blocking, the function should have been used instead
     if (memberError.message.includes('row-level security') || memberError.message.includes('policy')) {
       throw new Error(
-        'Unable to join organization due to security restrictions. The database function may not be working correctly. Please check that the function join_organization_by_code exists and has proper permissions.'
+        'Unable to join organization due to security restrictions. Please check RLS policies.'
       )
     }
     throw new Error(memberError.message)

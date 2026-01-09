@@ -3,13 +3,14 @@
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { signOut } from '@/app/actions/auth'
-import { LogOut, MessageSquare, MoreVertical } from 'lucide-react'
+import { LogOut, MessageSquare, MoreVertical, Users } from 'lucide-react'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { TimezoneSelector } from '@/components/timezone-selector'
 import { FeedbackDialog } from '@/components/feedback/feedback-dialog'
 import { NotificationBadge } from '@/components/notifications/notification-badge'
 import { FloatingActionButton } from '@/components/ui/floating-action-button'
 import { OrganizationSelector } from '@/components/organizations/organization-selector'
+import { JoinOrganizationDialog } from '@/components/organizations/join-organization-dialog'
 import { usePathname } from 'next/navigation'
 import {
   DropdownMenu,
@@ -21,6 +22,7 @@ import {
 
 export function Topbar({ userName }: { userName?: string }) {
   const [feedbackOpen, setFeedbackOpen] = useState(false)
+  const [joinOrgOpen, setJoinOrgOpen] = useState(false)
   const pathname = usePathname()
 
   return (
@@ -39,6 +41,16 @@ export function Topbar({ userName }: { userName?: string }) {
           </div>
           {/* Desktop: Show all buttons */}
           <div className="hidden md:flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setJoinOrgOpen(true)}
+              className="h-9 px-2 gap-1.5"
+              title="Join Organization"
+            >
+              <Users className="h-4 w-4" />
+              <span className="text-xs">Join Organization</span>
+            </Button>
             <Button
               variant="ghost"
               size="sm"
@@ -66,6 +78,10 @@ export function Topbar({ userName }: { userName?: string }) {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuItem onClick={() => setJoinOrgOpen(true)} className="min-h-[44px]">
+                <Users className="mr-2 h-4 w-4" />
+                Join Organization
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={() => setFeedbackOpen(true)} className="min-h-[44px]">
                 <MessageSquare className="mr-2 h-4 w-4" />
                 Feedback
@@ -89,6 +105,7 @@ export function Topbar({ userName }: { userName?: string }) {
         </div>
       </div>
       <FeedbackDialog open={feedbackOpen} onOpenChange={setFeedbackOpen} />
+      <JoinOrganizationDialog open={joinOrgOpen} onOpenChange={setJoinOrgOpen} />
     </>
   )
 }

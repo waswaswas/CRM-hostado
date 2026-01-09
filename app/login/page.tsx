@@ -8,6 +8,8 @@ import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { signIn } from '@/app/actions/auth'
 import { useToast } from '@/components/ui/toaster'
+import { JoinOrganizationDialog } from '@/components/organizations/join-organization-dialog'
+import { Users } from 'lucide-react'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -15,6 +17,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
+  const [joinOrgOpen, setJoinOrgOpen] = useState(false)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -82,9 +85,21 @@ export default function LoginPage() {
                 Sign up
               </Link>
             </div>
+            <div className="text-center">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setJoinOrgOpen(true)}
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <Users className="h-4 w-4 mr-2" />
+                Join Organization
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
+      <JoinOrganizationDialog open={joinOrgOpen} onOpenChange={setJoinOrgOpen} />
     </div>
   )
 }
