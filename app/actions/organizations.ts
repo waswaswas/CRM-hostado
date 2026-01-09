@@ -8,6 +8,25 @@ import type { Organization, OrganizationMember } from '@/types/database'
 const COOKIE_NAME = 'current_organization_id'
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 365 // 1 year
 
+// Map UI feature names to database feature names
+// The database expects 'email' (singular) but the UI uses 'emails' (plural)
+const FEATURE_NAME_MAP: Record<string, string> = {
+  'emails': 'email', // Map 'emails' (plural) to 'email' (singular) for database
+}
+
+// Valid feature names as defined in the database constraint
+const VALID_FEATURES = ['dashboard', 'clients', 'offers', 'email', 'accounting', 'reminders', 'settings', 'users']
+
+function normalizeFeatureName(feature: string): string {
+  // Map UI feature names to database feature names
+  return FEATURE_NAME_MAP[feature] || feature
+}
+
+function isValidFeature(feature: string): boolean {
+  const normalized = normalizeFeatureName(feature)
+  return VALID_FEATURES.includes(normalized)
+}
+
 export async function getCurrentOrganizationId(): Promise<string | null> {
   const cookieStore = await cookies()
   const orgId = cookieStore.get(COOKIE_NAME)?.value
@@ -953,14 +972,18 @@ export async function hasFeaturePermission(
     return true
   }
 
+  // Normalize feature name for database lookup
+  // UI uses 'emails' (plural), database expects 'email' (singular)
+  const dbFeatureName = normalizeFeatureName(feature)
+  
   // Check specific permission
   const { data: permission } = await supabase
     .from('organization_permissions')
     .select('has_access')
     .eq('organization_id', organizationId)
     .eq('user_id', user.id)
-    .eq('feature', feature)
-    .single()
+    .eq('feature', dbFeatureName)
+    .maybeSingle()
 
   return permission?.has_access || false
 }
@@ -1028,7 +1051,7 @@ export async function getMemberPermissions(
     dashboard: true, // Always accessible
     clients: false,
     offers: false,
-    emails: false,
+    emails: false, // UI uses 'emails' (plural)
     accounting: false,
     reminders: false,
     settings: false,
@@ -1036,7 +1059,10 @@ export async function getMemberPermissions(
   }
 
   permissions?.forEach((perm: any) => {
-    permMap[perm.feature] = perm.has_access || false
+    // Map database feature names back to UI feature names
+    // Database uses 'email' (singular), UI uses 'emails' (plural)
+    const uiFeatureName = perm.feature === 'email' ? 'emails' : perm.feature
+    permMap[uiFeatureName] = perm.has_access || false
   })
 
   return permMap
@@ -1081,44 +1107,65 @@ export async function updateMemberPermissions(
     throw new Error('Cannot modify owner permissions')
   }
 
-  // Update permissions for each feature
-  for (const [feature, hasAccess] of Object.entries(permissions)) {
-    // Check if permission exists
-    const { data: existing } = await supabase
-      .from('organization_permissions')
-      .select('id')
-      .eq('organization_id', organizationId)
-      .eq('user_id', userId)
-      .eq('feature', feature)
-      .single()
-
-    if (existing) {
-      // Update existing
-      const { error } = await supabase
-        .from('organization_permissions')
-        .update({ has_access: hasAccess })
-        .eq('id', existing.id)
-
-      if (error) {
-        console.error(`Error updating permission for ${feature}:`, error)
-        throw new Error(`Failed to update permission for ${feature}`)
+  // Update permissions using individual upserts for better reliability
+  // Process each permission separately to ensure atomic updates and better error handling
+  const permissionEntries = Object.entries(permissions)
+    .filter(([feature]) => {
+      // Skip dashboard (always true) and invalid features
+      if (feature === 'dashboard') return false
+      const normalized = normalizeFeatureName(feature)
+      if (!isValidFeature(normalized)) {
+        console.warn(`Invalid feature name: ${feature} (normalized: ${normalized})`)
+        return false
       }
-    } else {
-      // Insert new
-      const { error } = await supabase
-        .from('organization_permissions')
-        .insert({
-          organization_id: organizationId,
-          user_id: userId,
-          feature: feature as any,
-          has_access: hasAccess,
-        })
+      return true
+    })
 
-      if (error) {
-        console.error(`Error creating permission for ${feature}:`, error)
-        throw new Error(`Failed to create permission for ${feature}`)
+  if (permissionEntries.length === 0) {
+    // No permissions to update (only dashboard which is always true, or all invalid)
+    revalidatePath(`/organizations/${organizationId}`)
+    return
+  }
+
+  const errors: string[] = []
+  
+  // Process each permission with individual upsert operations
+  // This ensures each permission is updated atomically and errors are captured per feature
+  for (const [feature, hasAccess] of permissionEntries) {
+    try {
+      // Normalize feature name (e.g., 'emails' -> 'email')
+      const normalizedFeature = normalizeFeatureName(feature)
+      
+      // Use upsert (INSERT ... ON CONFLICT DO UPDATE) for each permission
+      const { error: upsertError } = await supabase
+        .from('organization_permissions')
+        .upsert(
+          {
+            organization_id: organizationId,
+            user_id: userId,
+            feature: normalizedFeature as any,
+            has_access: hasAccess,
+            updated_at: new Date().toISOString(),
+          },
+          {
+            onConflict: 'organization_id,user_id,feature',
+          }
+        )
+
+      if (upsertError) {
+        console.error(`Error updating permission for ${feature} (normalized: ${normalizedFeature}):`, upsertError)
+        errors.push(`${feature}: ${upsertError.message}`)
       }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      console.error(`Unexpected error updating permission for ${feature}:`, error)
+      errors.push(`${feature}: ${errorMessage}`)
     }
+  }
+
+  // If any errors occurred, throw a combined error message
+  if (errors.length > 0) {
+    throw new Error(`Failed to update some permissions: ${errors.join('; ')}`)
   }
 
   revalidatePath(`/organizations/${organizationId}`)

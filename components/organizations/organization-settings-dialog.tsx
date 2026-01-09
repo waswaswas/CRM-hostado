@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label'
 import { Users, Crown, Shield, UserCog, Eye, Mail, Settings as SettingsIcon, Copy, Check } from 'lucide-react'
 import type { Organization, OrganizationMember } from '@/types/database'
 import { getOrganizationMembers, getUserRole, updateOrganizationEmailSettings, generateInvitationCode, updateMemberPermissions, getMemberPermissions } from '@/app/actions/organizations'
+import { useToast } from '@/components/ui/toaster'
 
 interface OrganizationSettingsDialogProps {
   organization: Organization
@@ -36,6 +37,7 @@ export function OrganizationSettingsDialog({
   open,
   onOpenChange,
 }: OrganizationSettingsDialogProps) {
+  const { toast } = useToast()
   const [members, setMembers] = useState<OrganizationMember[]>([])
   const [userRole, setUserRole] = useState<'owner' | 'admin' | 'moderator' | 'viewer' | null>(null)
   const [loading, setLoading] = useState(true)
@@ -98,22 +100,53 @@ export function OrganizationSettingsDialog({
   }
 
   async function handleTogglePermission(memberId: string, userId: string, feature: string, currentValue: boolean) {
-    if (!organization.id) return
+    if (!organization.id || savingPermissions === memberId) return // Prevent concurrent updates
+    
+    // Store the previous value for rollback on error
+    const previousPerms = { ...(memberPermissions[memberId] || {}) }
+    const newValue = !currentValue
+    
+    // Optimistically update UI
+    const updatedPerms = {
+      ...previousPerms,
+      [feature]: newValue,
+    }
+    setMemberPermissions(prev => ({
+      ...prev,
+      [memberId]: updatedPerms,
+    }))
+    
     setSavingPermissions(memberId)
     try {
-      const currentPerms = memberPermissions[memberId] || {}
-      const updatedPerms = {
-        ...currentPerms,
-        [feature]: !currentValue,
-      }
       await updateMemberPermissions(organization.id, userId, updatedPerms)
-      setMemberPermissions(prev => ({
-        ...prev,
-        [memberId]: updatedPerms,
-      }))
+      
+      // Refresh permissions from server to ensure consistency
+      await loadMemberPermissions(memberId, userId)
+      
+      // Show success feedback (subtle, not intrusive)
+      toast({
+        title: 'Permissions updated',
+        description: `${feature} permission ${newValue ? 'enabled' : 'disabled'}`,
+      })
     } catch (error) {
       console.error('Error updating permissions:', error)
-      alert('Failed to update permissions. Please try again.')
+      
+      // Rollback to previous state on error
+      setMemberPermissions(prev => ({
+        ...prev,
+        [memberId]: previousPerms,
+      }))
+      
+      // Show user-friendly error message using toast
+      const errorMessage = error instanceof Error 
+        ? error.message 
+        : 'Failed to update permissions. Please try again.'
+      
+      toast({
+        title: 'Error',
+        description: errorMessage,
+        variant: 'destructive',
+      })
     } finally {
       setSavingPermissions(null)
     }
