@@ -47,23 +47,29 @@ export async function createOrganization(data: {
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-+|-+$/g, '')
-    
-    // Check if slug exists and append number if needed
-    let finalSlug = slug
-    let counter = 0
-    while (true) {
-      const { data: existing } = await supabase
-        .from('organizations')
-        .select('id')
-        .eq('slug', finalSlug)
-        .single()
-      
-      if (!existing) break
-      counter++
-      finalSlug = `${slug}-${counter}`
-    }
-    slug = finalSlug
+  } else {
+    // Normalize provided slug
+    slug = slug
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
   }
+
+  // Check if slug exists and append number if needed (for both auto-generated and provided slugs)
+  let finalSlug = slug
+  let counter = 0
+  while (true) {
+    const { data: existing } = await supabase
+      .from('organizations')
+      .select('id')
+      .eq('slug', finalSlug)
+      .maybeSingle() // Use maybeSingle() instead of single() to avoid error if not found
+    
+    if (!existing) break
+    counter++
+    finalSlug = `${slug}-${counter}`
+  }
+  slug = finalSlug
 
   const { data: organization, error } = await supabase
     .from('organizations')
