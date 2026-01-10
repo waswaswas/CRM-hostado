@@ -20,7 +20,7 @@
     "clsx": "^2.1.0",
     "date-fns": "^2.30.0",
     "imap": "^0.8.19",
-    "lucide-react": "^0.309.0",
+    "lucide-react": "^0.562.0",
     "mailparser": "^3.9.1",
     "next": "15.4.4",
     "nodemailer": "^7.0.11",
