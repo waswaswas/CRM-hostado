@@ -48,6 +48,9 @@ import {
 import { AccountingCustomerWithRelations } from '@/types/database'
 import { LinkAccountingCustomerDialog } from './link-accounting-customer-dialog'
 
+const SOURCE_OPTIONS = ['Phone Inbound', 'Phone Outbound', 'Chat', 'Email']
+const CUSTOM_SOURCE_VALUE = '__custom__'
+
 interface ClientDetailProps {
   client: Client
   linkedAccountingCustomers?: AccountingCustomerWithRelations[]
@@ -66,6 +69,7 @@ export function ClientDetail({ client: initialClient, linkedAccountingCustomers 
   const [showNoteDialog, setShowNoteDialog] = useState(false)
   const [editingStatus, setEditingStatus] = useState(false)
   const [editingField, setEditingField] = useState<string | null>(null)
+  const [sourceEditMode, setSourceEditMode] = useState<'preset' | 'custom'>('preset')
   const [editValues, setEditValues] = useState({
     name: '',
     email: '',
@@ -176,6 +180,10 @@ export function ClientDetail({ client: initialClient, linkedAccountingCustomers 
       source: client.source || '',
       notes_summary: client.notes_summary || '',
     })
+    if (field === 'source') {
+      const initialSource = client.source || ''
+      setSourceEditMode(SOURCE_OPTIONS.includes(initialSource) ? 'preset' : 'custom')
+    }
   }
 
   async function saveField(field: string) {
@@ -360,15 +368,41 @@ export function ClientDetail({ client: initialClient, linkedAccountingCustomers 
               <div>
                 <p className="text-sm font-medium text-muted-foreground mb-1">Source</p>
                 {editingField === 'source' ? (
-                  <div className="flex items-center gap-2">
-                    <Input
-                      value={editValues.source}
-                      onChange={(e) => setEditValues({ ...editValues, source: e.target.value })}
-                      placeholder="Source"
-                      autoFocus
-                    />
-                    <Button size="sm" onClick={() => saveField('source')}>Save</Button>
-                    <Button size="sm" variant="ghost" onClick={cancelEditing}>Cancel</Button>
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center gap-2">
+                      <Select
+                        value={sourceEditMode === 'custom' ? CUSTOM_SOURCE_VALUE : editValues.source}
+                        onChange={(e) => {
+                          const value = e.target.value
+                          if (value === CUSTOM_SOURCE_VALUE) {
+                            setSourceEditMode('custom')
+                            setEditValues({ ...editValues, source: '' })
+                          } else {
+                            setSourceEditMode('preset')
+                            setEditValues({ ...editValues, source: value })
+                          }
+                        }}
+                        autoFocus
+                        className="min-w-[200px]"
+                      >
+                        <option value="">Select source</option>
+                        {SOURCE_OPTIONS.map((option) => (
+                          <option key={option} value={option}>
+                            {option}
+                          </option>
+                        ))}
+                        <option value={CUSTOM_SOURCE_VALUE}>Custom...</option>
+                      </Select>
+                      <Button size="sm" onClick={() => saveField('source')}>Save</Button>
+                      <Button size="sm" variant="ghost" onClick={cancelEditing}>Cancel</Button>
+                    </div>
+                    {sourceEditMode === 'custom' && (
+                      <Input
+                        value={editValues.source}
+                        onChange={(e) => setEditValues({ ...editValues, source: e.target.value })}
+                        placeholder="Custom source"
+                      />
+                    )}
                   </div>
                 ) : (
                   <p 

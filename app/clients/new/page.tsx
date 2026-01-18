@@ -17,12 +17,15 @@ import type { StatusConfig } from '@/types/settings'
 import { ArrowLeft, User, Building2 } from 'lucide-react'
 
 type ClientType = 'presales' | 'customer' | null
+const SOURCE_OPTIONS = ['Phone Inbound', 'Phone Outbound', 'Chat', 'Email']
+const CUSTOM_SOURCE_VALUE = '__custom__'
 
 export default function NewClientPage() {
   const router = useRouter()
   const { toast } = useToast()
   const [clientType, setClientType] = useState<ClientType>(null)
   const [loading, setLoading] = useState(false)
+  const [sourceMode, setSourceMode] = useState<'preset' | 'custom'>('preset')
   const [customStatuses, setCustomStatuses] = useState<StatusConfig[]>([])
   const [formData, setFormData] = useState({
     name: '',
@@ -317,13 +320,38 @@ export default function NewClientPage() {
                   <label htmlFor="source" className="text-sm font-medium">
                     Source
                   </label>
-                  <Input
+                  <Select
                     id="source"
-                    placeholder="e.g., website, referral, cold_call"
-                    value={formData.source}
-                    onChange={(e) => setFormData({ ...formData, source: e.target.value })}
+                    value={sourceMode === 'custom' ? CUSTOM_SOURCE_VALUE : formData.source}
+                    onChange={(e) => {
+                      const value = e.target.value
+                      if (value === CUSTOM_SOURCE_VALUE) {
+                        setSourceMode('custom')
+                        setFormData({ ...formData, source: '' })
+                      } else {
+                        setSourceMode('preset')
+                        setFormData({ ...formData, source: value })
+                      }
+                    }}
                     disabled={loading}
-                  />
+                  >
+                    <option value="">Select source</option>
+                    {SOURCE_OPTIONS.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                    <option value={CUSTOM_SOURCE_VALUE}>Custom...</option>
+                  </Select>
+                  {sourceMode === 'custom' && (
+                    <Input
+                      id="source-custom"
+                      placeholder="Custom source"
+                      value={formData.source}
+                      onChange={(e) => setFormData({ ...formData, source: e.target.value })}
+                      disabled={loading}
+                    />
+                  )}
                 </div>
               </div>
 
