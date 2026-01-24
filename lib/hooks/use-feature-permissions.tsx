@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useOrganization } from '@/lib/organization-context'
 import { hasFeaturePermission } from '@/app/actions/organizations'
 
-export type Feature = 'dashboard' | 'clients' | 'offers' | 'emails' | 'accounting' | 'reminders' | 'settings' | 'users'
+export type Feature = 'dashboard' | 'clients' | 'offers' | 'emails' | 'accounting' | 'reminders' | 'settings' | 'users' | 'todo'
 
 export function useFeaturePermissions() {
   const { currentOrganization } = useOrganization()
@@ -17,6 +17,7 @@ export function useFeaturePermissions() {
     reminders: false,
     settings: false,
     users: false,
+    todo: false,
   })
   const [loading, setLoading] = useState(true)
 
@@ -33,6 +34,7 @@ export function useFeaturePermissions() {
           reminders: false,
           settings: false,
           users: false,
+          todo: false,
         })
         setLoading(false)
         return
@@ -40,7 +42,7 @@ export function useFeaturePermissions() {
 
       setLoading(true)
       try {
-        const features: Feature[] = ['clients', 'offers', 'emails', 'accounting', 'reminders', 'settings', 'users']
+        const features: Feature[] = ['dashboard', 'clients', 'offers', 'emails', 'accounting', 'reminders', 'settings', 'users', 'todo']
         const permMap: Partial<Record<Feature, boolean>> = {
           dashboard: true, // Always accessible
         }

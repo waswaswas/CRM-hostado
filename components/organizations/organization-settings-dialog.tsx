@@ -87,7 +87,7 @@ export function OrganizationSettingsDialog({
   }
 
   async function loadMemberPermissions(memberId: string, userId: string) {
-    if (!organization.id || !canManage) return
+    if (!organization.id || !canManagePermissions) return
     try {
       const perms = await getMemberPermissions(organization.id, userId)
       setMemberPermissions(prev => ({
@@ -100,7 +100,7 @@ export function OrganizationSettingsDialog({
   }
 
   async function handleTogglePermission(memberId: string, userId: string, feature: string, currentValue: boolean) {
-    if (!organization.id || savingPermissions === memberId) return // Prevent concurrent updates
+    if (!organization.id || !canManagePermissions || savingPermissions === memberId) return // Prevent concurrent updates
     
     // Store the previous value for rollback on error
     const previousPerms = { ...(memberPermissions[memberId] || {}) }
@@ -198,6 +198,7 @@ export function OrganizationSettingsDialog({
   }
 
   const canManage = userRole === 'owner' || userRole === 'admin'
+  const canManagePermissions = userRole === 'owner'
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -312,7 +313,7 @@ export function OrganizationSettingsDialog({
                                 </div>
                               </div>
                             </div>
-                            {canManage && !isOwnerOrAdmin && (
+                            {canManagePermissions && !isOwnerOrAdmin && (
                               <Button
                                 variant="outline"
                                 size="sm"
@@ -337,12 +338,14 @@ export function OrganizationSettingsDialog({
                               <p className="text-sm font-medium mb-3">Feature Permissions</p>
                               <div className="grid grid-cols-2 gap-3">
                                 {[
+                                  { key: 'dashboard', label: 'Dashboard' },
                                   { key: 'clients', label: 'Clients' },
                                   { key: 'offers', label: 'Offers' },
                                   { key: 'emails', label: 'Emails' },
                                   { key: 'accounting', label: 'Accounting' },
                                   { key: 'reminders', label: 'Reminders' },
                                   { key: 'settings', label: 'Settings' },
+                                  { key: 'todo', label: 'To-Do List' },
                                 ].map(({ key, label }) => (
                                   <label
                                     key={key}

@@ -33,7 +33,7 @@ export function TransactionForm({
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [uploading, setUploading] = useState(false)
-  const [transactionType, setTransactionType] = useState<'income' | 'expense'>(
+  const [transactionType, setTransactionType] = useState<'income' | 'expense' | 'transfer'>(
     transaction?.type || initialType || 'expense'
   )
 
@@ -46,6 +46,7 @@ export function TransactionForm({
     description: transaction?.description || '',
     accounting_customer_id: transaction?.accounting_customer_id || initialCustomerId || '',
     attachment_url: transaction?.attachment_url || '',
+    transfer_to_account_id: transaction?.transfer_to_account_id || '',
   })
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
@@ -152,6 +153,16 @@ export function TransactionForm({
           description: formData.description || undefined,
           accounting_customer_id: formData.accounting_customer_id || undefined,
         }
+
+        if (transactionType === 'transfer') {
+          if (!formData.transfer_to_account_id) {
+            throw new Error('Please select the destination account for the transfer.')
+          }
+          if (formData.transfer_to_account_id === formData.account_id) {
+            throw new Error('Transfer accounts must be different.')
+          }
+          transactionData.transfer_to_account_id = formData.transfer_to_account_id
+        }
         
         // Only include attachment_url if it's not empty
         if (formData.attachment_url && formData.attachment_url.trim() !== '') {
@@ -203,13 +214,23 @@ export function TransactionForm({
             >
               Expense
             </Button>
+            <Button
+              type="button"
+              variant={transactionType === 'transfer' ? 'default' : 'outline'}
+              onClick={() => {
+                setTransactionType('transfer')
+                setFormData({ ...formData, type: 'transfer' })
+              }}
+            >
+              Transfer
+            </Button>
           </div>
         )}
 
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="text-sm font-medium">
-              Account <span className="text-red-500">*</span>
+              {transactionType === 'transfer' ? 'From Account' : 'Account'} <span className="text-red-500">*</span>
             </label>
             <Select
               value={formData.account_id}
@@ -224,6 +245,47 @@ export function TransactionForm({
               ))}
             </Select>
           </div>
+          {transactionType === 'transfer' ? (
+            <div>
+              <label className="text-sm font-medium">
+                To Account <span className="text-red-500">*</span>
+              </label>
+              <Select
+                value={formData.transfer_to_account_id}
+                onChange={(e) =>
+                  setFormData({ ...formData, transfer_to_account_id: e.target.value })
+                }
+                required
+              >
+                <option value="">Select Account</option>
+                {accounts
+                  .filter((account) => account.id !== formData.account_id)
+                  .map((account) => (
+                    <option key={account.id} value={account.id}>
+                      {account.name}
+                    </option>
+                  ))}
+              </Select>
+            </div>
+          ) : (
+            <div>
+              <label className="text-sm font-medium">
+                Amount <span className="text-red-500">*</span>
+              </label>
+              <Input
+                type="number"
+                step="0.01"
+                min="0.01"
+                value={formData.amount}
+                onChange={(e) => setFormData({ ...formData, amount: parseFloat(e.target.value) || 0 })}
+                required
+                placeholder="0.00"
+              />
+            </div>
+          )}
+        </div>
+
+        {transactionType === 'transfer' && (
           <div>
             <label className="text-sm font-medium">
               Amount <span className="text-red-500">*</span>
@@ -238,7 +300,7 @@ export function TransactionForm({
               placeholder="0.00"
             />
           </div>
-        </div>
+        )}
 
         <div className="grid grid-cols-2 gap-4">
           <div>
@@ -265,29 +327,31 @@ export function TransactionForm({
           </div>
         </div>
 
-        <div>
-          <label className="text-sm font-medium">Customer</label>
-          <div className="flex gap-2">
-            <Select
-              value={formData.accounting_customer_id}
-              onChange={(e) => setFormData({ ...formData, accounting_customer_id: e.target.value })}
-              className="flex-1"
-            >
-              <option value="">Select Customer</option>
-              {accountingCustomers.map((customer) => (
-                <option key={customer.id} value={customer.id}>
-                  {customer.name} {customer.company ? `(${customer.company})` : ''}
-                </option>
-              ))}
-            </Select>
-            <Link href="/accounting/customers/new">
-              <Button type="button" variant="outline" className="flex items-center gap-2">
-                <UserPlus className="h-4 w-4" />
-                Add Customer
-              </Button>
-            </Link>
+        {transactionType !== 'transfer' && (
+          <div>
+            <label className="text-sm font-medium">Customer</label>
+            <div className="flex gap-2">
+              <Select
+                value={formData.accounting_customer_id}
+                onChange={(e) => setFormData({ ...formData, accounting_customer_id: e.target.value })}
+                className="flex-1"
+              >
+                <option value="">Select Customer</option>
+                {accountingCustomers.map((customer) => (
+                  <option key={customer.id} value={customer.id}>
+                    {customer.name} {customer.company ? `(${customer.company})` : ''}
+                  </option>
+                ))}
+              </Select>
+              <Link href="/accounting/customers/new">
+                <Button type="button" variant="outline" className="flex items-center gap-2">
+                  <UserPlus className="h-4 w-4" />
+                  Add Customer
+                </Button>
+              </Link>
+            </div>
           </div>
-        </div>
+        )}
 
         <div>
           <label className="text-sm font-medium">Notes</label>

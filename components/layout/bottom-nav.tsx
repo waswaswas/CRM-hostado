@@ -2,25 +2,29 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, Users, FileText, Mail, Building2 } from 'lucide-react'
+import { LayoutDashboard, Users, FileText, Mail, Building2, ListTodo } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
+import { useFeaturePermissions } from '@/lib/hooks/use-feature-permissions'
 
 const navigation = [
-  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-  { name: 'Clients', href: '/clients', icon: Users },
-  { name: 'Offers', href: '/offers', icon: FileText },
-  { name: 'Emails', href: '/emails', icon: Mail },
-  { name: 'Accounting', href: '/accounting', icon: Building2, badge: 'Beta' },
+  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, feature: 'dashboard' as const },
+  { name: 'Clients', href: '/clients', icon: Users, feature: 'clients' as const },
+  { name: 'Offers', href: '/offers', icon: FileText, feature: 'offers' as const },
+  { name: 'Emails', href: '/emails', icon: Mail, feature: 'emails' as const },
+  { name: 'Accounting', href: '/accounting', icon: Building2, badge: 'Beta', feature: 'accounting' as const },
+  { name: 'To-Do List', href: '/todo', icon: ListTodo, feature: 'todo' as const },
 ]
 
 export function BottomNav() {
   const pathname = usePathname()
+  const { permissions } = useFeaturePermissions()
+  const filtered = navigation.filter((item) => permissions[item.feature])
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 border-t bg-background md:hidden">
       <div className="flex h-16 items-center justify-around">
-        {navigation.map((item) => {
+        {filtered.map((item) => {
           const isActive = pathname === item.href || pathname?.startsWith(item.href + '/')
           return (
             <Link

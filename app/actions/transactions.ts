@@ -322,6 +322,27 @@ export async function createTransaction(data: {
     throw new Error('Account not found or you do not have permission to use this account')
   }
 
+  if (data.type === 'transfer') {
+    if (!data.transfer_to_account_id) {
+      throw new Error('Transfer destination account is required')
+    }
+    if (data.transfer_to_account_id === data.account_id) {
+      throw new Error('Transfer accounts must be different')
+    }
+
+    const { data: transferAccount, error: transferAccountError } = await supabase
+      .from('accounts')
+      .select('id, owner_id')
+      .eq('id', data.transfer_to_account_id)
+      .eq('owner_id', user.id)
+      .eq('organization_id', organizationId)
+      .single()
+
+    if (transferAccountError || !transferAccount) {
+      throw new Error('Transfer destination account not found or you do not have permission to use this account')
+    }
+  }
+
   const transactionNumber = data.number || await generateTransactionNumber()
 
   // For transfer transactions, we need to create two linked transactions
@@ -395,6 +416,50 @@ export async function createTransaction(data: {
       .update({ transfer_transaction_id: toTransaction.id })
       .eq('id', fromTransaction.id)
       .eq('organization_id', organizationId)
+
+    const amountValue = Number(data.amount)
+    const { data: balanceRows, error: balanceError } = await supabase
+      .from('accounts')
+      .select('id, current_balance')
+      .in('id', [data.account_id, data.transfer_to_account_id])
+      .eq('owner_id', user.id)
+      .eq('organization_id', organizationId)
+
+    if (balanceError || !balanceRows || balanceRows.length < 2) {
+      throw new Error('Failed to load account balances for transfer')
+    }
+
+    const fromAccount = balanceRows.find((row) => row.id === data.account_id)
+    const toAccount = balanceRows.find((row) => row.id === data.transfer_to_account_id)
+
+    if (!fromAccount || !toAccount) {
+      throw new Error('Failed to resolve accounts for transfer balance update')
+    }
+
+    const fromBalance = Number(fromAccount.current_balance) - amountValue
+    const toBalance = Number(toAccount.current_balance) + amountValue
+
+    const { error: fromUpdateError } = await supabase
+      .from('accounts')
+      .update({ current_balance: fromBalance })
+      .eq('id', data.account_id)
+      .eq('owner_id', user.id)
+      .eq('organization_id', organizationId)
+
+    if (fromUpdateError) {
+      throw new Error('Failed to update sender account balance')
+    }
+
+    const { error: toUpdateError } = await supabase
+      .from('accounts')
+      .update({ current_balance: toBalance })
+      .eq('id', data.transfer_to_account_id)
+      .eq('owner_id', user.id)
+      .eq('organization_id', organizationId)
+
+    if (toUpdateError) {
+      throw new Error('Failed to update recipient account balance')
+    }
 
     revalidatePath('/accounting/transactions')
     return fromTransaction

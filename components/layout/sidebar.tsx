@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, Users, Settings, FileText, Mail, Building2, Menu, X, User } from 'lucide-react'
+import { LayoutDashboard, Users, Settings, FileText, Mail, Building2, Menu, X, User, ListTodo } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -17,6 +17,7 @@ const allNavigation = [
   { name: 'Offers', href: '/offers', icon: FileText, feature: 'offers' as const },
   { name: 'Emails', href: '/emails', icon: Mail, feature: 'emails' as const },
   { name: 'Accounting', href: '/accounting', icon: Building2, feature: 'accounting' as const },
+  { name: 'To-Do List', href: '/todo', icon: ListTodo, feature: 'todo' as const },
 ]
 
 interface SidebarProps {

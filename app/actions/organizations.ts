@@ -15,7 +15,7 @@ const FEATURE_NAME_MAP: Record<string, string> = {
 }
 
 // Valid feature names as defined in the database constraint
-const VALID_FEATURES = ['dashboard', 'clients', 'offers', 'email', 'accounting', 'reminders', 'settings', 'users']
+const VALID_FEATURES = ['dashboard', 'clients', 'offers', 'email', 'accounting', 'reminders', 'settings', 'users', 'todo']
 
 function normalizeFeatureName(feature: string): string {
   // Map UI feature names to database feature names
@@ -424,7 +424,7 @@ export async function updateMemberRole(
     throw new Error('Not authenticated')
   }
 
-  // Check requester is owner/admin
+  // Check requester is owner
   const { data: requesterMember } = await supabase
     .from('organization_members')
     .select('role')
@@ -433,7 +433,7 @@ export async function updateMemberRole(
     .eq('is_active', true)
     .single()
 
-  if (!requesterMember || (requesterMember.role !== 'owner' && requesterMember.role !== 'admin')) {
+  if (!requesterMember || requesterMember.role !== 'owner') {
     throw new Error('Insufficient permissions')
   }
 
@@ -475,7 +475,7 @@ export async function removeMember(
     throw new Error('Not authenticated')
   }
 
-  // Check requester is owner/admin
+  // Check requester is owner
   const { data: requesterMember } = await supabase
     .from('organization_members')
     .select('role')
@@ -484,7 +484,7 @@ export async function removeMember(
     .eq('is_active', true)
     .single()
 
-  if (!requesterMember || (requesterMember.role !== 'owner' && requesterMember.role !== 'admin')) {
+  if (!requesterMember || requesterMember.role !== 'owner') {
     throw new Error('Insufficient permissions')
   }
 
@@ -800,7 +800,7 @@ export async function joinOrganizationByCode(code: string): Promise<Organization
 
   // Set default permissions - only dashboard access for new members
   const defaultPermissions = [
-    { feature: 'dashboard', has_access: true },
+    { feature: 'dashboard', has_access: false },
     { feature: 'clients', has_access: false },
     { feature: 'offers', has_access: false },
     { feature: 'emails', has_access: false },
@@ -808,6 +808,7 @@ export async function joinOrganizationByCode(code: string): Promise<Organization
     { feature: 'reminders', has_access: false },
     { feature: 'settings', has_access: false },
     { feature: 'users', has_access: false },
+    { feature: 'todo', has_access: false },
   ]
 
   // Create permissions for each feature
@@ -1001,7 +1002,7 @@ export async function getMemberPermissions(
     throw new Error('Not authenticated')
   }
 
-  // Check requester is owner/admin
+  // Check requester is owner
   const { data: requesterMember } = await supabase
     .from('organization_members')
     .select('role')
@@ -1010,7 +1011,7 @@ export async function getMemberPermissions(
     .eq('is_active', true)
     .single()
 
-  if (!requesterMember || (requesterMember.role !== 'owner' && requesterMember.role !== 'admin')) {
+  if (!requesterMember || requesterMember.role !== 'owner') {
     throw new Error('Insufficient permissions')
   }
 
@@ -1037,6 +1038,7 @@ export async function getMemberPermissions(
       reminders: true,
       settings: true,
       users: true,
+      todo: true,
     }
   }
 
@@ -1048,7 +1050,7 @@ export async function getMemberPermissions(
     .eq('user_id', userId)
 
   const permMap: Record<string, boolean> = {
-    dashboard: true, // Always accessible
+    dashboard: false,
     clients: false,
     offers: false,
     emails: false, // UI uses 'emails' (plural)
@@ -1056,6 +1058,7 @@ export async function getMemberPermissions(
     reminders: false,
     settings: false,
     users: false,
+    todo: false,
   }
 
   permissions?.forEach((perm: any) => {
@@ -1082,7 +1085,7 @@ export async function updateMemberPermissions(
     throw new Error('Not authenticated')
   }
 
-  // Check requester is owner/admin
+  // Check requester is owner
   const { data: requesterMember } = await supabase
     .from('organization_members')
     .select('role')
@@ -1091,7 +1094,7 @@ export async function updateMemberPermissions(
     .eq('is_active', true)
     .single()
 
-  if (!requesterMember || (requesterMember.role !== 'owner' && requesterMember.role !== 'admin')) {
+  if (!requesterMember || requesterMember.role !== 'owner') {
     throw new Error('Insufficient permissions')
   }
 

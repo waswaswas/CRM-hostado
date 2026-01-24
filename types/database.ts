@@ -231,7 +231,7 @@ export interface OrganizationPermission {
   updated_at: string
   organization_id: string
   user_id: string
-  feature: 'email' | 'accounting' | 'users' | 'reminders' | 'offers' | 'clients' | 'settings' | 'dashboard'
+  feature: 'email' | 'accounting' | 'users' | 'reminders' | 'offers' | 'clients' | 'settings' | 'dashboard' | 'todo'
   has_access: boolean
 }
 
