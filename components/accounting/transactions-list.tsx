@@ -12,6 +12,7 @@ import { format } from 'date-fns'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { AssignCustomerDialog } from './assign-customer-dialog'
+import { EditTransactionDialog } from './edit-transaction-dialog'
 import { deleteTransaction } from '@/app/actions/transactions'
 import { useToast } from '@/components/ui/toaster'
 
@@ -30,6 +31,8 @@ export function TransactionsList({ initialTransactions, accounts }: Transactions
   const [filterAccount, setFilterAccount] = useState<string>('all')
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest')
   const [deleting, setDeleting] = useState(false)
+  const [editingTransaction, setEditingTransaction] = useState<TransactionWithRelations | null>(null)
+  const [editDialogOpen, setEditDialogOpen] = useState(false)
 
   const filteredAndSorted = useMemo(() => {
     let filtered = transactions.filter((transaction) => {
@@ -121,6 +124,28 @@ export function TransactionsList({ initialTransactions, accounts }: Transactions
         variant: 'destructive',
       })
     }
+  }
+
+  const handleEditClick = (transaction: TransactionWithRelations) => {
+    setEditingTransaction(transaction)
+    setEditDialogOpen(true)
+  }
+
+  const handleEditSaved = (updated: { id: string; amount: number; currency: string; account_id: string; type: string }) => {
+    setTransactions((prev) =>
+      prev.map((transaction) =>
+        transaction.id === updated.id
+          ? {
+              ...transaction,
+              amount: updated.amount,
+              currency: updated.currency,
+              account_id: updated.account_id,
+              type: updated.type as any,
+              account: accounts.find((account) => account.id === updated.account_id) || transaction.account,
+            }
+          : transaction
+      )
+    )
   }
 
   const handleBulkDelete = async () => {
@@ -274,7 +299,19 @@ export function TransactionsList({ initialTransactions, accounts }: Transactions
         {filteredAndSorted.length > 0 ? (
           <div className="space-y-2">
             {filteredAndSorted.map((transaction) => (
-              <Card key={transaction.id} className="hover:shadow-md transition-shadow rounded-lg">
+              <Card
+                key={transaction.id}
+                className="hover:shadow-md transition-shadow rounded-lg cursor-pointer"
+                onClick={() => handleEditClick(transaction)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault()
+                    handleEditClick(transaction)
+                  }
+                }}
+              >
                 <CardContent className="p-3 sm:p-4">
                   <div className="flex items-start justify-between gap-3 sm:gap-4">
                     <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
@@ -318,11 +355,13 @@ export function TransactionsList({ initialTransactions, accounts }: Transactions
                           {transaction.reference || 'N/A'}
                         </div>
                         <div className="col-span-12 sm:col-span-1 flex items-center justify-start sm:justify-center flex-shrink-0">
-                          <AssignCustomerDialog
-                            transactionId={transaction.id}
-                            currentCustomerId={(transaction as any).accounting_customer_id}
-                            currentCustomerName={(transaction as any).accounting_customer?.name}
-                          />
+                          <div onClick={(event) => event.stopPropagation()}>
+                            <AssignCustomerDialog
+                              transactionId={transaction.id}
+                              currentCustomerId={(transaction as any).accounting_customer_id}
+                              currentCustomerName={(transaction as any).accounting_customer?.name}
+                            />
+                          </div>
                         </div>
                         <div className="col-span-12 sm:col-span-2 flex items-center justify-between sm:justify-end">
                           <div
@@ -333,7 +372,7 @@ export function TransactionsList({ initialTransactions, accounts }: Transactions
                             {transaction.type === 'expense' ? '-' : '+'}
                             {formatAmount(transaction.amount, transaction.currency)}
                           </div>
-                          <div className="flex items-center gap-1 sm:hidden">
+                          <div className="flex items-center gap-1 sm:hidden" onClick={(event) => event.stopPropagation()}>
                             <Link href={`/accounting/transactions/${transaction.id}`}>
                               <Button variant="ghost" size="sm" className="min-h-[44px] min-w-[44px] p-0">
                                 <Eye className="h-4 w-4" />
@@ -352,7 +391,7 @@ export function TransactionsList({ initialTransactions, accounts }: Transactions
                         </div>
                       </div>
                     </div>
-                    <div className="hidden sm:flex items-center gap-1 flex-shrink-0">
+                    <div className="hidden sm:flex items-center gap-1 flex-shrink-0" onClick={(event) => event.stopPropagation()}>
                       <Link href={`/accounting/transactions/${transaction.id}`}>
                         <Button variant="ghost" size="sm" className="min-h-[44px] min-w-[44px] md:h-8 md:w-8 p-0">
                           <Eye className="h-4 w-4" />
@@ -393,6 +432,18 @@ export function TransactionsList({ initialTransactions, accounts }: Transactions
           </Card>
         )}
       </div>
+      <EditTransactionDialog
+        open={editDialogOpen}
+        onOpenChange={(open) => {
+          setEditDialogOpen(open)
+          if (!open) {
+            setEditingTransaction(null)
+          }
+        }}
+        transaction={editingTransaction}
+        accounts={accounts}
+        onSaved={handleEditSaved}
+      />
     </div>
   )
 }
