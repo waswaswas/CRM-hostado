@@ -7,9 +7,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Select } from '@/components/ui/select'
 import { Users, Crown, Shield, UserCog, Eye, Mail, Settings as SettingsIcon, Copy, Check } from 'lucide-react'
 import type { Organization, OrganizationMember } from '@/types/database'
-import { getOrganizationMembers, getUserRole, updateOrganizationEmailSettings, generateInvitationCode, updateMemberPermissions, getMemberPermissions } from '@/app/actions/organizations'
+import { getOrganizationMembers, getUserRole, updateOrganizationEmailSettings, generateInvitationCode, updateMemberPermissions, getMemberPermissions, updateMemberRole } from '@/app/actions/organizations'
 import { useToast } from '@/components/ui/toaster'
 
 interface OrganizationSettingsDialogProps {
@@ -49,6 +50,7 @@ export function OrganizationSettingsDialog({
   const [expandedMember, setExpandedMember] = useState<string | null>(null)
   const [memberPermissions, setMemberPermissions] = useState<Record<string, Record<string, boolean>>>({})
   const [savingPermissions, setSavingPermissions] = useState<string | null>(null)
+  const [savingRole, setSavingRole] = useState<string | null>(null)
   
   // Email settings state
   const [emailSettings, setEmailSettings] = useState({
@@ -199,6 +201,48 @@ export function OrganizationSettingsDialog({
 
   const canManage = userRole === 'owner' || userRole === 'admin'
   const canManagePermissions = userRole === 'owner'
+  const canManageRoles = userRole === 'owner'
+
+  const defaultViewerPermissions: Record<string, boolean> = {
+    dashboard: false,
+    clients: false,
+    offers: false,
+    emails: false,
+    accounting: false,
+    reminders: false,
+    settings: false,
+    users: false,
+    todo: false,
+  }
+
+  async function handleRoleChange(memberId: string, userId: string, role: 'admin' | 'viewer') {
+    if (!organization.id || !canManageRoles || savingRole === memberId) return
+    setSavingRole(memberId)
+    try {
+      await updateMemberRole(organization.id, userId, role)
+      setMembers((prev) =>
+        prev.map((member) =>
+          member.id === memberId ? { ...member, role } : member
+        )
+      )
+
+      if (role === 'viewer') {
+        await updateMemberPermissions(organization.id, userId, defaultViewerPermissions)
+        await loadMemberPermissions(memberId, userId)
+      } else {
+        setExpandedMember(null)
+      }
+    } catch (error) {
+      console.error('Error updating role:', error)
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to update role',
+        variant: 'destructive',
+      })
+    } finally {
+      setSavingRole(null)
+    }
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -313,6 +357,23 @@ export function OrganizationSettingsDialog({
                                 </div>
                               </div>
                             </div>
+                            {canManageRoles && member.role !== 'owner' && (
+                              <Select
+                                value={member.role}
+                                onChange={(event) =>
+                                  handleRoleChange(
+                                    member.id,
+                                    member.user_id,
+                                    event.target.value as 'admin' | 'viewer'
+                                  )
+                                }
+                                className="w-32"
+                                disabled={savingRole === member.id}
+                              >
+                                <option value="viewer">Viewer</option>
+                                <option value="admin">Admin</option>
+                              </Select>
+                            )}
                             {canManagePermissions && !isOwnerOrAdmin && (
                               <Button
                                 variant="outline"

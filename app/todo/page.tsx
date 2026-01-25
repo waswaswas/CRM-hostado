@@ -4,6 +4,21 @@ import { useEffect, useMemo, useState } from 'react'
 import { useOrganization } from '@/lib/organization-context'
 import { useFeaturePermissions } from '@/lib/hooks/use-feature-permissions'
 import { getUserRole } from '@/app/actions/organizations'
+import {
+  createTodoAttachment,
+  createTodoComment,
+  createTodoList,
+  createTodoSubtask,
+  createTodoTask,
+  deleteTodoList,
+  deleteTodoTask,
+  getTodoLists,
+  getTodoTasks,
+  joinTodoListByCode,
+  toggleTodoSubtask,
+  updateTodoList,
+  updateTodoTask,
+} from '@/app/actions/todo'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -65,12 +80,50 @@ const PRIORITY_LABELS: Record<TaskPriority, string> = {
   critical: 'Critical',
 }
 
-function generateId(prefix: string) {
-  return `${prefix}_${Math.random().toString(36).slice(2, 10)}`
+function mapListFromDb(list: any): TodoList {
+  return {
+    id: list.id,
+    name: list.name,
+    color: list.color,
+    createdBy: list.created_by,
+    createdAt: list.created_at,
+    invitationCode: list.invitation_code,
+    members: (list.todo_list_members || []).map((member: any) => ({
+      userId: member.user_id,
+      role: member.role,
+    })),
+  }
 }
 
-function generateInviteCode() {
-  return Math.random().toString(36).slice(2, 8).toUpperCase()
+function mapTaskFromDb(task: any): TodoTask {
+  return {
+    id: task.id,
+    listId: task.list_id,
+    title: task.title,
+    description: task.description || '',
+    completed: task.completed ?? false,
+    priority: task.priority,
+    dueDate: task.due_date || null,
+    status: task.status,
+    assigneeId: task.assignee_id || null,
+    tags: task.tags || [],
+    subtasks: (task.subtasks || []).map((subtask: any) => ({
+      id: subtask.id,
+      title: subtask.title,
+      done: subtask.done,
+    })),
+    comments: (task.comments || []).map((comment: any) => ({
+      id: comment.id,
+      text: comment.content,
+      createdAt: comment.created_at,
+    })),
+    attachments: (task.attachments || []).map((attachment: any) => ({
+      id: attachment.id,
+      name: attachment.file_name,
+      url: attachment.file_url,
+    })),
+    updatedAt: task.updated_at,
+  }
 }
 
 export default function TodoPage() {
@@ -97,9 +150,8 @@ export default function TodoPage() {
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('')
   const [newComment, setNewComment] = useState('')
   const [newAttachmentUrl, setNewAttachmentUrl] = useState('')
-
-  const storageKey = currentOrganization?.id ? `todo_lists_${currentOrganization.id}` : null
-  const taskStorageKey = currentOrganization?.id ? `todo_tasks_${currentOrganization.id}` : null
+  const [loadingLists, setLoadingLists] = useState(false)
+  const [loadingTasks, setLoadingTasks] = useState(false)
 
   useEffect(() => {
     async function loadUserContext() {
@@ -117,18 +169,36 @@ export default function TodoPage() {
   }, [currentOrganization?.id])
 
   useEffect(() => {
-    if (!storageKey || !taskStorageKey) return
-    const storedLists = localStorage.getItem(storageKey)
-    const storedTasks = localStorage.getItem(taskStorageKey)
-    setLists(storedLists ? JSON.parse(storedLists) : [])
-    setTasks(storedTasks ? JSON.parse(storedTasks) : [])
-  }, [storageKey, taskStorageKey])
+    if (!currentOrganization?.id || permissionsLoading) return
+    if (!permissions.todo) return
+    async function loadLists() {
+      setLoadingLists(true)
+      try {
+        const data = await getTodoLists()
+        setLists(data.map(mapListFromDb))
+      } finally {
+        setLoadingLists(false)
+      }
+    }
+    loadLists()
+  }, [currentOrganization?.id, permissions.todo, permissionsLoading])
 
   useEffect(() => {
-    if (!storageKey || !taskStorageKey) return
-    localStorage.setItem(storageKey, JSON.stringify(lists))
-    localStorage.setItem(taskStorageKey, JSON.stringify(tasks))
-  }, [lists, tasks, storageKey, taskStorageKey])
+    if (!activeListId) {
+      setTasks([])
+      return
+    }
+    async function loadTasks() {
+      setLoadingTasks(true)
+      try {
+        const data = await getTodoTasks(activeListId)
+        setTasks(data.map(mapTaskFromDb))
+      } finally {
+        setLoadingTasks(false)
+      }
+    }
+    loadTasks()
+  }, [activeListId])
 
   const visibleLists = useMemo(() => {
     if (!userId) return []
@@ -137,6 +207,14 @@ export default function TodoPage() {
     }
     return lists.filter((list) => list.members.some((member) => member.userId === userId))
   }, [lists, userId, userRole])
+
+  useEffect(() => {
+    if (!activeListId) return
+    if (!visibleLists.some((list) => list.id === activeListId)) {
+      setActiveListId(null)
+      setActiveTaskId(null)
+    }
+  }, [activeListId, visibleLists])
 
   const activeList = lists.find((list) => list.id === activeListId) || null
   const listTasks = tasks.filter((task) => task.listId === activeListId)
@@ -176,7 +254,7 @@ export default function TodoPage() {
         const dateB = b.dueDate ? new Date(b.dueDate).getTime() : Infinity
         return dateA - dateB
       })
-  }, [listTasks, searchQuery, statusFilter, priorityFilter, sortBy])
+  }, [listTasks, searchQuery, statusFilter, priorityFilter, assigneeFilter, dueFilter, sortBy, userId])
 
   const selectedTasks = filteredTasks.filter((task) => selectedTaskIds.has(task.id))
   const activeTask = tasks.find((task) => task.id === activeTaskId) || null
@@ -190,71 +268,56 @@ export default function TodoPage() {
     setNewAttachmentUrl('')
   }, [activeTaskId])
 
-  function handleCreateList(data: { name: string; color: string }) {
+  async function refreshLists() {
+    const data = await getTodoLists()
+    setLists(data.map(mapListFromDb))
+  }
+
+  async function refreshTasks(listId: string) {
+    const data = await getTodoTasks(listId)
+    setTasks(data.map(mapTaskFromDb))
+  }
+
+  async function handleCreateList(data: { name: string; color: string }) {
     if (!userId) return
-    const newList: TodoList = {
-      id: generateId('list'),
-      name: data.name,
-      color: data.color,
-      createdBy: userId,
-      createdAt: new Date().toISOString(),
-      members: [{ userId, role: 'owner' }],
-      invitationCode: generateInviteCode(),
-    }
-    setLists((prev) => [newList, ...prev])
+    const newList = await createTodoList({ name: data.name, color: data.color })
+    await refreshLists()
     setActiveListId(newList.id)
     setShowCreateDialog(false)
   }
 
-  function handleJoinList() {
-    if (!userId || !inviteCodeInput.trim()) return
-    const list = lists.find((item) => item.invitationCode === inviteCodeInput.trim().toUpperCase())
-    if (!list) {
-      return
-    }
-    if (!list.members.some((member) => member.userId === userId)) {
-      const updated = lists.map((item) =>
-        item.id === list.id
-          ? { ...item, members: [...item.members, { userId, role: 'member' }] }
-          : item
-      )
-      setLists(updated)
-    }
-    setActiveListId(list.id)
+  async function handleJoinList() {
+    if (!inviteCodeInput.trim()) return
+    const list = await joinTodoListByCode(inviteCodeInput.trim().toUpperCase())
     setInviteCodeInput('')
+    await refreshLists()
+    setActiveListId(list.id)
   }
 
-  function handleAddTask() {
+  async function handleAddTask() {
     if (!newTaskTitle.trim() || !activeListId) return
-    const task: TodoTask = {
-      id: generateId('task'),
-      listId: activeListId,
-      title: newTaskTitle.trim(),
-      description: '',
-      completed: false,
-      priority: 'medium',
-      dueDate: null,
-      status: 'to_do',
-      assigneeId: null,
-      tags: [],
-      subtasks: [],
-      comments: [],
-      attachments: [],
-      updatedAt: new Date().toISOString(),
-    }
-    setTasks((prev) => [task, ...prev])
+    await createTodoTask(activeListId, newTaskTitle.trim())
     setNewTaskTitle('')
+    await refreshTasks(activeListId)
   }
 
-  function handleUpdateTask(taskId: string, updates: Partial<TodoTask>) {
+  async function handleUpdateTask(taskId: string, updates: Partial<TodoTask>) {
     setTasks((prev) =>
       prev.map((task) =>
         task.id === taskId ? { ...task, ...updates, updatedAt: new Date().toISOString() } : task
       )
     )
+    try {
+      await updateTodoTask(taskId, updates as any)
+    } catch (error) {
+      if (activeListId) {
+        await refreshTasks(activeListId)
+      }
+    }
   }
 
-  function handleDeleteTask(taskId: string) {
+  async function handleDeleteTask(taskId: string) {
+    await deleteTodoTask(taskId)
     setTasks((prev) => prev.filter((task) => task.id !== taskId))
     setSelectedTaskIds((prev) => {
       const next = new Set(prev)
@@ -263,33 +326,42 @@ export default function TodoPage() {
     })
   }
 
-  function handleBulkDelete() {
-    setTasks((prev) => prev.filter((task) => !selectedTaskIds.has(task.id)))
+  async function handleBulkDelete() {
+    await Promise.all(Array.from(selectedTaskIds).map((taskId) => deleteTodoTask(taskId)))
     setSelectedTaskIds(new Set())
-  }
-
-  function handleDuplicateTask(task: TodoTask) {
-    const duplicated: TodoTask = {
-      ...task,
-      id: generateId('task'),
-      title: `${task.title} (copy)`,
-      completed: false,
-      status: 'to_do',
-      updatedAt: new Date().toISOString(),
+    if (activeListId) {
+      await refreshTasks(activeListId)
     }
-    setTasks((prev) => [duplicated, ...prev])
   }
 
-  function handleArchiveTask(taskId: string) {
-    handleUpdateTask(taskId, { status: 'done', completed: true })
+  async function handleDuplicateTask(task: TodoTask) {
+    if (!activeListId) return
+    const newTask = await createTodoTask(activeListId, `${task.title} (copy)`)
+    await updateTodoTask(newTask.id, {
+      description: task.description,
+      priority: task.priority,
+      status: 'to_do',
+      completed: false,
+      dueDate: task.dueDate,
+      assigneeId: task.assigneeId,
+      tags: task.tags,
+    } as any)
+    await refreshTasks(activeListId)
   }
 
-  function handleDeleteList() {
+  async function handleArchiveTask(taskId: string) {
+    await updateTodoTask(taskId, { status: 'done', completed: true } as any)
+    if (activeListId) {
+      await refreshTasks(activeListId)
+    }
+  }
+
+  async function handleDeleteList() {
     if (!activeList || !userId) return
     const canDelete = activeList.createdBy === userId || userRole === 'owner'
     if (!canDelete) return
-    setLists((prev) => prev.filter((list) => list.id !== activeList.id))
-    setTasks((prev) => prev.filter((task) => task.listId !== activeList.id))
+    await deleteTodoList(activeList.id)
+    await refreshLists()
     setActiveListId(null)
     setActiveTaskId(null)
     setShowSettingsDialog(false)
@@ -325,7 +397,13 @@ export default function TodoPage() {
           </Button>
         </div>
 
-        {isFirstTime ? (
+        {loadingLists ? (
+          <Card>
+            <CardContent className="py-12 text-center text-muted-foreground">
+              Loading lists...
+            </CardContent>
+          </Card>
+        ) : isFirstTime ? (
           <Card>
             <CardContent className="py-12 text-center space-y-4">
               <h2 className="text-xl font-semibold">Welcome to To-Do Lists</h2>
@@ -496,7 +574,13 @@ export default function TodoPage() {
         )}
 
         <div className="space-y-2">
-          {filteredTasks.length === 0 ? (
+          {loadingTasks ? (
+            <Card>
+              <CardContent className="py-10 text-center text-muted-foreground">
+                Loading tasks...
+              </CardContent>
+            </Card>
+          ) : filteredTasks.length === 0 ? (
             <Card>
               <CardContent className="py-10 text-center text-muted-foreground">
                 No tasks match your filters.
@@ -684,11 +768,9 @@ export default function TodoPage() {
                     <input
                       type="checkbox"
                       checked={subtask.done}
-                      onChange={() => {
-                        const next = (activeTask.subtasks || []).map((item) =>
-                          item.id === subtask.id ? { ...item, done: !item.done } : item
-                        )
-                        handleUpdateTask(activeTask.id, { subtasks: next })
+                      onChange={async () => {
+                        await toggleTodoSubtask(subtask.id, !subtask.done)
+                        await refreshTasks(activeTask.listId)
                       }}
                       className="h-4 w-4 rounded border-gray-300"
                     />
@@ -706,14 +788,11 @@ export default function TodoPage() {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => {
+                    onClick={async () => {
                       if (!newSubtaskTitle.trim()) return
-                      const next = [
-                        ...(activeTask.subtasks || []),
-                        { id: generateId('subtask'), title: newSubtaskTitle.trim(), done: false },
-                      ]
-                      handleUpdateTask(activeTask.id, { subtasks: next })
+                      await createTodoSubtask(activeTask.id, newSubtaskTitle.trim())
                       setNewSubtaskTitle('')
+                      await refreshTasks(activeTask.listId)
                     }}
                   >
                     Add
@@ -736,14 +815,11 @@ export default function TodoPage() {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => {
+                    onClick={async () => {
                       if (!newComment.trim()) return
-                      const next = [
-                        ...(activeTask.comments || []),
-                        { id: generateId('comment'), text: newComment.trim(), createdAt: new Date().toISOString() },
-                      ]
-                      handleUpdateTask(activeTask.id, { comments: next })
+                      await createTodoComment(activeTask.id, newComment.trim())
                       setNewComment('')
+                      await refreshTasks(activeTask.listId)
                     }}
                   >
                     Add
@@ -766,18 +842,12 @@ export default function TodoPage() {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => {
+                    onClick={async () => {
                       if (!newAttachmentUrl.trim()) return
-                      const next = [
-                        ...(activeTask.attachments || []),
-                        {
-                          id: generateId('attach'),
-                          name: newAttachmentUrl.trim(),
-                          url: newAttachmentUrl.trim(),
-                        },
-                      ]
-                      handleUpdateTask(activeTask.id, { attachments: next })
+                      const value = newAttachmentUrl.trim()
+                      await createTodoAttachment(activeTask.id, value, value)
                       setNewAttachmentUrl('')
+                      await refreshTasks(activeTask.listId)
                     }}
                   >
                     Add
@@ -810,13 +880,10 @@ export default function TodoPage() {
         list={activeList}
         userId={userId}
         userRole={userRole}
-        onSave={(updates) => {
+        onSave={async (updates) => {
           if (!activeList) return
-          setLists((prev) =>
-            prev.map((list) =>
-              list.id === activeList.id ? { ...list, ...updates } : list
-            )
-          )
+          await updateTodoList(activeList.id, updates)
+          await refreshLists()
         }}
         onDelete={handleDeleteList}
       />
