@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Email, EmailStatus, EmailFolder } from '@/app/actions/emails'
 import {
@@ -33,6 +33,7 @@ export function EmailList({ initialEmails = [], clientId }: EmailListProps) {
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest')
   const [loading, setLoading] = useState(false)
   const [checkingEmails, setCheckingEmails] = useState(false)
+  const initialCheckRef = useRef(false)
 
   // Sort initial emails (newest first by default)
   const sortedInitialEmails = [...initialEmails].sort((a, b) => {
@@ -96,8 +97,35 @@ export function EmailList({ initialEmails = [], clientId }: EmailListProps) {
   }, [folderFilter, clientId, sortOrder, toast])
 
   useEffect(() => {
-    loadEmails()
-  }, [loadEmails])
+    if (initialCheckRef.current) {
+      return
+    }
+    initialCheckRef.current = true
+    let isMounted = true
+    async function initialLoad() {
+      try {
+        const result = await checkForNewEmails()
+        if (!isMounted) return
+        if (result.success && result.processed > 0) {
+          toast({
+            title: 'New Emails',
+            description: `${result.processed} new email${result.processed > 1 ? 's' : ''} received`,
+          })
+        }
+      } catch (error) {
+        console.error('Initial check for emails failed:', error)
+      } finally {
+        if (isMounted) {
+          await loadEmails(true)
+        }
+      }
+    }
+
+    initialLoad()
+    return () => {
+      isMounted = false
+    }
+  }, [loadEmails, toast])
 
   // Sort emails when sortOrder changes
   useEffect(() => {

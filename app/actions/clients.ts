@@ -144,6 +144,55 @@ export async function deleteClient(id: string) {
     throw new Error('No organization selected')
   }
 
+  // Remove/clear related records to avoid FK constraint failures.
+  const relatedDeletes = [
+    supabase.from('client_notes').delete().eq('client_id', id).eq('organization_id', organizationId),
+    supabase.from('interactions').delete().eq('client_id', id).eq('organization_id', organizationId),
+    supabase.from('offers').delete().eq('client_id', id).eq('organization_id', organizationId),
+    supabase.from('status_change_history').delete().eq('client_id', id).eq('organization_id', organizationId),
+    supabase.from('reminders').delete().eq('client_id', id).eq('organization_id', organizationId),
+  ]
+
+  const [notesRes, interactionsRes, offersRes, statusRes, remindersRes] = await Promise.all(relatedDeletes)
+  const relatedErrors = [notesRes.error, interactionsRes.error, offersRes.error, statusRes.error, remindersRes.error]
+    .filter(Boolean)
+    .map((err) => err?.message)
+
+  if (relatedErrors.length > 0) {
+    throw new Error(`Failed to delete related data: ${relatedErrors.join(', ')}`)
+  }
+
+  // Clear nullable references instead of deleting emails/accounting records
+  const { error: emailRefError } = await supabase
+    .from('emails')
+    .update({ client_id: null })
+    .eq('client_id', id)
+    .eq('organization_id', organizationId)
+
+  if (emailRefError) {
+    throw new Error(emailRefError.message)
+  }
+
+  const { error: accountingLinkError } = await supabase
+    .from('accounting_customers')
+    .update({ linked_client_id: null })
+    .eq('linked_client_id', id)
+    .eq('organization_id', organizationId)
+
+  if (accountingLinkError) {
+    throw new Error(accountingLinkError.message)
+  }
+
+  const { error: transactionRefError } = await supabase
+    .from('transactions')
+    .update({ contact_id: null })
+    .eq('contact_id', id)
+    .eq('organization_id', organizationId)
+
+  if (transactionRefError) {
+    throw new Error(transactionRefError.message)
+  }
+
   const { error } = await supabase
     .from('clients')
     .delete()
