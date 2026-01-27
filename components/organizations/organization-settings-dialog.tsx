@@ -422,7 +422,7 @@ export function OrganizationSettingsDialog({
                                         perms[key] || false
                                       )}
                                       disabled={savingPermissions === member.id}
-                                      className="rounded border-gray-300"
+                                      className="h-4 w-4 rounded border-gray-300 accent-blue-800 dark:accent-blue-500"
                                     />
                                     <span className="text-sm">{label}</span>
                                   </label>

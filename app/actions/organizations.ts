@@ -798,7 +798,7 @@ export async function joinOrganizationByCode(code: string): Promise<Organization
     throw new Error(memberError.message)
   }
 
-  // Set default permissions - only dashboard access for new members
+  // Set default permissions for new members (owner can enable later)
   const defaultPermissions = [
     { feature: 'dashboard', has_access: false },
     { feature: 'clients', has_access: false },
@@ -1114,8 +1114,6 @@ export async function updateMemberPermissions(
   // Process each permission separately to ensure atomic updates and better error handling
   const permissionEntries = Object.entries(permissions)
     .filter(([feature]) => {
-      // Skip dashboard (always true) and invalid features
-      if (feature === 'dashboard') return false
       const normalized = normalizeFeatureName(feature)
       if (!isValidFeature(normalized)) {
         console.warn(`Invalid feature name: ${feature} (normalized: ${normalized})`)

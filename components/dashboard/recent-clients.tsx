@@ -37,7 +37,6 @@ export function RecentClients({ initialClients, customStatuses }: RecentClientsP
         const { data } = await supabase
           .from('clients')
           .select('*')
-          .eq('owner_id', user.id)
           .or(`organization_id.eq.${currentOrganization.id},organization_id.is.null`)
           .order('created_at', { ascending: false })
           .limit(5)
@@ -81,7 +80,6 @@ export function RecentClients({ initialClients, customStatuses }: RecentClientsP
           const { data } = await supabase
             .from('clients')
             .select('*')
-            .eq('owner_id', user.id)
             .or(`organization_id.eq.${currentOrganization.id},organization_id.is.null`)
             .order('created_at', { ascending: false })
             .limit(5)

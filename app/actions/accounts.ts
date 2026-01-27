@@ -23,7 +23,6 @@ export async function getAccounts(): Promise<Account[]> {
   const { data, error } = await supabase
     .from('accounts')
     .select('*')
-    .eq('owner_id', user.id)
     .eq('organization_id', organizationId)
     .order('name', { ascending: true })
 
@@ -62,7 +61,6 @@ export async function getAccount(id: string): Promise<Account | null> {
     .from('accounts')
     .select('*')
     .eq('id', id)
-    .eq('owner_id', user.id)
     .eq('organization_id', organizationId)
     .single()
 

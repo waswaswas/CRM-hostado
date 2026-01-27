@@ -25,13 +25,12 @@ export async function createReminder(data: {
     throw new Error('No organization selected')
   }
 
-  // Verify client ownership if client_id is provided
+  // Verify client exists in this organization if client_id is provided
   if (data.client_id) {
     const { data: client } = await supabase
       .from('clients')
       .select('id')
       .eq('id', data.client_id)
-      .eq('owner_id', user.id)
       .eq('organization_id', organizationId)
       .single()
 
@@ -102,12 +101,11 @@ export async function getRemindersForClient(clientId: string) {
     return []
   }
 
-  // Verify client ownership
+  // Verify client belongs to organization
   const { data: client } = await supabase
     .from('clients')
     .select('id')
     .eq('id', clientId)
-    .eq('owner_id', user.id)
     .eq('organization_id', organizationId)
     .single()
 
@@ -151,7 +149,6 @@ export async function getUpcomingReminders() {
     const { data: clients, error: clientsError } = await supabase
       .from('clients')
       .select('id')
-      .eq('owner_id', user.id)
       .eq('organization_id', organizationId)
 
     if (clientsError) {
@@ -356,7 +353,6 @@ export async function getCompletedReminders() {
     const { data: clients, error: clientsError } = await supabase
       .from('clients')
       .select('id')
-      .eq('owner_id', user.id)
       .eq('organization_id', organizationId)
 
     if (clientsError) {
@@ -475,13 +471,12 @@ export async function updateReminder(
     throw new Error('No organization selected')
   }
 
-  // Verify client ownership if clientId is provided
+  // Verify client belongs to organization if clientId is provided
   if (clientId) {
     const { data: client } = await supabase
       .from('clients')
       .select('id')
       .eq('id', clientId)
-      .eq('owner_id', user.id)
       .eq('organization_id', organizationId)
       .single()
 

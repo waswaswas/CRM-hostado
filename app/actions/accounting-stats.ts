@@ -47,7 +47,6 @@ export async function getCashFlow(
   const { data, error } = await supabase
     .from('transactions')
     .select('date, type, amount')
-    .eq('owner_id', user.id)
     .eq('organization_id', organizationId)
     .gte('date', startDate)
     .lte('date', endDate)
@@ -99,10 +98,15 @@ export async function getProfitLoss(
     throw new Error('Unauthorized')
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    return []
+  }
+
   const { data, error } = await supabase
     .from('transactions')
     .select('date, type, amount')
-    .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
     .gte('date', startDate)
     .lte('date', endDate)
     .in('type', ['income', 'expense'])
@@ -161,7 +165,6 @@ export async function getExpensesByCategory(
   const { data, error } = await supabase
     .from('transactions')
     .select('category, amount')
-    .eq('owner_id', user.id)
     .eq('organization_id', organizationId)
     .eq('type', 'expense')
     .gte('date', startDate)
@@ -214,7 +217,6 @@ export async function getTopPayers(
   let query = supabase
     .from('transactions')
     .select('contact_id, amount, contact:clients(name)')
-    .eq('owner_id', user.id)
     .eq('organization_id', organizationId)
     .eq('type', 'income')
     .not('contact_id', 'is', null)
@@ -277,7 +279,6 @@ export async function getAccountBalances(): Promise<
   const { data, error } = await supabase
     .from('accounts')
     .select('id, name, current_balance')
-    .eq('owner_id', user.id)
     .eq('organization_id', organizationId)
     .order('name', { ascending: true })
 
@@ -324,7 +325,6 @@ export async function getAccountingSummary(
   const { data, error } = await supabase
     .from('transactions')
     .select('type, amount')
-    .eq('owner_id', user.id)
     .eq('organization_id', organizationId)
     .gte('date', startDate)
     .lte('date', endDate)

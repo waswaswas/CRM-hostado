@@ -54,7 +54,6 @@ export async function getTransactions(filters?: {
       contact:clients(*),
       accounting_customer:accounting_customers!left(*)
     `)
-    .eq('owner_id', user.id)
     .eq('organization_id', organizationId)
 
   if (filters?.account_id) {
@@ -94,7 +93,6 @@ export async function getTransactions(filters?: {
     let fallbackQuery = supabase
       .from('transactions')
       .select('*')
-      .eq('owner_id', user.id)
       .eq('organization_id', organizationId)
 
     // Apply the same filters to fallback query
@@ -149,7 +147,6 @@ export async function getTransactions(filters?: {
         .from('accounts')
         .select('*')
         .in('id', accountIds)
-        .eq('owner_id', user.id)
         .eq('organization_id', organizationId)
 
       accounts?.forEach((acc: any) => accountsMap.set(acc.id, acc))
@@ -170,7 +167,6 @@ export async function getTransactions(filters?: {
         .from('accounting_customers')
         .select('*')
         .in('id', accountingCustomerIds)
-        .eq('owner_id', user.id)
         .eq('organization_id', organizationId)
 
       accountingCustomers?.forEach((customer: any) => accountingCustomersMap.set(customer.id, customer))
@@ -220,7 +216,6 @@ export async function getTransaction(id: string): Promise<TransactionWithRelatio
       contact:clients(*)
     `)
     .eq('id', id)
-    .eq('owner_id', user.id)
     .eq('organization_id', organizationId)
     .single()
 

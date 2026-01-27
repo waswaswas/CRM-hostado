@@ -35,7 +35,6 @@ export async function getDashboardStats() {
     const { data: clients, error } = await supabase
       .from('clients')
       .select('*')
-      .eq('owner_id', user.id)
       .eq('organization_id', organizationId)
 
     if (error) {

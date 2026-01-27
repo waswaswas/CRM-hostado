@@ -27,7 +27,6 @@ export async function getAccountingCustomers(): Promise<AccountingCustomerWithRe
         *,
         linked_client:clients(*)
       `)
-      .eq('owner_id', user.id)
       .eq('organization_id', organizationId)
       .order('created_at', { ascending: false })
 
@@ -66,7 +65,6 @@ export async function getAccountingCustomer(id: string): Promise<AccountingCusto
       linked_client:clients(*)
     `)
     .eq('id', id)
-    .eq('owner_id', user.id)
     .eq('organization_id', organizationId)
     .single()
 
@@ -222,7 +220,6 @@ export async function getAccountingCustomersByClientId(clientId: string): Promis
         *,
         linked_client:clients(*)
       `)
-      .eq('owner_id', user.id)
       .eq('organization_id', organizationId)
       .eq('linked_client_id', clientId)
       .order('created_at', { ascending: false })
@@ -259,7 +256,6 @@ export async function getLinkedClientIds(): Promise<string[]> {
     const { data, error } = await supabase
       .from('accounting_customers')
       .select('linked_client_id')
-      .eq('owner_id', user.id)
       .eq('organization_id', organizationId)
       .not('linked_client_id', 'is', null)
 

@@ -9,7 +9,7 @@ export type Feature = 'dashboard' | 'clients' | 'offers' | 'emails' | 'accountin
 export function useFeaturePermissions() {
   const { currentOrganization } = useOrganization()
   const [permissions, setPermissions] = useState<Record<Feature, boolean>>({
-    dashboard: true, // Always true
+    dashboard: false,
     clients: false,
     offers: false,
     emails: false,
@@ -24,9 +24,8 @@ export function useFeaturePermissions() {
   useEffect(() => {
     async function loadPermissions() {
       if (!currentOrganization?.id) {
-        // If no organization, only dashboard is accessible
         setPermissions({
-          dashboard: true,
+          dashboard: false,
           clients: false,
           offers: false,
           emails: false,
@@ -43,9 +42,7 @@ export function useFeaturePermissions() {
       setLoading(true)
       try {
         const features: Feature[] = ['dashboard', 'clients', 'offers', 'emails', 'accounting', 'reminders', 'settings', 'users', 'todo']
-        const permMap: Partial<Record<Feature, boolean>> = {
-          dashboard: true, // Always accessible
-        }
+        const permMap: Partial<Record<Feature, boolean>> = {}
 
         // Check permissions for each feature
         const permissionChecks = features.map(async (feature) => {

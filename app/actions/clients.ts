@@ -227,7 +227,6 @@ export async function getClients() {
     const { data, error } = await supabase
       .from('clients')
       .select('*')
-      .eq('owner_id', user.id)
       .or(`organization_id.eq.${organizationId},organization_id.is.null`)
       .order('created_at', { ascending: false })
 
@@ -276,7 +275,6 @@ export async function getClient(id: string) {
     .from('clients')
     .select('*')
     .eq('id', id)
-    .eq('owner_id', user.id)
     .eq('organization_id', organizationId)
     .single()
 
