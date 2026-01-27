@@ -35,6 +35,22 @@ interface ProcessedEmail {
   messageId?: string
 }
 
+function formatImapDate(date: Date): string {
+  const day = String(date.getDate()).padStart(2, '0')
+  const month = date.toLocaleString('en-US', { month: 'short' })
+  const year = date.getFullYear()
+  return `${day}-${month}-${year}`
+}
+
+function getMaxFetchCount(): number {
+  const raw = process.env.IMAP_MAX_FETCH
+  const parsed = raw ? parseInt(raw, 10) : NaN
+  if (Number.isFinite(parsed) && parsed > 0) {
+    return parsed
+  }
+  return 200
+}
+
 function getImapConfig(): ImapConfig | null {
   const host = process.env.IMAP_HOST
   const port = process.env.IMAP_PORT
@@ -101,7 +117,7 @@ export async function checkForNewEmails(): Promise<{
         }
 
         // Search for UNSEEN emails first (most efficient)
-        // If that doesn't work, we'll also check recent emails
+        // Then also check recent emails from ALL to catch already read messages
         console.log(`[IMAP] Searching for UNSEEN emails`)
         
         // First try UNSEEN emails (most common case and fastest)
@@ -117,48 +133,62 @@ export async function checkForNewEmails(): Promise<{
             return
           }
 
-          if (!results || results.length === 0) {
-            console.log('[IMAP] No UNSEEN emails found, checking recent emails (last 10 minutes)')
-            
-            // If no UNSEEN emails, check for recent emails (last 10 minutes)
-            // This catches emails that were already read in cPanel
-            const tenMinutesAgo = new Date()
-            tenMinutesAgo.setMinutes(tenMinutesAgo.getMinutes() - 10)
-            
-            // Format date for IMAP: 'DD-MMM-YYYY' (e.g., '24-Dec-2025')
-            const sinceDate = tenMinutesAgo.toLocaleDateString('en-US', {
-              day: '2-digit',
-              month: 'short',
-              year: 'numeric'
-            })
-            
-            console.log(`[IMAP] Searching for emails since ${sinceDate} (last 10 minutes)`)
-            
-            // Search for recent emails
-            imap.search(['SINCE', sinceDate], async (err2, results2) => {
-              if (err2) {
-                console.error(`[IMAP] Failed to search recent emails: ${err2.message}`)
-                imap.end()
-                resolve({ success: true, processed: 0, errors: [] }) // Don't fail, just return empty
-                return
-              }
-              
-              if (!results2 || results2.length === 0) {
-                console.log('[IMAP] No recent emails found')
-                imap.end()
-                resolve({ success: true, processed: 0, errors: [] })
-                return
-              }
-              
-              console.log(`[IMAP] Found ${results2.length} recent email(s) to process`)
-              // Process these emails (will be filtered by duplicate detection)
-              await processEmailBatch(imap, results2, errors, processedCount, resolve)
-            })
-            return
-          }
+          const unseenResults = results || []
+          console.log(`[IMAP] Found ${unseenResults.length} UNSEEN email(s)`)
 
-          console.log(`[IMAP] Found ${results.length} UNSEEN email(s) to process`)
-          await processEmailBatch(imap, results, errors, processedCount, resolve)
+          imap.search(['ALL'], async (err2, allResults) => {
+            if (err2) {
+              console.error(`[IMAP] Failed to search ALL emails: ${err2.message}`)
+
+              // Fallback: check emails from the last 7 days using SINCE
+              const sevenDaysAgo = new Date()
+              sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+              const sinceDate = formatImapDate(sevenDaysAgo)
+              console.log(`[IMAP] Fallback search: SINCE ${sinceDate}`)
+
+              imap.search(['SINCE', sinceDate], async (err3, sinceResults) => {
+                if (err3) {
+                  console.error(`[IMAP] Failed to search recent emails: ${err3.message}`)
+                  imap.end()
+                  resolve({ success: true, processed: 0, errors: [] })
+                  return
+                }
+
+                const finalResults = Array.from(new Set([...(sinceResults || []), ...unseenResults])).sort(
+                  (a, b) => a - b
+                )
+
+                if (finalResults.length === 0) {
+                  console.log('[IMAP] No emails found to process')
+                  imap.end()
+                  resolve({ success: true, processed: 0, errors: [] })
+                  return
+                }
+
+                console.log(`[IMAP] Found ${finalResults.length} email(s) to process (fallback)`)
+                await processEmailBatch(imap, finalResults, errors, processedCount, resolve)
+              })
+              return
+            }
+
+            const maxFetch = getMaxFetchCount()
+            const recentResults = (allResults || []).slice(-maxFetch)
+            const combinedResults = Array.from(new Set([...unseenResults, ...recentResults])).sort(
+              (a, b) => a - b
+            )
+
+            if (combinedResults.length === 0) {
+              console.log('[IMAP] No emails found to process')
+              imap.end()
+              resolve({ success: true, processed: 0, errors: [] })
+              return
+            }
+
+            console.log(
+              `[IMAP] Processing ${combinedResults.length} email(s) (UNSEEN + last ${recentResults.length} from ALL)`
+            )
+            await processEmailBatch(imap, combinedResults, errors, processedCount, resolve)
+          })
         })
       })
     })

@@ -228,7 +228,7 @@ export async function getClients() {
       .from('clients')
       .select('*')
       .eq('owner_id', user.id)
-      .eq('organization_id', organizationId)
+      .or(`organization_id.eq.${organizationId},organization_id.is.null`)
       .order('created_at', { ascending: false })
 
     if (error) {

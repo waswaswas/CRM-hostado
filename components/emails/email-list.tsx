@@ -20,6 +20,8 @@ import { useToast } from '@/components/ui/toaster'
 import { format } from 'date-fns'
 import Link from 'next/link'
 import { Mail, Trash2, Eye, Send, Clock, XCircle, CheckCircle, FileText, Reply, Forward, MailOpen, Archive, RefreshCw } from 'lucide-react'
+import { createClient } from '@/lib/supabase/client'
+import { useOrganization } from '@/lib/organization-context'
 
 interface EmailListProps {
   initialEmails?: Email[]
@@ -29,6 +31,7 @@ interface EmailListProps {
 export function EmailList({ initialEmails = [], clientId }: EmailListProps) {
   const router = useRouter()
   const { toast } = useToast()
+  const { currentOrganization } = useOrganization()
   const [folderFilter, setFolderFilter] = useState<EmailFolder | 'all'>('all')
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest')
   const [loading, setLoading] = useState(false)
@@ -42,6 +45,7 @@ export function EmailList({ initialEmails = [], clientId }: EmailListProps) {
     return dateB - dateA // Newest first
   })
   const [emails, setEmails] = useState<Email[]>(sortedInitialEmails)
+  const [newEmailsCount, setNewEmailsCount] = useState(0)
 
   const loadEmails = useCallback(async (silent = false) => {
     if (!silent) {
@@ -107,10 +111,12 @@ export function EmailList({ initialEmails = [], clientId }: EmailListProps) {
         const result = await checkForNewEmails()
         if (!isMounted) return
         if (result.success && result.processed > 0) {
+          setNewEmailsCount(result.processed)
           toast({
             title: 'New Emails',
             description: `${result.processed} new email${result.processed > 1 ? 's' : ''} received`,
           })
+          setNewEmailsCount(result.processed)
         }
       } catch (error) {
         console.error('Initial check for emails failed:', error)
@@ -126,6 +132,58 @@ export function EmailList({ initialEmails = [], clientId }: EmailListProps) {
       isMounted = false
     }
   }, [loadEmails, toast])
+
+  useEffect(() => {
+    if (!currentOrganization?.id) return
+    const supabase = createClient()
+    let isActive = true
+
+    const channel = supabase
+      .channel(`emails-${currentOrganization.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'emails',
+          filter: `organization_id=eq.${currentOrganization.id}`,
+        },
+        (payload) => {
+          if (!isActive) return
+          const newEmail = payload.new as Email
+          setEmails((prev) => {
+            if (prev.some((email) => email.id === newEmail.id)) {
+              return prev
+            }
+            setNewEmailsCount((count) => count + 1)
+            toast({
+              title: 'New Emails',
+              description: 'New email received',
+            })
+            const next = [newEmail, ...prev]
+            return next.sort((a, b) => {
+              const dateA = new Date(a.sent_at || a.created_at).getTime()
+              const dateB = new Date(b.sent_at || b.created_at).getTime()
+              return sortOrder === 'newest' ? dateB - dateA : dateA - dateB
+            })
+          })
+        }
+      )
+      .subscribe()
+
+    return () => {
+      isActive = false
+      supabase.removeChannel(channel)
+    }
+  }, [currentOrganization?.id, sortOrder, toast])
+
+  useEffect(() => {
+    if (newEmailsCount === 0) return
+    const timeoutId = setTimeout(() => {
+      setNewEmailsCount(0)
+    }, 15000)
+    return () => clearTimeout(timeoutId)
+  }, [newEmailsCount])
 
   // Sort emails when sortOrder changes
   useEffect(() => {
@@ -213,6 +271,7 @@ export function EmailList({ initialEmails = [], clientId }: EmailListProps) {
       
       if (result.success) {
         if (result.processed > 0) {
+          setNewEmailsCount(result.processed)
           toast({
             title: 'Success',
             description: `Found and processed ${result.processed} new email${result.processed > 1 ? 's' : ''}`,
@@ -399,6 +458,11 @@ export function EmailList({ initialEmails = [], clientId }: EmailListProps) {
             <RefreshCw className={`mr-2 h-4 w-4 ${checkingEmails ? 'animate-spin' : ''}`} />
             <span className="hidden sm:inline">{checkingEmails ? 'Checking...' : 'Check for Emails'}</span>
             <span className="sm:hidden">Check</span>
+            {newEmailsCount > 0 && (
+              <span className="ml-2 inline-flex items-center rounded-full bg-primary px-2 py-0.5 text-xs text-primary-foreground">
+                {newEmailsCount}
+              </span>
+            )}
           </Button>
           <Link href="/emails/receive" className="flex-1 sm:flex-initial">
             <Button variant="outline" className="w-full sm:w-auto min-h-[44px]">

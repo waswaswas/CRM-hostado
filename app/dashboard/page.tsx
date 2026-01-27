@@ -11,6 +11,7 @@ import Link from 'next/link'
 import { Calendar, Users, AlertCircle, TrendingUp, Clock, Tag, List } from 'lucide-react'
 import type { Client } from '@/types/database'
 import { RemindersCard } from '@/components/dashboard/reminders-card'
+import { RecentClients } from '@/components/dashboard/recent-clients'
 import { format, parseISO } from 'date-fns'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
@@ -90,8 +91,6 @@ export default async function DashboardPage() {
     console.warn('Failed to load settings:', error)
   }
 
-  const recentClients = clients.slice(0, 5)
-
   const now = new Date()
   const today = new Date(now)
   today.setHours(0, 0, 0, 0)
@@ -161,46 +160,7 @@ export default async function DashboardPage() {
             clients={clients}
           />
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Users className="h-5 w-5" />
-                Recent Clients
-              </CardTitle>
-              <CardDescription>Recently added clients</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {recentClients.length > 0 ? (
-                <div className="space-y-2">
-                  {recentClients.map((client: Client) => (
-                    <Link
-                      key={client.id}
-                      href={`/clients/${client.id}`}
-                      className="block rounded-lg border p-3 transition-colors hover:bg-accent"
-                    >
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <p className="font-medium">{client.name}</p>
-                          {client.company && (
-                            <p className="text-sm text-muted-foreground">
-                              {client.company}
-                            </p>
-                          )}
-                        </div>
-                        <Badge className={getStatusColor(client.status, client.client_type)}>
-                          {formatStatus(client.status, customStatuses)}
-                        </Badge>
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  No clients yet. Create your first client to get started.
-                </p>
-              )}
-            </CardContent>
-          </Card>
+          <RecentClients initialClients={clients} customStatuses={customStatuses} />
         </div>
 
         {/* Stats Cards Section */}
