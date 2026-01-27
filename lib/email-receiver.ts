@@ -398,7 +398,15 @@ async function processContactFormInquiry(
     throw new Error('Unauthorized')
   }
 
+  const { getCurrentOrganizationId } = await import('@/app/actions/organizations')
+  const organizationId = await getCurrentOrganizationId()
+
+  if (!organizationId) {
+    throw new Error('No organization selected')
+  }
+
   const receivedAt = email.date.toISOString()
+  const normalizedMessage = (formData.message || '').trim().replace(/\s+/g, ' ')
 
   // FIRST: Check if this email already exists (prevent duplicates)
   // This is the most important check - if email was already processed, skip entirely
@@ -408,59 +416,61 @@ async function processContactFormInquiry(
   if (email.messageId) {
     const { data: emailByMessageId } = await supabase
       .from('emails')
-      .select('id, client_id, from_email, provider_message_id')
+      .select('id, client_id, from_email, provider_message_id, is_deleted')
       .eq('owner_id', user.id)
+      .eq('organization_id', organizationId)
       .eq('provider_message_id', email.messageId)
       .maybeSingle()
     existingEmail = emailByMessageId
   }
 
-  // Method 2: Check by from_email and subject (wider time window - 7 days to catch re-fetched emails)
+  // Method 2: Check recent emails from same sender/subject (short window),
+  // and compare message content to avoid blocking real new inquiries.
   if (!existingEmail) {
-    const { data: emailByContent } = await supabase
+    const twoHours = 2 * 60 * 60 * 1000
+    const { data: recentEmails } = await supabase
       .from('emails')
-      .select('id, client_id, from_email, provider_message_id')
+      .select('id, body_text, sent_at, is_deleted')
       .eq('owner_id', user.id)
+      .eq('organization_id', organizationId)
       .eq('from_email', formData.email)
       .eq('subject', email.subject)
       .eq('direction', 'inbound')
-      .gte('sent_at', new Date(new Date(receivedAt).getTime() - 7 * 24 * 60 * 60 * 1000).toISOString()) // Within 7 days
-      .lte('sent_at', new Date(new Date(receivedAt).getTime() + 7 * 24 * 60 * 60 * 1000).toISOString())
+      .gte('sent_at', new Date(new Date(receivedAt).getTime() - twoHours).toISOString())
+      .lte('sent_at', new Date(new Date(receivedAt).getTime() + twoHours).toISOString())
       .order('sent_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
-    existingEmail = emailByContent
-  }
+      .limit(5)
 
-  // Method 3: Check if ANY email exists from this sender with this subject (no time limit)
-  // This catches emails that were processed before, even if dates don't match exactly
-  if (!existingEmail) {
-    const { data: emailBySenderAndSubject } = await supabase
-      .from('emails')
-      .select('id, client_id, from_email, sent_at, provider_message_id')
-      .eq('owner_id', user.id)
-      .eq('from_email', formData.email)
-      .eq('subject', email.subject)
-      .eq('direction', 'inbound')
-      .order('sent_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
-    
-    // Only consider it a duplicate if the sent_at date is very close (within 7 days)
-    if (emailBySenderAndSubject) {
-      const existingDate = new Date(emailBySenderAndSubject.sent_at)
-      const currentDate = new Date(receivedAt)
-      const timeDiff = Math.abs(currentDate.getTime() - existingDate.getTime())
-      const sevenDays = 7 * 24 * 60 * 60 * 1000
-      
-      if (timeDiff < sevenDays) {
-        existingEmail = emailBySenderAndSubject
-      }
+    const match = (recentEmails || []).find((row: any) => {
+      const body = (row.body_text || '').trim().replace(/\s+/g, ' ')
+      return body === normalizedMessage
+    })
+
+    if (match) {
+      existingEmail = match
     }
   }
 
-  // If email already exists, skip processing entirely (don't recreate clients)
+  // If email already exists, restore it if it was deleted, otherwise skip processing
   if (existingEmail) {
+    if (existingEmail.is_deleted) {
+      await supabase
+        .from('emails')
+        .update({
+          is_deleted: false,
+          deleted_at: null,
+          folder: 'inbox',
+          is_read: false,
+        })
+        .eq('id', existingEmail.id)
+        .eq('owner_id', user.id)
+        .eq('organization_id', organizationId)
+
+      console.log(
+        `[Email Receiver] Restored deleted email: ${email.subject} from ${formData.email} (email ID: ${existingEmail.id})`
+      )
+      return false
+    }
     console.log(`[Email Receiver] Email already processed, skipping: ${email.subject} from ${formData.email} (existing email ID: ${existingEmail.id}, messageId: ${existingEmail.provider_message_id || 'none'})`)
     return false // Return false to indicate this was a duplicate
   }
@@ -473,6 +483,7 @@ async function processContactFormInquiry(
     .from('clients')
     .select('id, name, email, phone')
     .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
     .eq('email', formData.email)
 
   let clientId: string | null = null
@@ -526,6 +537,7 @@ async function processContactFormInquiry(
   // client_id may be null if this is not a contact form inquiry
   const emailInsertData: any = {
       owner_id: user.id,
+      organization_id: organizationId,
       subject: email.subject,
       body_html: email.html || email.text,
       body_text: email.text || (email.html ? email.html.replace(/<[^>]*>/g, '') : ''),

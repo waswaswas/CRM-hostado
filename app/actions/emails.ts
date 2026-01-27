@@ -964,6 +964,7 @@ export async function getEmails(filters?: {
     .eq('owner_id', user.id)
     .eq('organization_id', organizationId)
     .eq('is_deleted', false)
+    .order('sent_at', { ascending: false, nullsFirst: false })
     .order('created_at', { ascending: false })
 
   if (filters?.client_id) {
