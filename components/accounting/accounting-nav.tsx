@@ -17,7 +17,7 @@ export function AccountingNav() {
   const pathname = usePathname()
 
   return (
-    <div className="flex items-center gap-2 border-b pb-4 mb-6">
+    <div className="flex items-center gap-2 border-b pb-4 mb-6 overflow-x-auto">
       {accountingNav.map((item) => {
         const isActive = pathname === item.href || pathname?.startsWith(item.href + '/')
         return (
@@ -25,14 +25,15 @@ export function AccountingNav() {
             key={item.name}
             href={item.href}
             className={cn(
-              'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors',
+              'flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors',
               isActive
                 ? 'bg-primary text-primary-foreground'
                 : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
             )}
           >
             <item.icon className="h-4 w-4" />
-            {item.name}
+            <span className="hidden sm:inline">{item.name}</span>
+            <span className="sm:hidden">{item.name}</span>
           </Link>
         )
       })}

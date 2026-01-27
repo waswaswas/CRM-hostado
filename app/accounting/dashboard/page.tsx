@@ -25,8 +25,8 @@ export default async function AccountingDashboardPage() {
         <div className="space-y-6">
           <AccountingNav />
           <div>
-            <h1 className="text-3xl font-bold">Accounting Dashboard</h1>
-            <p className="text-muted-foreground">Financial overview and analytics</p>
+            <h1 className="text-2xl md:text-3xl font-bold">Accounting Dashboard</h1>
+            <p className="text-sm md:text-base text-muted-foreground">Financial overview and analytics</p>
           </div>
           <AccountingDashboard startDate={startDate} endDate={endDate} />
         </div>

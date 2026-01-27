@@ -67,7 +67,11 @@ export function OrganizationSelector() {
     <div className="flex items-center gap-2">
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="outline" size="sm" className="gap-2 min-w-[120px] justify-between">
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2 min-w-[120px] max-w-[200px] sm:max-w-none w-full justify-between"
+          >
             <div className="flex items-center gap-2 min-w-0">
               <Building2 className="h-4 w-4 flex-shrink-0" />
               <span className="text-sm font-medium truncate">
@@ -119,7 +123,7 @@ export function OrganizationSelector() {
           </Link>
         </DropdownMenuContent>
       </DropdownMenu>
-      <Link href="/organizations/new">
+      <Link href="/organizations/new" className="hidden sm:inline-flex">
         <Button variant="ghost" size="sm" className="gap-2">
           <Plus className="h-4 w-4" />
           <span className="hidden sm:inline">New</span>

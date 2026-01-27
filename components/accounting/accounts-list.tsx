@@ -37,8 +37,8 @@ export function AccountsList({ accounts: initialAccounts }: AccountsListProps) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex-1">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="flex-1 min-w-0">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
@@ -50,8 +50,8 @@ export function AccountsList({ accounts: initialAccounts }: AccountsListProps) {
           </div>
         </div>
         <Dialog open={showNewAccountDialog} onOpenChange={setShowNewAccountDialog}>
-          <DialogTrigger>
-            <Button>
+          <DialogTrigger asChild>
+            <Button className="w-full sm:w-auto">
               <Plus className="mr-2 h-4 w-4" />
               New Account
             </Button>

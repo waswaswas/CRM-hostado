@@ -491,27 +491,28 @@ export function ClientDetail({ client: initialClient, linkedAccountingCustomers 
 
         <div className="lg:col-span-2">
           <Tabs defaultValue="timeline" className="w-full">
-            <TabsList>
-              <TabsTrigger value="timeline">Timeline</TabsTrigger>
-              <TabsTrigger value="notes">Notes</TabsTrigger>
-              <TabsTrigger value="offers">Offers</TabsTrigger>
-              <TabsTrigger value="reminders">Reminders</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="timeline" className="space-y-4">
-              <div className="flex justify-end gap-2">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <TabsList className="flex flex-wrap">
+                <TabsTrigger value="timeline">Timeline</TabsTrigger>
+                <TabsTrigger value="notes">Notes</TabsTrigger>
+                <TabsTrigger value="offers">Offers</TabsTrigger>
+                <TabsTrigger value="reminders">Reminders</TabsTrigger>
+              </TabsList>
+              <div className="flex flex-wrap items-center gap-2">
                 <Link href={`/emails/compose?client_id=${client.id}`}>
-                  <Button variant="outline">
+                  <Button variant="outline" className="min-h-[40px]">
                     <Mail className="mr-2 h-4 w-4" />
                     Send Email
                   </Button>
                 </Link>
-                <Button onClick={() => setShowInteractionDialog(true)}>
+                <Button onClick={() => setShowInteractionDialog(true)} className="min-h-[40px]">
                   <Plus className="mr-2 h-4 w-4" />
                   Add Interaction
                 </Button>
               </div>
+            </div>
 
+            <TabsContent value="timeline" className="space-y-4">
               {loading ? (
                 <p className="text-muted-foreground">Loading...</p>
               ) : interactions.length > 0 ? (

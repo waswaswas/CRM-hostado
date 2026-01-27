@@ -25,11 +25,11 @@ export function Topbar({ userName }: { userName?: string }) {
 
   return (
     <>
-      <div className="flex h-16 items-center justify-between border-b bg-background px-4 md:px-6">
-        <div className="flex items-center gap-2 min-w-0 flex-1">
+      <div className="flex h-16 items-center justify-between border-b bg-background pl-16 pr-4 md:px-6">
+        <div className="flex items-center gap-2 min-w-0 flex-1 overflow-hidden">
           <OrganizationSelector />
         </div>
-        <div className="flex items-center gap-1 md:gap-2">
+        <div className="flex items-center gap-1 md:gap-2 flex-shrink-0">
           {/* Theme Toggle - Always visible, before bell */}
           <ThemeToggle />
           <NotificationBadge />

@@ -37,13 +37,13 @@ export function OrganizationMembersList({
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2">
             <Users className="h-5 w-5 text-primary" />
             <CardTitle>Members</CardTitle>
           </div>
           {canManage && (
-            <Button size="sm" disabled>
+            <Button size="sm" disabled className="w-full sm:w-auto">
               Invite Member
             </Button>
           )}
@@ -60,7 +60,7 @@ export function OrganizationMembersList({
             return (
               <div
                 key={member.id}
-                className="flex items-center justify-between p-3 border rounded-lg"
+                className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between p-3 border rounded-lg"
               >
                 <div className="flex items-center gap-3">
                   <Icon className={`h-5 w-5 ${colorClass}`} />
@@ -74,11 +74,11 @@ export function OrganizationMembersList({
                   </div>
                 </div>
                 {canManage && member.role !== 'owner' && (
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm" disabled>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <Button variant="outline" size="sm" disabled className="w-full sm:w-auto">
                       Edit
                     </Button>
-                    <Button variant="outline" size="sm" disabled>
+                    <Button variant="outline" size="sm" disabled className="w-full sm:w-auto">
                       Remove
                     </Button>
                   </div>

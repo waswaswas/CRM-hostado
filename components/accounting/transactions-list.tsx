@@ -208,7 +208,7 @@ export function TransactionsList({ initialTransactions, accounts }: Transactions
           <Select
             value={filterType}
             onChange={(e) => setFilterType(e.target.value)}
-            className="min-w-[120px]"
+            className="w-full sm:w-auto min-w-[120px]"
           >
             <option value="all">All Types</option>
             <option value="income">Income</option>
@@ -218,7 +218,7 @@ export function TransactionsList({ initialTransactions, accounts }: Transactions
           <Select
             value={filterAccount}
             onChange={(e) => setFilterAccount(e.target.value)}
-            className="min-w-[140px]"
+            className="w-full sm:w-auto min-w-[140px]"
           >
             <option value="all">All Accounts</option>
             {accounts.map((account) => (
@@ -230,20 +230,20 @@ export function TransactionsList({ initialTransactions, accounts }: Transactions
           <Button
             variant="outline"
             onClick={() => setSortOrder(sortOrder === 'newest' ? 'oldest' : 'newest')}
-            className="whitespace-nowrap"
+            className="w-full sm:w-auto whitespace-nowrap"
           >
             <ArrowUpDown className="mr-2 h-4 w-4" />
             {sortOrder === 'newest' ? 'Newest' : 'Oldest'}
           </Button>
-          <div className="flex gap-2">
+          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
             <Link href="/accounting/import">
-              <Button variant="outline" size="sm" className="whitespace-nowrap">
+              <Button variant="outline" size="sm" className="w-full sm:w-auto whitespace-nowrap">
                 <Upload className="mr-2 h-4 w-4" />
                 <span className="hidden sm:inline">Import</span>
               </Button>
             </Link>
             <Link href="/accounting/transactions/new">
-              <Button size="sm" className="whitespace-nowrap">
+              <Button size="sm" className="w-full sm:w-auto whitespace-nowrap">
                 <Plus className="mr-2 h-4 w-4" />
                 <span className="hidden sm:inline">New</span>
                 <span className="sm:hidden">+</span>
@@ -255,11 +255,11 @@ export function TransactionsList({ initialTransactions, accounts }: Transactions
 
       {/* Bulk actions bar */}
       {selectedTransactions.size > 0 && (
-        <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 bg-muted rounded-lg">
           <span className="text-sm font-medium">
             {selectedTransactions.size} transaction{selectedTransactions.size > 1 ? 's' : ''} selected
           </span>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
             <Button
               variant="outline"
               size="sm"

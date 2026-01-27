@@ -52,9 +52,9 @@ export function AccountingCustomersList({ initialCustomers }: AccountingCustomer
             />
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
           <Link href="/accounting/customers/import">
-            <Button variant="outline" size="sm" className="whitespace-nowrap">
+            <Button variant="outline" size="sm" className="w-full sm:w-auto whitespace-nowrap">
               <Upload className="mr-2 h-4 w-4" />
               <span className="hidden sm:inline">Import</span>
             </Button>
