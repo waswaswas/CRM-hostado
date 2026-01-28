@@ -40,9 +40,9 @@ export function OrganizationSelector() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center gap-2 px-3 py-2">
-        <Building2 className="h-4 w-4 text-muted-foreground animate-pulse" />
-        <span className="text-sm text-muted-foreground">Loading...</span>
+      <div className="flex items-center gap-1.5 px-2 py-1.5 h-8">
+        <Building2 className="h-3.5 w-3.5 text-muted-foreground animate-pulse" />
+        <span className="text-xs text-muted-foreground">Loading...</span>
       </div>
     )
   }
@@ -53,10 +53,10 @@ export function OrganizationSelector() {
     return (
       <div className="flex items-center gap-2">
         <Link href="/organizations/new">
-          <Button variant="outline" size="sm" className="gap-2">
-            <Plus className="h-4 w-4" />
-            <span className="hidden sm:inline">Create Organization</span>
-            <span className="sm:hidden">Create</span>
+          <Button variant="outline" size="sm" className="gap-1.5 h-8 px-2">
+            <Plus className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline text-xs">Create Organization</span>
+            <span className="sm:hidden text-xs">Create</span>
           </Button>
         </Link>
       </div>
@@ -70,15 +70,15 @@ export function OrganizationSelector() {
           <Button
             variant="outline"
             size="sm"
-            className="gap-2 min-w-[120px] max-w-[200px] sm:max-w-none w-full justify-between"
+            className="gap-1.5 min-w-[100px] max-w-[180px] sm:max-w-none w-full justify-between h-8 px-2"
           >
-            <div className="flex items-center gap-2 min-w-0">
-              <Building2 className="h-4 w-4 flex-shrink-0" />
-              <span className="text-sm font-medium truncate">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <Building2 className="h-3.5 w-3.5 flex-shrink-0" />
+              <span className="text-xs font-medium truncate">
                 {currentOrganization?.name || organizations[0]?.name || 'Select Org'}
               </span>
             </div>
-            <ChevronDown className="h-4 w-4 flex-shrink-0" />
+            <ChevronDown className="h-3.5 w-3.5 flex-shrink-0" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-56">
@@ -124,9 +124,9 @@ export function OrganizationSelector() {
         </DropdownMenuContent>
       </DropdownMenu>
       <Link href="/organizations/new" className="hidden sm:inline-flex">
-        <Button variant="ghost" size="sm" className="gap-2">
-          <Plus className="h-4 w-4" />
-          <span className="hidden sm:inline">New</span>
+        <Button variant="ghost" size="sm" className="gap-1.5 h-8 px-2">
+          <Plus className="h-3.5 w-3.5" />
+          <span className="hidden sm:inline text-xs">New</span>
         </Button>
       </Link>
       <JoinOrganizationDialog open={joinOrgOpen} onOpenChange={setJoinOrgOpen} />

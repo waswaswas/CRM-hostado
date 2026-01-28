@@ -79,13 +79,13 @@ export function FloatingActionButton({ currentPath }: FloatingActionButtonProps)
         <Button
           onClick={() => setIsOpen(!isOpen)}
           size="lg"
-          className="h-12 w-12 rounded-full shadow-lg p-0 min-h-[48px] min-w-[48px]"
+          className="h-8 w-8 rounded-full shadow-lg p-0 min-h-[32px] min-w-[32px]"
           aria-label={isOpen ? 'Close menu' : 'Open quick actions'}
         >
           {isOpen ? (
-            <X className="h-5 w-5" />
+            <X className="h-3.5 w-3.5" />
           ) : (
-            <Plus className="h-5 w-5" />
+            <Plus className="h-3.5 w-3.5" />
           )}
         </Button>
       </div>

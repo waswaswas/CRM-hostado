@@ -268,7 +268,7 @@ export function RemindersCard({
               className="min-h-[44px] px-3 md:h-8"
             >
               <List className="h-4 w-4 mr-1.5" />
-              <span className="hidden sm:inline">List</span>
+              <span>List</span>
             </Button>
             <Button
               variant={viewMode === 'calendar' ? 'default' : 'ghost'}
@@ -277,7 +277,7 @@ export function RemindersCard({
               className="min-h-[44px] px-3 md:h-8"
             >
               <Calendar className="h-4 w-4 mr-1.5" />
-              <span className="hidden sm:inline">Calendar</span>
+              <span>Calendar</span>
             </Button>
             <Button
               variant={viewMode === 'completed' ? 'default' : 'ghost'}

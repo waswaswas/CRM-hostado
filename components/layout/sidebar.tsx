@@ -47,14 +47,14 @@ export function Sidebar({ userName, collapsed = false, onToggleCollapse }: Sideb
       <Button
         variant="ghost"
         size="icon"
-        className="fixed left-4 top-4 z-50 md:hidden h-11 w-11 min-h-[44px] min-w-[44px]"
+        className="fixed left-4 top-[0.5rem] sm:top-[0.75rem] z-50 md:hidden h-10 w-10 min-h-[40px] min-w-[40px]"
         onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
         aria-label="Toggle menu"
       >
         {mobileMenuOpen ? (
-          <X className="h-6 w-6" />
+          <X className="h-5 w-5" />
         ) : (
-          <Menu className="h-6 w-6" />
+          <Menu className="h-5 w-5" />
         )}
       </Button>
 
