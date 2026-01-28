@@ -77,28 +77,29 @@ export function NotificationBadge() {
       <DropdownMenuTrigger asChild>
         <Button
           variant="ghost"
-          size="sm"
-          className="h-9 px-2 gap-1.5 relative"
+          size="icon"
+          className="h-10 w-10 rounded-lg relative text-muted-foreground hover:text-foreground hover:bg-muted/50"
           title="Notifications"
+          aria-label={`${unreadCount > 0 ? `${unreadCount} unread notifications` : 'Notifications'}`}
         >
-          <Bell className="h-4 w-4" />
+          <Bell className="h-5 w-5" />
           {unreadCount > 0 && (
-            <Badge
-              variant="destructive"
-              className="absolute -top-1 -right-1 h-5 min-w-5 flex items-center justify-center px-1 text-xs font-bold"
+            <span
+              className="absolute top-1.5 right-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1.5 text-[11px] font-semibold text-destructive-foreground ring-2 ring-background"
+              aria-hidden
             >
               {displayCount}
-            </Badge>
+            </span>
           )}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-80">
-        <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
+      <DropdownMenuContent align="end" className="w-80 rounded-xl border-border/80 shadow-lg">
+        <div className="px-3 py-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           Notifications
         </div>
         <DropdownMenuSeparator />
         {notifications.length === 0 ? (
-          <div className="px-3 py-6 text-center text-sm text-muted-foreground">
+          <div className="px-4 py-8 text-center text-sm text-muted-foreground">
             {loading ? 'Loading...' : 'No notifications'}
           </div>
         ) : (
@@ -112,14 +113,14 @@ export function NotificationBadge() {
                     router.push(link)
                   }
                 }}
-                className="flex flex-col items-start gap-1 py-2"
+                className="flex flex-col items-start gap-1.5 rounded-lg py-3 mx-1 min-h-[52px] cursor-pointer"
               >
-                <div className="flex items-center gap-2 w-full">
-                  <span className="font-medium truncate">
+                <div className="flex items-center gap-2 w-full min-w-0">
+                  <span className="font-medium truncate text-sm">
                     {notification.title}
                   </span>
                   {!notification.is_read && (
-                    <Badge variant="secondary" className="text-[10px]">New</Badge>
+                    <Badge variant="secondary" className="shrink-0 text-[10px] px-1.5 py-0 rounded-md">New</Badge>
                   )}
                 </div>
                 {notification.message && (
@@ -127,7 +128,7 @@ export function NotificationBadge() {
                     {notification.message}
                   </span>
                 )}
-                <span className="text-[10px] text-muted-foreground">
+                <span className="text-[11px] text-muted-foreground/80">
                   {format(new Date(notification.created_at), 'MMM d, HH:mm')}
                 </span>
               </DropdownMenuItem>
@@ -135,8 +136,8 @@ export function NotificationBadge() {
           })
         )}
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={() => router.push('/notifications')}>
-          View all
+        <DropdownMenuItem onClick={() => router.push('/notifications')} className="rounded-lg min-h-[44px] font-medium mx-1 mb-1">
+          View all notifications
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

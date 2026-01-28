@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, Users, Settings, FileText, Mail, Building2, Menu, X, User, ListTodo } from 'lucide-react'
+import { LayoutDashboard, Users, Settings, FileText, Mail, Building2, Menu, X, User, ListTodo, ChevronLeft, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -22,9 +22,13 @@ const allNavigation = [
 
 interface SidebarProps {
   userName?: string
+  /** Tablet/desktop only: when true, sidebar shows only the expand arrow. */
+  collapsed?: boolean
+  /** Tablet/desktop only: toggle collapse. */
+  onToggleCollapse?: () => void
 }
 
-export function Sidebar({ userName }: SidebarProps) {
+export function Sidebar({ userName, collapsed = false, onToggleCollapse }: SidebarProps) {
   const pathname = usePathname()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const { permissions, loading: permissionsLoading } = useFeaturePermissions()
@@ -34,6 +38,8 @@ export function Sidebar({ userName }: SidebarProps) {
 
   // Filter navigation based on permissions
   const navigation = allNavigation.filter(item => permissions[item.feature])
+
+  const showCollapseToggle = Boolean(onToggleCollapse)
 
   return (
     <>
@@ -60,104 +66,129 @@ export function Sidebar({ userName }: SidebarProps) {
         />
       )}
 
-      {/* Sidebar - Desktop & Mobile Drawer */}
+      {/* Sidebar - Mobile drawer; tablet/desktop: collapsible with arrow */}
       <div
         className={cn(
-          'fixed md:static inset-y-0 left-0 z-40 flex h-full w-64 flex-col border-r bg-card transition-transform duration-300 ease-in-out',
-          mobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
+          'fixed md:relative inset-y-0 left-0 z-40 flex h-full flex-col border-r bg-card shrink-0 transition-[width,transform] duration-300 ease-in-out',
+          'md:flex-row md:overflow-hidden',
+          // Mobile: slide in/out
+          mobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0',
+          // Mobile: fixed width for drawer
+          'w-64',
+          // Tablet/desktop: collapsible width when toggle provided (224px expanded, 56px collapsed); else fixed
+          showCollapseToggle ? (collapsed ? 'md:w-14' : 'md:w-56 lg:w-64') : 'md:w-56 lg:w-64'
         )}
       >
-        <div className="flex flex-col border-b">
-          <div className="flex h-24 items-center justify-center px-4">
-            <img 
-              src="/hostado-logo.png" 
-              alt="Hostado" 
-              className="h-16 w-full object-cover"
-            />
+        {/* Main content: logo, nav, user — hidden when collapsed on tablet/desktop */}
+        <div
+          className={cn(
+            'flex flex-1 flex-col min-w-0',
+            collapsed && showCollapseToggle && 'md:w-0 md:flex-none md:overflow-hidden md:opacity-0 md:pointer-events-none md:min-w-0'
+          )}
+        >
+          <div className={cn('flex flex-col border-b md:border-b', collapsed && showCollapseToggle && 'md:hidden')}>
+            <div className="flex h-20 sm:h-24 items-center justify-center px-4">
+              <img
+                src="/hostado-logo.png"
+                alt="Hostado"
+                className="h-14 w-full max-w-[180px] object-contain sm:h-16"
+              />
+            </div>
+          </div>
+          <nav className="flex-1 space-y-1 overflow-y-auto overflow-x-hidden p-3 sm:p-4">
+            {isLoading ? (
+              <>
+                {[ { width: 'w-24' }, { width: 'w-20' }, { width: 'w-28' }, { width: 'w-24' }, { width: 'w-32' } ].map((item, i) => (
+                  <div key={i} className="flex items-center gap-3 rounded-lg px-3 py-3 min-h-[44px]">
+                    <Skeleton className="h-5 w-5 rounded flex-shrink-0" />
+                    <Skeleton className={cn('h-4', item.width)} />
+                  </div>
+                ))}
+              </>
+            ) : (
+              navigation.map((item) => {
+                const isActive = pathname === item.href || pathname?.startsWith(item.href + '/')
+                return (
+                  <Link
+                    key={item.name}
+                    href={item.href}
+                    onClick={() => setMobileMenuOpen(false)}
+                    className={cn(
+                      'flex items-center justify-between gap-3 rounded-lg px-3 py-3 text-sm font-medium transition-colors min-h-[44px] min-w-[44px]',
+                      isActive
+                        ? 'bg-primary text-primary-foreground'
+                        : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                    )}
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <item.icon className="h-5 w-5 shrink-0" />
+                      <span className="truncate">{item.name}</span>
+                    </div>
+                    {item.name === 'Accounting' && (
+                      <Badge variant="secondary" className="text-xs shrink-0">
+                        Beta
+                      </Badge>
+                    )}
+                  </Link>
+                )
+              })
+            )}
+          </nav>
+          {userName && (
+            <div className={cn('border-t p-3 sm:p-4', collapsed && showCollapseToggle && 'md:hidden')}>
+              <div className="flex items-center gap-2 px-3 py-2 min-h-[44px]">
+                <User className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                <span className="text-sm text-muted-foreground truncate">{userName}</span>
+              </div>
+            </div>
+          )}
+          <div className={cn('border-t p-3 sm:p-4', collapsed && showCollapseToggle && 'md:hidden')}>
+            {isLoading ? (
+              <div className="flex items-center gap-3 rounded-lg px-3 py-3 min-h-[44px]">
+                <Skeleton className="h-5 w-5 rounded flex-shrink-0" />
+                <Skeleton className="h-4 w-20" />
+              </div>
+            ) : (
+              <Link
+                href="/settings"
+                onClick={() => setMobileMenuOpen(false)}
+                className={cn(
+                  'flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium transition-colors min-h-[44px]',
+                  pathname === '/settings' || pathname?.startsWith('/settings')
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                )}
+              >
+                <Settings className="h-5 w-5 shrink-0" />
+                Settings
+              </Link>
+            )}
           </div>
         </div>
-        <nav className="flex-1 space-y-1 overflow-y-auto p-4">
-          {isLoading ? (
-            // Skeleton loading for navigation items
-            <>
-              {[
-                { width: 'w-24' },
-                { width: 'w-20' },
-                { width: 'w-28' },
-                { width: 'w-24' },
-                { width: 'w-32' },
-              ].map((item, i) => (
-                <div
-                  key={i}
-                  className="flex items-center gap-3 rounded-lg px-3 py-3 min-h-[44px]"
-                >
-                  <Skeleton className="h-5 w-5 rounded flex-shrink-0" />
-                  <Skeleton className={cn('h-4', item.width)} />
-                </div>
-              ))}
-            </>
-          ) : (
-            navigation.map((item) => {
-              const isActive = pathname === item.href || pathname?.startsWith(item.href + '/')
-              return (
-                <Link
-                  key={item.name}
-                  href={item.href}
-                  onClick={() => setMobileMenuOpen(false)}
-                  className={cn(
-                    'flex items-center justify-between gap-3 rounded-lg px-3 py-3 text-sm font-medium transition-colors min-h-[44px]',
-                    isActive
-                      ? 'bg-primary text-primary-foreground'
-                      : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
-                  )}
-                >
-                  <div className="flex items-center gap-3">
-                    <item.icon className="h-5 w-5" />
-                    {item.name}
-                  </div>
-                  {item.name === 'Accounting' && (
-                    <Badge variant="secondary" className="text-xs">
-                      Beta
-                    </Badge>
-                  )}
-                </Link>
-              )
-            })
-          )}
-        </nav>
-        {/* User Email - Below feature list */}
-        {userName && (
-          <div className="border-t p-4">
-            <div className="flex items-center gap-2 px-3 py-2">
-              <User className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-              <span className="text-sm text-muted-foreground truncate">
-                {userName}
-              </span>
-            </div>
+
+        {/* Collapse/expand arrow — tablet & desktop only, 44px touch target */}
+        {showCollapseToggle && (
+          <div
+            className={cn(
+              'hidden md:flex flex-shrink-0 items-center justify-center border-l border-border/60 bg-muted/30',
+              collapsed ? 'w-14 flex-col' : 'w-12 flex-col'
+            )}
+          >
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onToggleCollapse}
+              aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              className="h-11 w-11 min-h-[44px] min-w-[44px] rounded-lg"
+            >
+              {collapsed ? (
+                <ChevronRight className="h-5 w-5" />
+              ) : (
+                <ChevronLeft className="h-5 w-5" />
+              )}
+            </Button>
           </div>
         )}
-        <div className="border-t p-4">
-          {isLoading ? (
-            <div className="flex items-center gap-3 rounded-lg px-3 py-3 min-h-[44px]">
-              <Skeleton className="h-5 w-5 rounded flex-shrink-0" />
-              <Skeleton className="h-4 w-20" />
-            </div>
-          ) : (
-            <Link
-              href="/settings"
-              onClick={() => setMobileMenuOpen(false)}
-              className={cn(
-                'flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium transition-colors min-h-[44px]',
-                pathname === '/settings' || pathname?.startsWith('/settings')
-                  ? 'bg-primary text-primary-foreground'
-                  : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
-              )}
-            >
-              <Settings className="h-5 w-5" />
-              Settings
-            </Link>
-          )}
-        </div>
       </div>
     </>
   )

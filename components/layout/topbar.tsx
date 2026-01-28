@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { signOut } from '@/app/actions/auth'
 import { LogOut, MessageSquare, MoreVertical } from 'lucide-react'
@@ -19,67 +20,80 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 
-export function Topbar({ userName }: { userName?: string }) {
+export function Topbar({ userName, sidebarCollapsed }: { userName?: string; sidebarCollapsed?: boolean }) {
   const [feedbackOpen, setFeedbackOpen] = useState(false)
   const pathname = usePathname()
 
   return (
     <>
-      <div className="flex h-16 items-center justify-between border-b bg-background pl-16 pr-4 md:px-6">
-        <div className="flex items-center gap-2 min-w-0 flex-1">
+      <div
+        className={cn(
+          'flex h-14 sm:h-16 items-center justify-between gap-4 border-b border-border/80 bg-background px-4 pr-4 transition-[padding] duration-300',
+          'pl-16 md:pl-5 md:pr-5 lg:px-6', // mobile: space for hamburger; tablet+: comfortable padding
+          sidebarCollapsed && 'md:pl-4'
+        )}
+      >
+        {/* Left: org selector */}
+        <div className="flex min-w-0 flex-1 items-center">
           <OrganizationSelector />
         </div>
-        <div className="flex items-center gap-1 md:gap-2 flex-shrink-0">
-          {/* Theme Toggle - Always visible, before bell */}
+
+        {/* Right: actions — grouped and spaced for clarity */}
+        <div className="flex flex-shrink-0 items-center gap-1 sm:gap-2">
           <ThemeToggle />
-          <NotificationBadge />
-          {/* Mobile: FAB Button (replaces top button) */}
+          <div className="min-h-[40px] min-w-[40px] flex items-center justify-center">
+            <NotificationBadge />
+          </div>
           <div className="md:hidden">
             <FloatingActionButton currentPath={pathname} />
           </div>
-          {/* Desktop: Show all buttons */}
-          <div className="hidden md:flex items-center gap-2">
+          <div className="hidden md:flex items-center gap-1 lg:gap-2">
+            <div className="h-6 w-px bg-border hidden lg:block" aria-hidden />
             <Button
               variant="ghost"
               size="sm"
               onClick={() => setFeedbackOpen(true)}
-              className="h-9 px-2 gap-1.5"
+              className="h-9 min-h-[40px] px-3 gap-1.5 rounded-lg text-muted-foreground hover:text-foreground"
               title="Feedback & Improvements"
             >
-              <MessageSquare className="h-4 w-4" />
-              <span className="text-xs">Feedback</span>
+              <MessageSquare className="h-4 w-4 shrink-0" />
+              <span className="text-sm">Feedback</span>
             </Button>
             <TimezoneSelector />
+            <div className="h-6 w-px bg-border hidden lg:block" aria-hidden />
             <form action={signOut}>
-              <Button type="submit" variant="ghost" size="sm" className="min-h-[44px]">
-                <LogOut className="mr-2 h-4 w-4" />
-                Logout
+              <Button
+                type="submit"
+                variant="ghost"
+                size="sm"
+                className="h-9 min-h-[40px] px-3 gap-1.5 rounded-lg text-muted-foreground hover:text-foreground"
+              >
+                <LogOut className="h-4 w-4 shrink-0" />
+                <span className="text-sm">Logout</span>
               </Button>
             </form>
           </div>
-          {/* Mobile: Dropdown menu */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-11 w-11 md:hidden">
+              <Button variant="ghost" size="icon" className="h-10 w-10 md:hidden rounded-lg" aria-label="More options">
                 <MoreVertical className="h-5 w-5" />
-                <span className="sr-only">More options</span>
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuItem onClick={() => setFeedbackOpen(true)} className="min-h-[44px]">
+            <DropdownMenuContent align="end" className="w-56 rounded-lg">
+              <DropdownMenuItem onClick={() => setFeedbackOpen(true)} className="min-h-[44px] rounded-md">
                 <MessageSquare className="mr-2 h-4 w-4" />
                 Feedback
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <div className="px-2 py-1.5">
-                <div className="text-xs font-medium mb-1">Timezone</div>
+                <div className="text-xs font-medium mb-1 text-muted-foreground">Timezone</div>
                 <TimezoneSelector />
               </div>
               <DropdownMenuSeparator />
               <form action={signOut}>
                 <DropdownMenuItem asChild>
-                  <button type="submit" className="w-full text-left min-h-[44px]">
-                    <LogOut className="mr-2 h-4 w-4" />
+                  <button type="submit" className="w-full text-left min-h-[44px] rounded-md flex items-center gap-2">
+                    <LogOut className="h-4 w-4" />
                     Logout
                   </button>
                 </DropdownMenuItem>

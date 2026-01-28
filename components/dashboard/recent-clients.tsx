@@ -4,11 +4,13 @@ import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Users } from 'lucide-react'
+import { Users, ChevronRight } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useOrganization } from '@/lib/organization-context'
 import type { Client } from '@/types/database'
 import { formatStatus, getStatusColor } from '@/lib/status-utils'
+import { Skeleton } from '@/components/ui/skeleton'
+import { cn } from '@/lib/utils'
 
 interface RecentClientsProps {
   initialClients: Client[]
@@ -97,44 +99,79 @@ export function RecentClients({ initialClients, customStatuses }: RecentClientsP
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Users className="h-5 w-5" />
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-base font-semibold">
+          <Users className="h-5 w-5 text-muted-foreground" />
           Recent Clients
         </CardTitle>
-        <CardDescription>Recently added clients</CardDescription>
+        <CardDescription className="text-sm">Recently added clients</CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-2">
         {loading && recentClients.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Loading...</p>
-        ) : recentClients.length > 0 ? (
           <div className="space-y-2">
-            {recentClients.map((client) => (
-              <Link
-                key={client.id}
-                href={`/clients/${client.id}`}
-                className="block rounded-lg border p-3 transition-colors hover:bg-accent"
-              >
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <p className="font-medium">{client.name}</p>
-                    {client.company && (
-                      <p className="text-sm text-muted-foreground">
-                        {client.company}
-                      </p>
-                    )}
-                  </div>
-                  <Badge className={getStatusColor(client.status, client.client_type)}>
-                    {formatStatus(client.status, customStatuses)}
-                  </Badge>
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="flex items-center gap-3 rounded-xl border border-border p-3.5">
+                <Skeleton className="h-10 w-10 rounded-full" />
+                <div className="flex-1 space-y-1">
+                  <Skeleton className="h-4 w-32" />
+                  <Skeleton className="h-3 w-24" />
                 </div>
-              </Link>
+              </div>
             ))}
           </div>
+        ) : recentClients.length > 0 ? (
+          <>
+            <div className="space-y-2">
+              {recentClients.map((client) => (
+                <Link
+                  key={client.id}
+                  href={`/clients/${client.id}`}
+                  className={cn(
+                    'flex items-center gap-3 rounded-xl border border-border bg-card p-3.5',
+                    'hover:bg-muted/50 dark:hover:bg-muted/30 hover:border-primary/30 transition-colors'
+                  )}
+                >
+                  <div className="flex flex-1 min-w-0 items-center justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium text-foreground truncate">{client.name}</p>
+                      {client.company && (
+                        <p className="text-sm text-muted-foreground truncate mt-0.5">{client.company}</p>
+                      )}
+                    </div>
+                    <Badge
+                      className={cn(
+                        'shrink-0 text-xs font-medium px-2 py-0.5 rounded-md',
+                        getStatusColor(client.status, client.client_type)
+                      )}
+                    >
+                      {formatStatus(client.status, customStatuses)}
+                    </Badge>
+                  </div>
+                  <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+                </Link>
+              ))}
+            </div>
+            <Link
+              href="/clients"
+              className="mt-3 flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-muted-foreground/30 py-2.5 text-sm font-medium text-muted-foreground hover:bg-muted/50 hover:text-foreground hover:border-primary/30 transition-colors"
+            >
+              View all clients
+              <ChevronRight className="h-4 w-4" />
+            </Link>
+          </>
         ) : (
-          <p className="text-sm text-muted-foreground">
-            No clients yet. Create your first client to get started.
-          </p>
+          <div className="py-10 text-center">
+            <Users className="mx-auto h-10 w-10 text-muted-foreground/50 mb-2" />
+            <p className="text-sm text-muted-foreground">No clients yet</p>
+            <p className="text-xs text-muted-foreground mt-1">Create your first client to get started</p>
+            <Link
+              href="/clients/new"
+              className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
+            >
+              Add client
+              <ChevronRight className="h-4 w-4" />
+            </Link>
+          </div>
         )}
       </CardContent>
     </Card>

@@ -1,8 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Sidebar } from './sidebar'
-import { Topbar } from './topbar'
+import { LayoutShell } from './layout-shell'
 import { createClient } from '@/lib/supabase/client'
 
 export function AppLayoutClient({ children }: { children: React.ReactNode }) {
@@ -19,17 +18,7 @@ export function AppLayoutClient({ children }: { children: React.ReactNode }) {
     getUser()
   }, [])
 
-  return (
-    <div className="flex h-screen">
-      <Sidebar userName={userEmail} />
-      <div className="flex flex-1 flex-col overflow-hidden">
-        <Topbar userName={userEmail} />
-        <main className="flex-1 overflow-y-auto bg-muted/50 p-4 md:p-6">
-          {children}
-        </main>
-      </div>
-    </div>
-  )
+  return <LayoutShell userName={userEmail}>{children}</LayoutShell>
 }
 
 
