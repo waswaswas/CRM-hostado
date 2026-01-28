@@ -148,9 +148,9 @@ export function EmailList({ initialEmails = [], clientId }: EmailListProps) {
           table: 'emails',
           filter: `organization_id=eq.${currentOrganization.id}`,
         },
-        (payload) => {
+        (payload: { new: Email }) => {
           if (!isActive) return
-          const newEmail = payload.new as Email
+          const newEmail = payload.new
           setEmails((prev) => {
             if (prev.some((email) => email.id === newEmail.id)) {
               return prev

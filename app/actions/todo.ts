@@ -35,6 +35,12 @@ export type TodoTask = {
   attachments?: { id: string; file_name: string; file_url: string }[]
 }
 
+/** Updates for a task; allows camelCase aliases (dueDate, assigneeId) from the UI */
+export type TodoTaskUpdate = Partial<TodoTask> & {
+  dueDate?: string | null
+  assigneeId?: string | null
+}
+
 function generateInviteCode(): string {
   return Math.random().toString(36).slice(2, 8).toUpperCase()
 }
@@ -85,7 +91,7 @@ export async function getTodoTasks(listId: string): Promise<TodoTask[]> {
     throw new Error(error.message)
   }
 
-  const taskIds = (tasks || []).map((task) => task.id)
+  const taskIds = (tasks || []).map((task: { id: string }) => task.id)
 
   const [subtasksResult, commentsResult, attachmentsResult] = await Promise.all([
     taskIds.length
@@ -276,7 +282,7 @@ export async function createTodoTask(listId: string, title: string): Promise<Tod
   return task as TodoTask
 }
 
-export async function updateTodoTask(taskId: string, updates: Partial<TodoTask>): Promise<void> {
+export async function updateTodoTask(taskId: string, updates: TodoTaskUpdate): Promise<void> {
   const supabase = await createClient()
   const {
     data: { user },

@@ -424,8 +424,8 @@ export async function createTransaction(data: {
       throw new Error('Failed to load account balances for transfer')
     }
 
-    const fromAccount = balanceRows.find((row) => row.id === data.account_id)
-    const toAccount = balanceRows.find((row) => row.id === data.transfer_to_account_id)
+    const fromAccount = balanceRows.find((row: { id: string; current_balance: unknown }) => row.id === data.account_id)
+    const toAccount = balanceRows.find((row: { id: string; current_balance: unknown }) => row.id === data.transfer_to_account_id)
 
     if (!fromAccount || !toAccount) {
       throw new Error('Failed to resolve accounts for transfer balance update')

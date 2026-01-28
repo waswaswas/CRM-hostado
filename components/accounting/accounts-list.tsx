@@ -5,7 +5,7 @@ import { Account } from '@/types/database'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { AccountForm } from './account-form'
 import { Plus, Search, Lock } from 'lucide-react'
 import { format } from 'date-fns'
@@ -49,13 +49,14 @@ export function AccountsList({ accounts: initialAccounts }: AccountsListProps) {
             />
           </div>
         </div>
+        <Button
+          className="w-full sm:w-auto"
+          onClick={() => setShowNewAccountDialog(true)}
+        >
+          <Plus className="mr-2 h-4 w-4" />
+          New Account
+        </Button>
         <Dialog open={showNewAccountDialog} onOpenChange={setShowNewAccountDialog}>
-          <DialogTrigger asChild>
-            <Button className="w-full sm:w-auto">
-              <Plus className="mr-2 h-4 w-4" />
-              New Account
-            </Button>
-          </DialogTrigger>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>New Account</DialogTitle>

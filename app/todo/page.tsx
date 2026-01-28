@@ -188,10 +188,11 @@ export default function TodoPage() {
       setTasks([])
       return
     }
+    const listId = activeListId
     async function loadTasks() {
       setLoadingTasks(true)
       try {
-        const data = await getTodoTasks(activeListId)
+        const data = await getTodoTasks(listId)
         setTasks(data.map(mapTaskFromDb))
       } finally {
         setLoadingTasks(false)
