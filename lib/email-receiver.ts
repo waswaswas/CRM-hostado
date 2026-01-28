@@ -511,7 +511,7 @@ async function processContactFormInquiry(
   
   const { data: existingClients } = await supabase
     .from('clients')
-    .select('id, name, email, phone')
+    .select('id, name, email, phone, is_deleted')
     .eq('owner_id', user.id)
     .eq('organization_id', organizationId)
     .eq('email', formData.email)
@@ -520,13 +520,21 @@ async function processContactFormInquiry(
 
   if (existingClients && existingClients.length > 0) {
     // Client already exists with this email, use the first one
-    clientId = existingClients[0].id
+    if (existingClients[0].is_deleted) {
+      console.log(
+        `[Email Receiver] Client is deleted for ${formData.email}, skipping recreation`
+      )
+      clientId = null
+    } else {
+      clientId = existingClients[0].id
+    }
     
     // Update the client if name or phone is missing/updated
     const needsUpdate = 
-      !existingClients[0].name || 
+      !!clientId &&
+      (!existingClients[0].name || 
       existingClients[0].name !== formData.name ||
-      (!existingClients[0].phone && formData.phone)
+      (!existingClients[0].phone && formData.phone))
     
     if (needsUpdate) {
       await supabase
@@ -538,6 +546,23 @@ async function processContactFormInquiry(
         .eq('id', clientId)
     }
   } else if (isContactFormInquiry) {
+    // If any inbound email exists for this sender, never recreate a deleted client.
+    const { data: existingInquiry } = await supabase
+      .from('emails')
+      .select('id')
+      .eq('owner_id', user.id)
+      .eq('organization_id', organizationId)
+      .eq('from_email', formData.email)
+      .eq('direction', 'inbound')
+      .limit(1)
+      .maybeSingle()
+
+    if (existingInquiry) {
+      console.log(
+        `[Email Receiver] Skipping client creation for ${formData.email} - inquiry already exists`
+      )
+      clientId = null
+    } else {
     // No client with this email exists, create new one
     // Only create for contact form inquiries (not for delivery failures or other system emails)
     // Set status to 'follow_up_required' to remind to contact them
@@ -550,6 +575,7 @@ async function processContactFormInquiry(
       source: 'contact_form',
     })
     clientId = newClient.id
+    }
   } else {
     // Not a contact form inquiry - don't create a client
     console.log(`[Email Receiver] Skipping client creation for email with subject: "${email.subject}"`)

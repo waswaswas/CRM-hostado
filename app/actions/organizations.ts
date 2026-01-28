@@ -33,6 +33,85 @@ export async function getCurrentOrganizationId(): Promise<string | null> {
   return orgId || null
 }
 
+export type OrgRole = 'owner' | 'admin' | 'moderator' | 'viewer'
+
+/** Returns the current user's role in the current organization, or null if none. */
+export async function getCurrentUserOrgRole(): Promise<OrgRole | null> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return null
+
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) return null
+
+  const { data: member } = await supabase
+    .from('organization_members')
+    .select('role')
+    .eq('organization_id', organizationId)
+    .eq('user_id', user.id)
+    .eq('is_active', true)
+    .maybeSingle()
+
+  return (member?.role as OrgRole) ?? null
+}
+
+/** Returns permission context for the dashboard: has any permission, has dashboard, has clients. */
+export async function getDashboardPermissionContext(): Promise<{
+  hasAnyPermission: boolean
+  hasDashboard: boolean
+  hasClients: boolean
+}> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) {
+    return { hasAnyPermission: false, hasDashboard: false, hasClients: false }
+  }
+
+  const orgId = await getCurrentOrganizationId()
+  if (!orgId) {
+    return { hasAnyPermission: false, hasDashboard: false, hasClients: false }
+  }
+
+  const { data: member } = await supabase
+    .from('organization_members')
+    .select('role')
+    .eq('organization_id', orgId)
+    .eq('user_id', user.id)
+    .eq('is_active', true)
+    .maybeSingle()
+
+  if (!member) {
+    return { hasAnyPermission: false, hasDashboard: false, hasClients: false }
+  }
+
+  if (member.role === 'owner' || member.role === 'admin') {
+    return { hasAnyPermission: true, hasDashboard: true, hasClients: true }
+  }
+
+  const { data: perms } = await supabase
+    .from('organization_permissions')
+    .select('feature, has_access')
+    .eq('organization_id', orgId)
+    .eq('user_id', user.id)
+
+  const map: Record<string, boolean> = {}
+  for (const p of perms || []) {
+    if (p.has_access) {
+      const key = p.feature === 'email' ? 'emails' : p.feature
+      map[key] = true
+    }
+  }
+  const hasDashboard = map['dashboard'] === true
+  const hasClients = map['clients'] === true
+  const featureKeys = ['dashboard', 'clients', 'offers', 'emails', 'accounting', 'reminders', 'settings', 'users', 'todo']
+  const hasAnyPermission = featureKeys.some((f) => map[f] === true)
+  return { hasAnyPermission, hasDashboard, hasClients }
+}
+
 export async function setCurrentOrganizationId(organizationId: string) {
   const cookieStore = await cookies()
   cookieStore.set(COOKIE_NAME, organizationId, {

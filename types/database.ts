@@ -20,6 +20,8 @@ export interface Client {
   client_type: ClientType | null
   source: string | null
   notes_summary: string | null
+  is_deleted?: boolean
+  deleted_at?: string | null
 }
 
 export interface Interaction {

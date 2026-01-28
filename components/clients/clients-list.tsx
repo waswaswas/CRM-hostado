@@ -19,9 +19,11 @@ import type { StatusConfig } from '@/types/settings'
 interface ClientsListProps {
   initialClients: Client[]
   linkedClientIds?: string[]
+  /** When false (e.g. viewer), hide/disable delete actions. Defaults to true for backwards compatibility. */
+  canDelete?: boolean
 }
 
-export function ClientsList({ initialClients, linkedClientIds = [] }: ClientsListProps) {
+export function ClientsList({ initialClients, linkedClientIds = [], canDelete = true }: ClientsListProps) {
   const { toast } = useToast()
   const [clients, setClients] = useState<Client[]>(initialClients)
   const [filteredClients, setFilteredClients] = useState<Client[]>(initialClients)
@@ -50,7 +52,7 @@ export function ClientsList({ initialClients, linkedClientIds = [] }: ClientsLis
   }, [])
 
   useEffect(() => {
-    let filtered = clients
+    let filtered = clients.filter((client) => !client.is_deleted)
 
     // Search filter
     if (search) {
@@ -401,14 +403,16 @@ export function ClientsList({ initialClients, linkedClientIds = [] }: ClientsLis
                 <span className="text-sm font-medium">
                   {selectedClients.size} client{selectedClients.size > 1 ? 's' : ''} selected
                 </span>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={handleBulkDelete}
-                >
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  Delete Selected
-                </Button>
+                {canDelete && (
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={handleBulkDelete}
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Delete Selected
+                  </Button>
+                )}
                 <Button
                   variant="ghost"
                   size="sm"
@@ -420,18 +424,20 @@ export function ClientsList({ initialClients, linkedClientIds = [] }: ClientsLis
             </div>
           )}
 
-          {/* Select All Checkbox */}
-          <div className="flex items-center gap-2 pb-2 border-b">
-            <input
-              type="checkbox"
-              checked={filteredClients.length > 0 && selectedClients.size === filteredClients.length}
-              onChange={handleSelectAll}
-              className="h-5 w-5 rounded-full border-2 border-gray-300 cursor-pointer appearance-none checked:bg-primary checked:border-primary checked:after:content-['✓'] checked:after:text-white checked:after:flex checked:after:items-center checked:after:justify-center checked:after:text-xs transition-colors"
-            />
-            <label className="text-sm font-medium cursor-pointer" onClick={handleSelectAll}>
-              Select All ({filteredClients.length})
-            </label>
-          </div>
+          {/* Select All Checkbox - only when bulk delete is available */}
+          {canDelete && (
+            <div className="flex items-center gap-2 pb-2 border-b">
+              <input
+                type="checkbox"
+                checked={filteredClients.length > 0 && selectedClients.size === filteredClients.length}
+                onChange={handleSelectAll}
+                className="h-5 w-5 rounded-full border-2 border-gray-300 cursor-pointer appearance-none checked:bg-primary checked:border-primary checked:after:content-['✓'] checked:after:text-white checked:after:flex checked:after:items-center checked:after:justify-center checked:after:text-xs transition-colors"
+              />
+              <label className="text-sm font-medium cursor-pointer" onClick={handleSelectAll}>
+                Select All ({filteredClients.length})
+              </label>
+            </div>
+          )}
 
           <div className="grid gap-4">
             {filteredClients.map((client) => (
@@ -439,14 +445,16 @@ export function ClientsList({ initialClients, linkedClientIds = [] }: ClientsLis
                 <CardContent className="p-3 md:p-4">
                   <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
                     <div className="flex items-start gap-3 flex-1 min-w-0">
-                      {/* Checkbox */}
-                      <input
-                        type="checkbox"
-                        checked={selectedClients.has(client.id)}
-                        onChange={() => handleToggleSelect(client.id)}
-                        onClick={(e) => e.stopPropagation()}
-                        className="h-5 w-5 rounded-full border-2 border-gray-300 cursor-pointer flex-shrink-0 mt-0.5 appearance-none checked:bg-primary checked:border-primary checked:after:content-['✓'] checked:after:text-white checked:after:flex checked:after:items-center checked:after:justify-center checked:after:text-xs transition-colors"
-                      />
+                      {/* Checkbox - only when bulk delete is available */}
+                      {canDelete && (
+                        <input
+                          type="checkbox"
+                          checked={selectedClients.has(client.id)}
+                          onChange={() => handleToggleSelect(client.id)}
+                          onClick={(e) => e.stopPropagation()}
+                          className="h-5 w-5 rounded-full border-2 border-gray-300 cursor-pointer flex-shrink-0 mt-0.5 appearance-none checked:bg-primary checked:border-primary checked:after:content-['✓'] checked:after:text-white checked:after:flex checked:after:items-center checked:after:justify-center checked:after:text-xs transition-colors"
+                        />
+                      )}
                       <div className="flex-1 min-w-0">
                         {/* Name and Primary Tags */}
                         <div className="flex flex-col sm:flex-row sm:items-center gap-2 mb-2">
@@ -570,24 +578,28 @@ export function ClientsList({ initialClients, linkedClientIds = [] }: ClientsLis
                       <div className="text-right text-sm text-muted-foreground">
                         <p>Added {format(new Date(client.created_at), 'MMM d, yyyy')}</p>
                       </div>
-                      <button
-                        onClick={(e) => handleDeleteClient(client.id, client.name, e)}
-                        className="p-2 text-muted-foreground hover:text-destructive transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
-                        title="Delete client"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                      {canDelete && (
+                        <button
+                          onClick={(e) => handleDeleteClient(client.id, client.name, e)}
+                          className="p-2 text-muted-foreground hover:text-destructive transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
+                          title="Delete client"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      )}
                     </div>
                     {/* Mobile: Delete button */}
-                    <div className="sm:hidden flex justify-end">
-                      <button
-                        onClick={(e) => handleDeleteClient(client.id, client.name, e)}
-                        className="p-2 text-muted-foreground hover:text-destructive transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
-                        title="Delete client"
-                      >
-                        <Trash2 className="h-5 w-5" />
-                      </button>
-                    </div>
+                    {canDelete && (
+                      <div className="sm:hidden flex justify-end">
+                        <button
+                          onClick={(e) => handleDeleteClient(client.id, client.name, e)}
+                          className="p-2 text-muted-foreground hover:text-destructive transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
+                          title="Delete client"
+                        >
+                          <Trash2 className="h-5 w-5" />
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>

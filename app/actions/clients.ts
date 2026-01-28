@@ -3,7 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { Client, ClientStatus } from '@/types/database'
 import { revalidatePath } from 'next/cache'
-import { getCurrentOrganizationId } from './organizations'
+import { getCurrentOrganizationId, getCurrentUserOrgRole } from './organizations'
 
 export async function createClientRecord(data: {
   name: string
@@ -92,6 +92,7 @@ export async function updateClient(
     .eq('id', id)
     .eq('owner_id', user.id)
     .eq('organization_id', organizationId)
+    .eq('is_deleted', false)
     .single()
 
   const { data: client, error } = await supabase
@@ -100,6 +101,7 @@ export async function updateClient(
     .eq('id', id)
     .eq('owner_id', user.id)
     .eq('organization_id', organizationId)
+    .eq('is_deleted', false)
     .select()
     .single()
 
@@ -144,64 +146,30 @@ export async function deleteClient(id: string) {
     throw new Error('No organization selected')
   }
 
-  // Remove/clear related records to avoid FK constraint failures.
-  const relatedDeletes = [
-    supabase.from('client_notes').delete().eq('client_id', id).eq('organization_id', organizationId),
-    supabase.from('interactions').delete().eq('client_id', id).eq('organization_id', organizationId),
-    supabase.from('offers').delete().eq('client_id', id).eq('organization_id', organizationId),
-    supabase.from('status_change_history').delete().eq('client_id', id).eq('organization_id', organizationId),
-    supabase.from('reminders').delete().eq('client_id', id).eq('organization_id', organizationId),
-  ]
-
-  const [notesRes, interactionsRes, offersRes, statusRes, remindersRes] = await Promise.all(relatedDeletes)
-  const relatedErrors = [notesRes.error, interactionsRes.error, offersRes.error, statusRes.error, remindersRes.error]
-    .filter(Boolean)
-    .map((err) => err?.message)
-
-  if (relatedErrors.length > 0) {
-    throw new Error(`Failed to delete related data: ${relatedErrors.join(', ')}`)
+  // Only owners and admins can delete clients; viewers can view/edit but not delete
+  const role = await getCurrentUserOrgRole()
+  if (!role || (role !== 'owner' && role !== 'admin')) {
+    throw new Error('Only owners and admins can delete clients.')
   }
 
-  // Clear nullable references instead of deleting emails/accounting records
-  const { error: emailRefError } = await supabase
-    .from('emails')
-    .update({ client_id: null })
-    .eq('client_id', id)
-    .eq('organization_id', organizationId)
-
-  if (emailRefError) {
-    throw new Error(emailRefError.message)
-  }
-
-  const { error: accountingLinkError } = await supabase
-    .from('accounting_customers')
-    .update({ linked_client_id: null })
-    .eq('linked_client_id', id)
-    .eq('organization_id', organizationId)
-
-  if (accountingLinkError) {
-    throw new Error(accountingLinkError.message)
-  }
-
-  const { error: transactionRefError } = await supabase
-    .from('transactions')
-    .update({ contact_id: null })
-    .eq('contact_id', id)
-    .eq('organization_id', organizationId)
-
-  if (transactionRefError) {
-    throw new Error(transactionRefError.message)
-  }
-
-  const { error } = await supabase
+  // Soft delete client to prevent recreation and preserve history
+  const { data: updatedClient, error } = await supabase
     .from('clients')
-    .delete()
+    .update({
+      is_deleted: true,
+      deleted_at: new Date().toISOString(),
+    })
     .eq('id', id)
-    .eq('owner_id', user.id)
     .eq('organization_id', organizationId)
+    .eq('is_deleted', false)
+    .select('id')
+    .maybeSingle()
 
   if (error) {
     throw new Error(error.message)
+  }
+  if (!updatedClient) {
+    throw new Error('Client could not be deleted (not found or insufficient permissions).')
   }
 
   revalidatePath('/clients')
@@ -227,7 +195,8 @@ export async function getClients() {
     const { data, error } = await supabase
       .from('clients')
       .select('*')
-      .or(`organization_id.eq.${organizationId},organization_id.is.null`)
+      .eq('organization_id', organizationId)
+      .eq('is_deleted', false)
       .order('created_at', { ascending: false })
 
     if (error) {
@@ -276,6 +245,7 @@ export async function getClient(id: string) {
     .select('*')
     .eq('id', id)
     .eq('organization_id', organizationId)
+    .eq('is_deleted', false)
     .single()
 
   if (error) {

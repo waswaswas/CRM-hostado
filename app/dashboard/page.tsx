@@ -12,10 +12,11 @@ import { Calendar, Users, AlertCircle, TrendingUp, Clock, Tag, List } from 'luci
 import type { Client } from '@/types/database'
 import { RemindersCard } from '@/components/dashboard/reminders-card'
 import { RecentClients } from '@/components/dashboard/recent-clients'
+import { NoPermissionsCard } from '@/components/dashboard/no-permissions-card'
 import { format, parseISO } from 'date-fns'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { getOrganizations, getCurrentOrganizationId, setCurrentOrganizationId } from '@/app/actions/organizations'
+import { getOrganizations, getCurrentOrganizationId, setCurrentOrganizationId, getDashboardPermissionContext } from '@/app/actions/organizations'
 import { revalidatePath } from 'next/cache'
 
 function formatDateTime(dateString: string) {
@@ -57,6 +58,20 @@ export default async function DashboardPage() {
         revalidatePath('/', 'layout')
       }
     }
+  }
+
+  const permContext = await getDashboardPermissionContext()
+
+  // No permissions at all: show message and refresh button instead of dashboard
+  if (!permContext.hasAnyPermission) {
+    return (
+      <AppLayout>
+        <div className="space-y-6">
+          <h1 className="text-3xl font-bold">Dashboard</h1>
+          <NoPermissionsCard />
+        </div>
+      </AppLayout>
+    )
   }
 
   let reminders = []
@@ -150,7 +165,7 @@ export default async function DashboardPage() {
           <h1 className="text-3xl font-bold">Dashboard</h1>
         </div>
 
-        <div className="grid gap-6 md:grid-cols-2">
+        <div className={`grid gap-6 ${permContext.hasClients ? 'md:grid-cols-2' : ''}`}>
           <RemindersCard 
             reminders={reminders}
             overdueReminders={overdueReminders}
@@ -160,11 +175,13 @@ export default async function DashboardPage() {
             clients={clients}
           />
 
-          <RecentClients initialClients={clients} customStatuses={customStatuses} />
+          {permContext.hasClients && (
+            <RecentClients initialClients={clients} customStatuses={customStatuses} />
+          )}
         </div>
 
-        {/* Stats Cards Section */}
-        {stats && (
+        {/* Stats Cards (leads + waiting for offer) — only when user has Clients permission */}
+        {permContext.hasClients && stats && (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
