@@ -43,7 +43,7 @@ export type TodoTask = {
   completed: boolean
   created_at: string
   updated_at: string
-  subtasks?: { id: string; title: string; done: boolean }[]
+  subtasks?: { id: string; title: string; done: boolean; due_date: string | null }[]
   comments?: { id: string; content: string; created_at: string }[]
   attachments?: { id: string; file_name: string; file_url: string }[]
 }
@@ -254,7 +254,7 @@ export async function getTodoTasks(listId: string, projectId?: string | null): P
     taskIds.length
       ? supabase
           .from('todo_task_subtasks')
-          .select('id, task_id, title, done')
+          .select('id, task_id, title, done, due_date')
           .in('task_id', taskIds)
       : Promise.resolve({ data: [] as any[] }),
     taskIds.length
@@ -271,13 +271,13 @@ export async function getTodoTasks(listId: string, projectId?: string | null): P
       : Promise.resolve({ data: [] as any[] }),
   ])
 
-  const subtasksByTask = new Map<string, { id: string; title: string; done: boolean }[]>()
+  const subtasksByTask = new Map<string, { id: string; title: string; done: boolean; due_date: string | null }[]>()
   const commentsByTask = new Map<string, { id: string; content: string; created_at: string }[]>()
   const attachmentsByTask = new Map<string, { id: string; file_name: string; file_url: string }[]>()
 
   ;(subtasksResult.data || []).forEach((row: any) => {
     const list = subtasksByTask.get(row.task_id) || []
-    list.push({ id: row.id, title: row.title, done: row.done })
+    list.push({ id: row.id, title: row.title, done: row.done, due_date: row.due_date ?? null })
     subtasksByTask.set(row.task_id, list)
   })
 
@@ -510,6 +510,46 @@ export async function createTodoSubtask(taskId: string, title: string): Promise<
   revalidatePath('/todo')
 }
 
+export async function updateTodoSubtask(
+  subtaskId: string,
+  updates: { title?: string; due_date?: string | null }
+): Promise<void> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) throw new Error('Unauthorized')
+
+  const payload: Record<string, unknown> = {}
+  if (updates.title !== undefined) payload.title = updates.title
+  if (updates.due_date !== undefined) payload.due_date = updates.due_date || null
+  if (Object.keys(payload).length === 0) return
+
+  const { error } = await supabase
+    .from('todo_task_subtasks')
+    .update(payload)
+    .eq('id', subtaskId)
+
+  if (error) throw new Error(error.message)
+  revalidatePath('/todo')
+}
+
+export async function deleteTodoSubtask(subtaskId: string): Promise<void> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) throw new Error('Unauthorized')
+
+  const { error } = await supabase
+    .from('todo_task_subtasks')
+    .delete()
+    .eq('id', subtaskId)
+
+  if (error) throw new Error(error.message)
+  revalidatePath('/todo')
+}
+
 export async function toggleTodoSubtask(subtaskId: string, done: boolean): Promise<void> {
   const supabase = await createClient()
   const {
@@ -554,4 +594,289 @@ export async function createTodoAttachment(taskId: string, fileName: string, fil
 
   if (error) throw new Error(error.message)
   revalidatePath('/todo')
+}
+
+// ---- Time tracking ----
+
+export type TodoTimeEntry = {
+  id: string
+  task_id: string
+  user_id: string
+  entry_type: 'timer' | 'manual' | 'correction'
+  start_time: string | null
+  end_time: string | null
+  duration_minutes: number
+  note: string | null
+  corrected_entry_id: string | null
+  created_at: string
+}
+
+export type TodoTimerSession = {
+  id: string
+  task_id: string
+  user_id: string
+  started_at: string
+  stopped_at: string | null
+  is_running: boolean
+  created_at: string
+}
+
+async function getTaskListId(supabase: Awaited<ReturnType<typeof createClient>>, taskId: string): Promise<string> {
+  const { data, error } = await supabase
+    .from('todo_tasks')
+    .select('list_id')
+    .eq('id', taskId)
+    .single()
+  if (error || !data) throw new Error('Task not found')
+  return data.list_id
+}
+
+async function logTodoTaskActivity(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  taskId: string,
+  action: string,
+  metadata: Record<string, unknown>
+): Promise<void> {
+  await supabase.from('todo_task_activity').insert({
+    task_id: taskId,
+    user_id: userId,
+    action,
+    metadata,
+  })
+}
+
+export async function getRunningTimer(listId: string): Promise<TodoTimerSession | null> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return null
+  const { data: taskIds } = await supabase
+    .from('todo_tasks')
+    .select('id')
+    .eq('list_id', listId)
+  const ids = (taskIds || []).map((t: { id: string }) => t.id)
+  if (ids.length === 0) return null
+  const { data: session } = await supabase
+    .from('todo_task_timer_sessions')
+    .select('*')
+    .eq('user_id', user.id)
+    .eq('is_running', true)
+    .in('task_id', ids)
+    .limit(1)
+    .maybeSingle()
+  if (!session) return null
+  return session as TodoTimerSession
+}
+
+export async function startTimer(taskId: string): Promise<TodoTimerSession> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) throw new Error('Unauthorized')
+
+  const listId = await getTaskListId(supabase, taskId)
+
+  const { data: existing } = await supabase
+    .from('todo_task_timer_sessions')
+    .select('id, task_id, started_at')
+    .eq('user_id', user.id)
+    .eq('is_running', true)
+
+  const listTaskIds = existing
+    ? (await Promise.all(
+        (existing as { task_id: string }[]).map(async (row) => {
+          const lid = await getTaskListId(supabase, row.task_id)
+          return lid === listId ? row.id : null
+        })
+      )).filter(Boolean) as string[]
+    : []
+
+  for (const sessionId of listTaskIds) {
+    await supabase
+      .from('todo_task_timer_sessions')
+      .update({ is_running: false, stopped_at: new Date().toISOString() })
+      .eq('id', sessionId)
+  }
+
+  const { data: session, error } = await supabase
+    .from('todo_task_timer_sessions')
+    .insert({
+      task_id: taskId,
+      user_id: user.id,
+      started_at: new Date().toISOString(),
+      is_running: true,
+    })
+    .select()
+    .single()
+
+  if (error || !session) throw new Error(error?.message || 'Failed to start timer')
+  await logTodoTaskActivity(supabase, user.id, taskId, 'timer_started', { session_id: session.id })
+  revalidatePath('/todo')
+  return session as TodoTimerSession
+}
+
+export async function stopTimer(taskId: string): Promise<TodoTimeEntry> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) throw new Error('Unauthorized')
+
+  const { data: session, error: sessionError } = await supabase
+    .from('todo_task_timer_sessions')
+    .select('*')
+    .eq('task_id', taskId)
+    .eq('user_id', user.id)
+    .eq('is_running', true)
+    .maybeSingle()
+
+  if (sessionError || !session) throw new Error('No running timer for this task')
+
+  const stoppedAt = new Date()
+  const startedAt = new Date(session.started_at)
+  const durationMinutes = Math.max(0, Math.round((stoppedAt.getTime() - startedAt.getTime()) / 60000))
+
+  await supabase
+    .from('todo_task_timer_sessions')
+    .update({ is_running: false, stopped_at: stoppedAt.toISOString() })
+    .eq('id', session.id)
+
+  const { data: entry, error: entryError } = await supabase
+    .from('todo_task_time_entries')
+    .insert({
+      task_id: taskId,
+      user_id: user.id,
+      entry_type: 'timer',
+      start_time: session.started_at,
+      end_time: stoppedAt.toISOString(),
+      duration_minutes: durationMinutes,
+      note: null,
+    })
+    .select()
+    .single()
+
+  if (entryError || !entry) throw new Error(entryError?.message || 'Failed to save time entry')
+  await logTodoTaskActivity(supabase, user.id, taskId, 'timer_stopped', {
+    duration_minutes: durationMinutes,
+    entry_id: entry.id,
+  })
+  revalidatePath('/todo')
+  return entry as TodoTimeEntry
+}
+
+export async function addManualTimeEntry(
+  taskId: string,
+  durationMinutes: number,
+  options?: { note?: string; date?: string }
+): Promise<TodoTimeEntry> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) throw new Error('Unauthorized')
+  if (durationMinutes <= 0) throw new Error('Duration must be positive')
+
+  const { data: entry, error } = await supabase
+    .from('todo_task_time_entries')
+    .insert({
+      task_id: taskId,
+      user_id: user.id,
+      entry_type: 'manual',
+      duration_minutes: durationMinutes,
+      note: options?.note ?? null,
+      start_time: options?.date ?? null,
+      end_time: null,
+    })
+    .select()
+    .single()
+
+  if (error || !entry) throw new Error(error?.message || 'Failed to add time entry')
+  await logTodoTaskActivity(supabase, user.id, taskId, 'manual_time_added', {
+    entry_id: entry.id,
+    duration_minutes: durationMinutes,
+  })
+  revalidatePath('/todo')
+  return entry as TodoTimeEntry
+}
+
+export async function correctTimeEntry(
+  entryId: string,
+  newDurationMinutes: number,
+  note?: string
+): Promise<TodoTimeEntry> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) throw new Error('Unauthorized')
+  if (newDurationMinutes < 0) throw new Error('Duration cannot be negative')
+
+  const { data: original, error: fetchError } = await supabase
+    .from('todo_task_time_entries')
+    .select('id, task_id, user_id')
+    .eq('id', entryId)
+    .single()
+
+  if (fetchError || !original) throw new Error('Time entry not found')
+  if (original.user_id !== user.id) throw new Error('You can only correct your own entries')
+
+  const { data: correction, error } = await supabase
+    .from('todo_task_time_entries')
+    .insert({
+      task_id: original.task_id,
+      user_id: user.id,
+      entry_type: 'correction',
+      duration_minutes: newDurationMinutes,
+      note: note ?? null,
+      corrected_entry_id: entryId,
+    })
+    .select()
+    .single()
+
+  if (error || !correction) throw new Error(error?.message || 'Failed to create correction')
+  await logTodoTaskActivity(supabase, user.id, original.task_id, 'time_corrected', {
+    original_entry_id: entryId,
+    correction_entry_id: correction.id,
+    new_duration_minutes: newDurationMinutes,
+  })
+  revalidatePath('/todo')
+  return correction as TodoTimeEntry
+}
+
+export async function getTimeEntries(taskId: string): Promise<TodoTimeEntry[]> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return []
+
+  const { data, error } = await supabase
+    .from('todo_task_time_entries')
+    .select('*')
+    .eq('task_id', taskId)
+    .order('created_at', { ascending: false })
+
+  if (error) return []
+  return (data || []) as TodoTimeEntry[]
+}
+
+/** Total minutes for task: for each entry use latest correction if any, else original. */
+export async function getTotalMinutes(taskId: string): Promise<number> {
+  const entries = await getTimeEntries(taskId)
+  const effectiveByOriginalId = new Map<string, number>()
+  for (const e of entries) {
+    if (e.entry_type === 'correction') {
+      const origId = e.corrected_entry_id!
+      effectiveByOriginalId.set(origId, e.duration_minutes)
+    }
+  }
+  let total = 0
+  for (const e of entries) {
+    if (e.entry_type === 'correction') continue
+    total += effectiveByOriginalId.get(e.id) ?? e.duration_minutes
+  }
+  return total
 }

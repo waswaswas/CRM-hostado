@@ -5,6 +5,8 @@ import { useOrganization } from '@/lib/organization-context'
 import { useFeaturePermissions } from '@/lib/hooks/use-feature-permissions'
 import { getUserRole } from '@/app/actions/organizations'
 import {
+  addManualTimeEntry,
+  correctTimeEntry,
   createTodoAttachment,
   createTodoComment,
   createTodoList,
@@ -12,13 +14,20 @@ import {
   createTodoSubtask,
   createTodoTask,
   deleteTodoList,
+  deleteTodoSubtask,
   deleteTodoTask,
+  getRunningTimer,
+  getTimeEntries,
   getTodoLists,
   getTodoProjects,
   getTodoTasks,
+  getTotalMinutes,
   joinTodoListByCode,
+  startTimer,
+  stopTimer,
   toggleTodoSubtask,
   updateTodoList,
+  updateTodoSubtask,
   updateTodoTask,
 } from '@/app/actions/todo'
 import { createClient } from '@/lib/supabase/client'
@@ -30,7 +39,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { useToast } from '@/components/ui/toaster'
-import { Archive, Calendar, Check, Copy, FolderOpen, Pencil, Plus, Search, Settings, Trash2, Users } from 'lucide-react'
+import { Archive, Calendar, Check, Clock, Copy, FolderOpen, Pencil, Plus, Search, Settings, Square, Trash2, Users } from 'lucide-react'
 
 type UserRole = 'owner' | 'admin' | 'moderator' | 'viewer'
 type TaskStatus = 'to_do' | 'in_progress' | 'blocked' | 'done'
@@ -73,7 +82,7 @@ type TodoTask = {
   status: TaskStatus
   assigneeId: string | null
   tags: string[]
-  subtasks: { id: string; title: string; done: boolean }[]
+  subtasks: { id: string; title: string; done: boolean; dueDate: string | null }[]
   comments: { id: string; text: string; createdAt: string }[]
   attachments: { id: string; name: string; url: string }[]
   updatedAt: string
@@ -138,6 +147,7 @@ function mapTaskFromDb(task: any): TodoTask {
       id: subtask.id,
       title: subtask.title,
       done: subtask.done,
+      dueDate: subtask.due_date ?? null,
     })),
     comments: (task.comments || []).map((comment: any) => ({
       id: comment.id,
@@ -184,6 +194,14 @@ export default function TodoPage() {
   const [loadingLists, setLoadingLists] = useState(false)
   const [loadingTasks, setLoadingTasks] = useState(false)
   const [addingTask, setAddingTask] = useState(false)
+  const [timeEntries, setTimeEntries] = useState<Array<{ id: string; entry_type: string; duration_minutes: number; note: string | null; created_at: string; corrected_entry_id: string | null }>>([])
+  const [timeTotalMinutes, setTimeTotalMinutes] = useState(0)
+  const [runningTimer, setRunningTimer] = useState<{ id: string; task_id: string; started_at: string } | null>(null)
+  const [manualTimeMinutes, setManualTimeMinutes] = useState('')
+  const [manualTimeNote, setManualTimeNote] = useState('')
+  const [correctingEntryId, setCorrectingEntryId] = useState<string | null>(null)
+  const [correctDuration, setCorrectDuration] = useState('')
+  const [timerLoading, setTimerLoading] = useState(false)
 
   useEffect(() => {
     async function loadUserContext() {
@@ -321,6 +339,32 @@ export default function TodoPage() {
     setNewComment('')
     setNewAttachmentUrl('')
   }, [activeTaskId])
+
+  useEffect(() => {
+    if (!activeTaskId || !activeListId) {
+      setTimeEntries([])
+      setTimeTotalMinutes(0)
+      setRunningTimer(null)
+      return
+    }
+    async function loadTime() {
+      try {
+        const [entries, total, running] = await Promise.all([
+          getTimeEntries(activeTaskId),
+          getTotalMinutes(activeTaskId),
+          getRunningTimer(activeListId),
+        ])
+        setTimeEntries(entries)
+        setTimeTotalMinutes(total)
+        setRunningTimer(running && running.is_running ? { id: running.id, task_id: running.task_id, started_at: running.started_at } : null)
+      } catch {
+        setTimeEntries([])
+        setTimeTotalMinutes(0)
+        setRunningTimer(null)
+      }
+    }
+    loadTime()
+  }, [activeTaskId, activeListId])
 
   async function refreshLists() {
     const data = await getTodoLists()
@@ -657,7 +701,7 @@ export default function TodoPage() {
 
         <div className="flex items-center gap-2">
           <Input
-            placeholder="Add a task and press Enter"
+            placeholder="Enter a task name and press enter"
             value={newTaskTitle}
             onChange={(event) => setNewTaskTitle(event.target.value)}
             onKeyDown={(event) => {
@@ -890,22 +934,167 @@ export default function TodoPage() {
                 />
               </div>
               <div className="space-y-2">
+                <label className="text-sm font-medium flex items-center gap-2">
+                  <Clock className="h-4 w-4" />
+                  Time tracking
+                </label>
+                <p className="text-xs text-muted-foreground">Total: {timeTotalMinutes} min</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  {runningTimer ? (
+                    runningTimer.task_id === activeTask.id ? (
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        disabled={timerLoading}
+                        onClick={async () => {
+                          setTimerLoading(true)
+                          try {
+                            await stopTimer(activeTask.id)
+                            const [entries, total, running] = await Promise.all([
+                              getTimeEntries(activeTask.id),
+                              getTotalMinutes(activeTask.id),
+                              getRunningTimer(activeTask.listId),
+                            ])
+                            setTimeEntries(entries)
+                            setTimeTotalMinutes(total)
+                            setRunningTimer(running && running.is_running ? { id: running.id, task_id: running.task_id, started_at: running.started_at } : null)
+                          } finally {
+                            setTimerLoading(false)
+                          }
+                        }}
+                      >
+                        <Square className="h-4 w-4 mr-1" />
+                        Stop timer
+                      </Button>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">Timer running on another task. Stop it there first.</span>
+                    )
+                  ) : (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={timerLoading}
+                      onClick={async () => {
+                        setTimerLoading(true)
+                        try {
+                          await startTimer(activeTask.id)
+                          const running = await getRunningTimer(activeTask.listId)
+                          setRunningTimer(running && running.is_running ? { id: running.id, task_id: running.task_id, started_at: running.started_at } : null)
+                        } finally {
+                          setTimerLoading(false)
+                        }
+                      }}
+                    >
+                      <Clock className="h-4 w-4 mr-1" />
+                      Start timer
+                    </Button>
+                  )}
+                </div>
+                <div className="flex gap-2 flex-wrap">
+                  <Input
+                    type="number"
+                    min={1}
+                    placeholder="Min"
+                    value={manualTimeMinutes}
+                    onChange={(e) => setManualTimeMinutes(e.target.value)}
+                    className="w-20"
+                  />
+                  <Input
+                    placeholder="Note (optional)"
+                    value={manualTimeNote}
+                    onChange={(e) => setManualTimeNote(e.target.value)}
+                    className="flex-1 min-w-0"
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={async () => {
+                      const min = parseInt(manualTimeMinutes, 10)
+                      if (!min || min < 1) return
+                      await addManualTimeEntry(activeTask.id, min, { note: manualTimeNote.trim() || undefined })
+                      setManualTimeMinutes('')
+                      setManualTimeNote('')
+                      const [entries, total] = await Promise.all([getTimeEntries(activeTask.id), getTotalMinutes(activeTask.id)])
+                      setTimeEntries(entries)
+                      setTimeTotalMinutes(total)
+                    }}
+                  >
+                    Add time
+                  </Button>
+                </div>
+                {timeEntries.length > 0 && (
+                  <div className="space-y-1.5 mt-2">
+                    <p className="text-xs font-medium text-muted-foreground">Entries</p>
+                    {timeEntries.map((entry) => (
+                      <div key={entry.id} className="flex items-center justify-between gap-2 rounded border px-2 py-1.5 text-sm">
+                        <span className="capitalize">{entry.entry_type}</span>
+                        <span>{entry.duration_minutes} min</span>
+                        {entry.note && <span className="truncate text-muted-foreground">{entry.note}</span>}
+                        {entry.entry_type !== 'correction' && (
+                          correctingEntryId === entry.id ? (
+                            <div className="flex gap-1 items-center">
+                              <Input
+                                type="number"
+                                min={0}
+                                value={correctDuration}
+                                onChange={(e) => setCorrectDuration(e.target.value)}
+                                className="w-16 h-8 text-xs"
+                                autoFocus
+                              />
+                              <Button
+                                size="sm"
+                                className="h-8"
+                                onClick={async () => {
+                                  const min = parseInt(correctDuration, 10)
+                                  if (min < 0) return
+                                  await correctTimeEntry(entry.id, min)
+                                  setCorrectingEntryId(null)
+                                  setCorrectDuration('')
+                                  const [entries, total] = await Promise.all([getTimeEntries(activeTask.id), getTotalMinutes(activeTask.id)])
+                                  setTimeEntries(entries)
+                                  setTimeTotalMinutes(total)
+                                }}
+                              >
+                                Save
+                              </Button>
+                              <Button variant="ghost" size="sm" className="h-8" onClick={() => { setCorrectingEntryId(null); setCorrectDuration('') }}>
+                                Cancel
+                              </Button>
+                            </div>
+                          ) : (
+                            <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => { setCorrectingEntryId(entry.id); setCorrectDuration(String(entry.duration_minutes)) }}>
+                              Correct
+                            </Button>
+                          )
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="space-y-2">
                 <label className="text-sm font-medium">Subtasks</label>
                 {(activeTask.subtasks || []).map((subtask) => (
-                  <div key={subtask.id} className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={subtask.done}
-                      onChange={async () => {
-                        await toggleTodoSubtask(subtask.id, !subtask.done)
-                        await refreshTasks(activeTask.listId, activeProjectId)
-                      }}
-                      className="h-4 w-4 rounded border-gray-300"
-                    />
-                    <span className={`text-sm ${subtask.done ? 'line-through text-muted-foreground' : ''}`}>
-                      {subtask.title}
-                    </span>
-                  </div>
+                  <SubtaskRow
+                    key={subtask.id}
+                    subtask={subtask}
+                    onToggle={async (done) => {
+                      await toggleTodoSubtask(subtask.id, done)
+                      await refreshTasks(activeTask.listId, activeProjectId)
+                    }}
+                    onRename={async (title) => {
+                      await updateTodoSubtask(subtask.id, { title })
+                      await refreshTasks(activeTask.listId, activeProjectId)
+                    }}
+                    onDueDateChange={async (dueDate) => {
+                      await updateTodoSubtask(subtask.id, { due_date: dueDate || null })
+                      await refreshTasks(activeTask.listId, activeProjectId)
+                    }}
+                    onDelete={async () => {
+                      await deleteTodoSubtask(subtask.id)
+                      await refreshTasks(activeTask.listId, activeProjectId)
+                    }}
+                  />
                 ))}
                 <div className="flex gap-2">
                   <Input
@@ -1020,6 +1209,75 @@ export default function TodoPage() {
         }}
         onDelete={handleDeleteList}
       />
+    </div>
+  )
+}
+
+function SubtaskRow({
+  subtask,
+  onToggle,
+  onRename,
+  onDueDateChange,
+  onDelete,
+}: {
+  subtask: { id: string; title: string; done: boolean; dueDate: string | null }
+  onToggle: (done: boolean) => Promise<void>
+  onRename: (title: string) => Promise<void>
+  onDueDateChange: (dueDate: string | null) => Promise<void>
+  onDelete: () => Promise<void>
+}) {
+  const [editing, setEditing] = useState(false)
+  const [editTitle, setEditTitle] = useState(subtask.title)
+
+  useEffect(() => {
+    setEditTitle(subtask.title)
+  }, [subtask.title])
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 rounded border border-transparent hover:border-border px-2 py-1.5 group">
+      <input
+        type="checkbox"
+        checked={subtask.done}
+        onChange={() => onToggle(!subtask.done)}
+        className="h-4 w-4 rounded border-gray-300 shrink-0"
+      />
+      {editing ? (
+        <Input
+          value={editTitle}
+          onChange={(e) => setEditTitle(e.target.value)}
+          onBlur={() => {
+            const t = editTitle.trim()
+            if (t && t !== subtask.title) onRename(t)
+            setEditing(false)
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              const t = editTitle.trim()
+              if (t && t !== subtask.title) onRename(t)
+              setEditing(false)
+            }
+          }}
+          className="h-8 flex-1 min-w-0 text-sm"
+          autoFocus
+        />
+      ) : (
+        <button
+          type="button"
+          onClick={() => setEditing(true)}
+          className={`text-sm text-left flex-1 min-w-0 truncate ${subtask.done ? 'line-through text-muted-foreground' : ''}`}
+        >
+          {subtask.title || 'Untitled'}
+        </button>
+      )}
+      <Input
+        type="date"
+        value={subtask.dueDate || ''}
+        onChange={(e) => onDueDateChange(e.target.value || null)}
+        className="h-8 w-[130px] text-xs shrink-0"
+      />
+      <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 opacity-70 hover:opacity-100" onClick={onDelete} aria-label="Delete subtask">
+        <Trash2 className="h-4 w-4 text-destructive" />
+      </Button>
     </div>
   )
 }
