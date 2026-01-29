@@ -16,9 +16,22 @@ export type TodoList = {
   todo_list_members?: { user_id: string; role: 'owner' | 'member' }[]
 }
 
+export type TodoProject = {
+  id: string
+  list_id: string
+  created_by: string
+  name: string
+  description: string | null
+  sort_order: number
+  is_archived: boolean
+  created_at: string
+  updated_at: string
+}
+
 export type TodoTask = {
   id: string
   list_id: string
+  project_id: string | null
   created_by: string
   title: string
   description: string | null
@@ -35,10 +48,11 @@ export type TodoTask = {
   attachments?: { id: string; file_name: string; file_url: string }[]
 }
 
-/** Updates for a task; allows camelCase aliases (dueDate, assigneeId) from the UI */
+/** Updates for a task; allows camelCase aliases (dueDate, assigneeId, projectId) from the UI */
 export type TodoTaskUpdate = Partial<TodoTask> & {
   dueDate?: string | null
   assigneeId?: string | null
+  projectId?: string | null
 }
 
 function generateInviteCode(): string {
@@ -115,7 +129,7 @@ export async function getTodoLists(): Promise<TodoList[]> {
   return attachMembers((data || []) as TodoList[])
 }
 
-export async function getTodoTasks(listId: string): Promise<TodoTask[]> {
+export async function getTodoProjects(listId: string): Promise<TodoProject[]> {
   const supabase = await createClient()
   const {
     data: { user },
@@ -125,11 +139,110 @@ export async function getTodoTasks(listId: string): Promise<TodoTask[]> {
     throw new Error('Unauthorized')
   }
 
-  const { data: tasks, error } = await supabase
+  const { data, error } = await supabase
+    .from('todo_projects')
+    .select('*')
+    .eq('list_id', listId)
+    .eq('is_archived', false)
+    .order('sort_order', { ascending: true })
+    .order('created_at', { ascending: true })
+
+  if (error) {
+    throw new Error(error.message)
+  }
+  return (data || []) as TodoProject[]
+}
+
+export async function createTodoProject(listId: string, input: { name: string; description?: string }): Promise<TodoProject> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    throw new Error('Unauthorized')
+  }
+
+  const { data: existing } = await supabase
+    .from('todo_projects')
+    .select('sort_order')
+    .eq('list_id', listId)
+    .order('sort_order', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  const sortOrder = existing?.sort_order != null ? existing.sort_order + 1 : 0
+
+  const { data: project, error } = await supabase
+    .from('todo_projects')
+    .insert({
+      list_id: listId,
+      created_by: user.id,
+      name: input.name,
+      description: input.description ?? null,
+      sort_order: sortOrder,
+    })
+    .select()
+    .single()
+
+  if (error || !project) {
+    throw new Error(error?.message || 'Failed to create project')
+  }
+  revalidatePath('/todo')
+  return project as TodoProject
+}
+
+export async function updateTodoProject(
+  projectId: string,
+  updates: { name?: string; description?: string; is_archived?: boolean; sort_order?: number }
+): Promise<void> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    throw new Error('Unauthorized')
+  }
+
+  const payload: Record<string, unknown> = { updated_at: new Date().toISOString() }
+  if (updates.name !== undefined) payload.name = updates.name
+  if (updates.description !== undefined) payload.description = updates.description
+  if (updates.is_archived !== undefined) payload.is_archived = updates.is_archived
+  if (updates.sort_order !== undefined) payload.sort_order = updates.sort_order
+
+  const { error } = await supabase
+    .from('todo_projects')
+    .update(payload)
+    .eq('id', projectId)
+
+  if (error) {
+    throw new Error(error.message)
+  }
+  revalidatePath('/todo')
+}
+
+export async function getTodoTasks(listId: string, projectId?: string | null): Promise<TodoTask[]> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    throw new Error('Unauthorized')
+  }
+
+  let query = supabase
     .from('todo_tasks')
     .select('*')
     .eq('list_id', listId)
     .order('created_at', { ascending: false })
+
+  if (projectId != null && projectId !== '') {
+    query = query.eq('project_id', projectId)
+  }
+
+  const { data: tasks, error } = await query
 
   if (error) {
     throw new Error(error.message)
@@ -304,24 +417,31 @@ export async function deleteTodoList(listId: string): Promise<void> {
   revalidatePath('/todo')
 }
 
-export async function createTodoTask(listId: string, title: string): Promise<TodoTask> {
+export async function createTodoTask(listId: string, title: string, projectId?: string | null): Promise<TodoTask> {
   const supabase = await createClient()
   const {
     data: { user },
   } = await supabase.auth.getUser()
   if (!user) throw new Error('Unauthorized')
 
+  const payload: { list_id: string; created_by: string; title: string; project_id?: string | null } = {
+    list_id: listId,
+    created_by: user.id,
+    title,
+  }
+  if (projectId != null && projectId !== '') {
+    payload.project_id = projectId
+  }
+
   const { data: task, error } = await supabase
     .from('todo_tasks')
-    .insert({
-      list_id: listId,
-      created_by: user.id,
-      title,
-    })
+    .insert(payload)
     .select()
     .single()
 
-  if (error || !task) throw new Error(error?.message || 'Failed to create task')
+  if (error || !task) {
+    throw new Error(error?.message || 'Failed to create task')
+  }
   revalidatePath('/todo')
   return task as TodoTask
 }
@@ -345,6 +465,8 @@ export async function updateTodoTask(taskId: string, updates: TodoTaskUpdate): P
   if (updates.dueDate !== undefined) updatePayload.due_date = updates.dueDate
   if (updates.assignee_id !== undefined) updatePayload.assignee_id = updates.assignee_id
   if (updates.assigneeId !== undefined) updatePayload.assignee_id = updates.assigneeId
+  if (updates.project_id !== undefined) updatePayload.project_id = updates.project_id
+  if (updates.projectId !== undefined) updatePayload.project_id = updates.projectId
   if (updates.tags !== undefined) updatePayload.tags = updates.tags
   if (updates.completed !== undefined) updatePayload.completed = updates.completed
 

@@ -8,11 +8,13 @@ import {
   createTodoAttachment,
   createTodoComment,
   createTodoList,
+  createTodoProject,
   createTodoSubtask,
   createTodoTask,
   deleteTodoList,
   deleteTodoTask,
   getTodoLists,
+  getTodoProjects,
   getTodoTasks,
   joinTodoListByCode,
   toggleTodoSubtask,
@@ -27,7 +29,8 @@ import { Select } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
-import { Archive, Calendar, Check, Copy, Pencil, Plus, Search, Settings, Trash2, Users } from 'lucide-react'
+import { useToast } from '@/components/ui/toaster'
+import { Archive, Calendar, Check, Copy, FolderOpen, Pencil, Plus, Search, Settings, Trash2, Users } from 'lucide-react'
 
 type UserRole = 'owner' | 'admin' | 'moderator' | 'viewer'
 type TaskStatus = 'to_do' | 'in_progress' | 'blocked' | 'done'
@@ -48,9 +51,20 @@ type TodoList = {
   invitationCode: string
 }
 
+type TodoProject = {
+  id: string
+  listId: string
+  name: string
+  description: string | null
+  sortOrder: number
+  isArchived: boolean
+  createdAt: string
+}
+
 type TodoTask = {
   id: string
   listId: string
+  projectId: string | null
   title: string
   description: string
   completed: boolean
@@ -95,10 +109,23 @@ function mapListFromDb(list: any): TodoList {
   }
 }
 
+function mapProjectFromDb(p: any): TodoProject {
+  return {
+    id: p.id,
+    listId: p.list_id,
+    name: p.name,
+    description: p.description ?? null,
+    sortOrder: p.sort_order ?? 0,
+    isArchived: p.is_archived ?? false,
+    createdAt: p.created_at,
+  }
+}
+
 function mapTaskFromDb(task: any): TodoTask {
   return {
     id: task.id,
     listId: task.list_id,
+    projectId: task.project_id ?? null,
     title: task.title,
     description: task.description || '',
     completed: task.completed ?? false,
@@ -129,13 +156,17 @@ function mapTaskFromDb(task: any): TodoTask {
 export default function TodoPage() {
   const { currentOrganization } = useOrganization()
   const { permissions, loading: permissionsLoading } = useFeaturePermissions()
+  const { toast } = useToast()
   const [userId, setUserId] = useState<string | null>(null)
   const [userRole, setUserRole] = useState<UserRole>('viewer')
   const [lists, setLists] = useState<TodoList[]>([])
+  const [projects, setProjects] = useState<TodoProject[]>([])
   const [tasks, setTasks] = useState<TodoTask[]>([])
   const [activeListId, setActiveListId] = useState<string | null>(null)
+  const [activeProjectId, setActiveProjectId] = useState<string | null>(null)
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null)
   const [showCreateDialog, setShowCreateDialog] = useState(false)
+  const [showCreateProjectDialog, setShowCreateProjectDialog] = useState(false)
   const [showSettingsDialog, setShowSettingsDialog] = useState(false)
   const [inviteCodeInput, setInviteCodeInput] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
@@ -152,6 +183,7 @@ export default function TodoPage() {
   const [newAttachmentUrl, setNewAttachmentUrl] = useState('')
   const [loadingLists, setLoadingLists] = useState(false)
   const [loadingTasks, setLoadingTasks] = useState(false)
+  const [addingTask, setAddingTask] = useState(false)
 
   useEffect(() => {
     async function loadUserContext() {
@@ -185,21 +217,42 @@ export default function TodoPage() {
 
   useEffect(() => {
     if (!activeListId) {
+      setProjects([])
+      setTasks([])
+      setActiveProjectId(null)
+      return
+    }
+    setActiveProjectId(null)
+    const listId = activeListId
+    async function loadProjects() {
+      try {
+        const data = await getTodoProjects(listId)
+        setProjects(data.map(mapProjectFromDb))
+      } catch {
+        setProjects([])
+      }
+    }
+    loadProjects()
+  }, [activeListId])
+
+  useEffect(() => {
+    if (!activeListId) {
       setTasks([])
       return
     }
     const listId = activeListId
+    const projectId = activeProjectId
     async function loadTasks() {
       setLoadingTasks(true)
       try {
-        const data = await getTodoTasks(listId)
+        const data = await getTodoTasks(listId, projectId ?? undefined)
         setTasks(data.map(mapTaskFromDb))
       } finally {
         setLoadingTasks(false)
       }
     }
     loadTasks()
-  }, [activeListId])
+  }, [activeListId, activeProjectId])
 
   const visibleLists = useMemo(() => {
     if (!userId) return []
@@ -274,8 +327,13 @@ export default function TodoPage() {
     setLists(data.map(mapListFromDb))
   }
 
-  async function refreshTasks(listId: string) {
-    const data = await getTodoTasks(listId)
+  async function refreshProjects(listId: string) {
+    const data = await getTodoProjects(listId)
+    setProjects(data.map(mapProjectFromDb))
+  }
+
+  async function refreshTasks(listId: string, projectId?: string | null) {
+    const data = await getTodoTasks(listId, projectId ?? undefined)
     setTasks(data.map(mapTaskFromDb))
   }
 
@@ -296,10 +354,32 @@ export default function TodoPage() {
   }
 
   async function handleAddTask() {
-    if (!newTaskTitle.trim() || !activeListId) return
-    await createTodoTask(activeListId, newTaskTitle.trim())
-    setNewTaskTitle('')
-    await refreshTasks(activeListId)
+    if (!newTaskTitle.trim()) {
+      toast({ title: 'Enter a task title', variant: 'destructive' })
+      return
+    }
+    if (!activeListId) return
+    setAddingTask(true)
+    try {
+      await createTodoTask(activeListId, newTaskTitle.trim(), activeProjectId ?? undefined)
+      setNewTaskTitle('')
+      await refreshTasks(activeListId, activeProjectId)
+    } catch (err) {
+      toast({
+        title: 'Could not create task',
+        description: err instanceof Error ? err.message : 'Something went wrong',
+        variant: 'destructive',
+      })
+    } finally {
+      setAddingTask(false)
+    }
+  }
+
+  async function handleCreateProject(name: string) {
+    if (!activeListId || !name.trim()) return
+    await createTodoProject(activeListId, { name: name.trim() })
+    await refreshProjects(activeListId)
+    setShowCreateProjectDialog(false)
   }
 
   async function handleUpdateTask(taskId: string, updates: Partial<TodoTask>) {
@@ -312,7 +392,7 @@ export default function TodoPage() {
       await updateTodoTask(taskId, updates as any)
     } catch (error) {
       if (activeListId) {
-        await refreshTasks(activeListId)
+        await refreshTasks(activeListId, activeProjectId)
       }
     }
   }
@@ -331,13 +411,13 @@ export default function TodoPage() {
     await Promise.all(Array.from(selectedTaskIds).map((taskId) => deleteTodoTask(taskId)))
     setSelectedTaskIds(new Set())
     if (activeListId) {
-      await refreshTasks(activeListId)
+      await refreshTasks(activeListId, activeProjectId)
     }
   }
 
   async function handleDuplicateTask(task: TodoTask) {
     if (!activeListId) return
-    const newTask = await createTodoTask(activeListId, `${task.title} (copy)`)
+    const newTask = await createTodoTask(activeListId, `${task.title} (copy)`, task.projectId ?? undefined)
     await updateTodoTask(newTask.id, {
       description: task.description,
       priority: task.priority,
@@ -347,13 +427,13 @@ export default function TodoPage() {
       assigneeId: task.assigneeId,
       tags: task.tags,
     } as any)
-    await refreshTasks(activeListId)
+    await refreshTasks(activeListId, activeProjectId)
   }
 
   async function handleArchiveTask(taskId: string) {
     await updateTodoTask(taskId, { status: 'done', completed: true } as any)
     if (activeListId) {
-      await refreshTasks(activeListId)
+      await refreshTasks(activeListId, activeProjectId)
     }
   }
 
@@ -477,22 +557,55 @@ export default function TodoPage() {
 
   return (
     <div className="flex flex-col lg:flex-row gap-6">
-      <div className="flex-1 space-y-4">
+      <div className="w-full lg:w-52 shrink-0 space-y-2 lg:border-r lg:pr-4">
+        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Tasks</p>
+        <Button
+          variant={activeProjectId === null ? 'secondary' : 'ghost'}
+          size="sm"
+          className="w-full justify-start"
+          onClick={() => setActiveProjectId(null)}
+        >
+          <FolderOpen className="h-4 w-4 mr-2" />
+          All tasks
+        </Button>
+        {projects.map((project) => (
+          <Button
+            key={project.id}
+            variant={activeProjectId === project.id ? 'secondary' : 'ghost'}
+            size="sm"
+            className="w-full justify-start truncate"
+            onClick={() => setActiveProjectId(project.id)}
+          >
+            <FolderOpen className="h-4 w-4 mr-2 shrink-0" />
+            <span className="truncate">{project.name}</span>
+          </Button>
+        ))}
+        <Button
+          variant="outline"
+          size="sm"
+          className="w-full justify-start"
+          onClick={() => setShowCreateProjectDialog(true)}
+        >
+          <Plus className="h-4 w-4 mr-2" />
+          Create project
+        </Button>
+      </div>
+      <div className="flex-1 min-w-0 space-y-4">
         <div className="flex flex-col gap-3">
           <Button variant="outline" size="sm" onClick={() => setActiveListId(null)}>
             Back to lists
           </Button>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <span className="h-3 w-3 rounded-full" style={{ backgroundColor: activeList?.color }} />
-              <div>
-                <h1 className="text-2xl font-semibold">{activeList?.name}</h1>
+              <span className="h-3 w-3 rounded-full shrink-0" style={{ backgroundColor: activeList?.color }} />
+              <div className="min-w-0">
+                <h1 className="text-2xl font-semibold truncate">{activeList?.name}</h1>
                 <p className="text-xs text-muted-foreground">
                   {activeList?.members.length} members • Created {activeList ? new Date(activeList.createdAt).toLocaleDateString() : ''}
                 </p>
               </div>
             </div>
-            <Button variant="outline" onClick={() => setShowSettingsDialog(true)}>
+            <Button variant="outline" onClick={() => setShowSettingsDialog(true)} className="shrink-0">
               <Settings className="h-4 w-4 mr-2" />
               List settings
             </Button>
@@ -554,9 +667,9 @@ export default function TodoPage() {
               }
             }}
           />
-          <Button onClick={handleAddTask}>
+          <Button onClick={handleAddTask} disabled={addingTask}>
             <Plus className="h-4 w-4 mr-2" />
-            Add
+            {addingTask ? 'Adding…' : 'Add'}
           </Button>
         </div>
 
@@ -740,6 +853,20 @@ export default function TodoPage() {
                 </Select>
               </div>
               <div>
+                <label className="text-sm font-medium">Project</label>
+                <Select
+                  value={activeTask.projectId || ''}
+                  onChange={(event) =>
+                    handleUpdateTask(activeTask.id, { projectId: event.target.value || null })
+                  }
+                >
+                  <option value="">No project</option>
+                  {projects.map((p) => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </Select>
+              </div>
+              <div>
                 <label className="text-sm font-medium">Due date</label>
                 <Input
                   type="date"
@@ -771,7 +898,7 @@ export default function TodoPage() {
                       checked={subtask.done}
                       onChange={async () => {
                         await toggleTodoSubtask(subtask.id, !subtask.done)
-                        await refreshTasks(activeTask.listId)
+                        await refreshTasks(activeTask.listId, activeProjectId)
                       }}
                       className="h-4 w-4 rounded border-gray-300"
                     />
@@ -793,7 +920,7 @@ export default function TodoPage() {
                       if (!newSubtaskTitle.trim()) return
                       await createTodoSubtask(activeTask.id, newSubtaskTitle.trim())
                       setNewSubtaskTitle('')
-                      await refreshTasks(activeTask.listId)
+                      await refreshTasks(activeTask.listId, activeProjectId)
                     }}
                   >
                     Add
@@ -820,7 +947,7 @@ export default function TodoPage() {
                       if (!newComment.trim()) return
                       await createTodoComment(activeTask.id, newComment.trim())
                       setNewComment('')
-                      await refreshTasks(activeTask.listId)
+                      await refreshTasks(activeTask.listId, activeProjectId)
                     }}
                   >
                     Add
@@ -848,7 +975,7 @@ export default function TodoPage() {
                       const value = newAttachmentUrl.trim()
                       await createTodoAttachment(activeTask.id, value, value)
                       setNewAttachmentUrl('')
-                      await refreshTasks(activeTask.listId)
+                      await refreshTasks(activeTask.listId, activeProjectId)
                     }}
                   >
                     Add
@@ -874,6 +1001,11 @@ export default function TodoPage() {
         open={showCreateDialog}
         onOpenChange={setShowCreateDialog}
         onCreate={handleCreateList}
+      />
+      <CreateProjectDialog
+        open={showCreateProjectDialog}
+        onOpenChange={setShowCreateProjectDialog}
+        onCreate={handleCreateProject}
       />
       <ListSettingsDialog
         open={showSettingsDialog}
@@ -948,6 +1080,53 @@ function CreateListDialog({
               }}
             >
               Create list
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function CreateProjectDialog({
+  open,
+  onOpenChange,
+  onCreate,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  onCreate: (name: string) => void
+}) {
+  const [name, setName] = useState('')
+
+  useEffect(() => {
+    if (!open) setName('')
+  }, [open])
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Create project</DialogTitle>
+          <DialogDescription>Add a project to group tasks in this list.</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div>
+            <label className="text-sm font-medium">Project name</label>
+            <Input value={name} onChange={(event) => setName(event.target.value)} placeholder="e.g. Sprint 1" />
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                if (!name.trim()) return
+                onCreate(name.trim())
+                onOpenChange(false)
+              }}
+            >
+              Create project
             </Button>
           </div>
         </div>
