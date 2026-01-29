@@ -74,6 +74,11 @@ export default async function DashboardPage() {
     )
   }
 
+  // User has only To-Do List permission (no dashboard): redirect to To-Do List
+  if (permContext.hasTodo && !permContext.hasDashboard) {
+    redirect('/todo')
+  }
+
   let reminders = []
   let clients = []
   let stats = { newLeadsWeek: 0, newLeadsMonth: 0, newTagLeads: 0, waitingForOffer: 0 }
@@ -81,10 +86,12 @@ export default async function DashboardPage() {
   let customStatuses: Array<{ key: string; label: string }> = []
 
   let completedReminders = []
-  
+
   try {
-    reminders = await getUpcomingReminders()
-    completedReminders = await getCompletedReminders()
+    if (permContext.hasReminders) {
+      reminders = await getUpcomingReminders()
+      completedReminders = await getCompletedReminders()
+    }
     clients = await getClients()
   } catch (error) {
     dbError = error instanceof Error ? error.message : 'Database error'
@@ -165,15 +172,17 @@ export default async function DashboardPage() {
           <h1 className="text-3xl font-bold">Dashboard</h1>
         </div>
 
-        <div className={`grid gap-6 ${permContext.hasClients ? 'md:grid-cols-2' : ''}`}>
-          <RemindersCard 
-            reminders={reminders}
-            overdueReminders={overdueReminders}
-            todayReminders={todayReminders}
-            upcomingReminders={upcomingReminders}
-            completedReminders={completedReminders}
-            clients={clients}
-          />
+        <div className={`grid gap-6 ${permContext.hasClients || permContext.hasReminders ? 'md:grid-cols-2' : ''}`}>
+          {permContext.hasReminders && (
+            <RemindersCard 
+              reminders={reminders}
+              overdueReminders={overdueReminders}
+              todayReminders={todayReminders}
+              upcomingReminders={upcomingReminders}
+              completedReminders={completedReminders}
+              clients={clients}
+            />
+          )}
 
           {permContext.hasClients && (
             <RecentClients initialClients={clients} customStatuses={customStatuses} />

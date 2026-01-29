@@ -2,7 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
-import { getCurrentOrganizationId } from './organizations'
+import { getCurrentOrganizationId, getCurrentUserOrgRole } from './organizations'
 
 export type TodoList = {
   id: string
@@ -58,9 +58,53 @@ export async function getTodoLists(): Promise<TodoList[]> {
   const organizationId = await getCurrentOrganizationId()
   if (!organizationId) return []
 
+  const role = await getCurrentUserOrgRole()
+  const isOwnerOrAdmin = role === 'owner' || role === 'admin'
+
+  async function attachMembers(lists: TodoList[]): Promise<TodoList[]> {
+    if (lists.length === 0) return lists
+    const listIds = lists.map((l) => l.id)
+    const { data: members } = await supabase
+      .from('todo_list_members')
+      .select('list_id, user_id, role')
+      .in('list_id', listIds)
+    const byList = new Map<string, { user_id: string; role: 'owner' | 'member' }[]>()
+    for (const m of members || []) {
+      const arr = byList.get(m.list_id) || []
+      arr.push({ user_id: m.user_id, role: m.role })
+      byList.set(m.list_id, arr)
+    }
+    return lists.map((list) => ({
+      ...list,
+      todo_list_members: byList.get(list.id) || [],
+    }))
+  }
+
+  if (isOwnerOrAdmin) {
+    const { data, error } = await supabase
+      .from('todo_lists')
+      .select('*')
+      .eq('organization_id', organizationId)
+      .order('created_at', { ascending: false })
+
+    if (error) {
+      throw new Error(error.message)
+    }
+    return attachMembers((data || []) as TodoList[])
+  }
+
+  const { data: memberListIds } = await supabase
+    .from('todo_list_members')
+    .select('list_id')
+    .eq('user_id', user.id)
+
+  const listIds = (memberListIds || []).map((r: { list_id: string }) => r.list_id)
+  if (listIds.length === 0) return []
+
   const { data, error } = await supabase
     .from('todo_lists')
-    .select('*, todo_list_members(user_id, role)')
+    .select('*')
+    .in('id', listIds)
     .eq('organization_id', organizationId)
     .order('created_at', { ascending: false })
 
@@ -68,7 +112,7 @@ export async function getTodoLists(): Promise<TodoList[]> {
     throw new Error(error.message)
   }
 
-  return data as TodoList[]
+  return attachMembers((data || []) as TodoList[])
 }
 
 export async function getTodoTasks(listId: string): Promise<TodoTask[]> {

@@ -57,23 +57,25 @@ export async function getCurrentUserOrgRole(): Promise<OrgRole | null> {
   return (member?.role as OrgRole) ?? null
 }
 
-/** Returns permission context for the dashboard: has any permission, has dashboard, has clients. */
+/** Returns permission context for the dashboard: has any permission, has dashboard, has clients, has reminders, has todo. */
 export async function getDashboardPermissionContext(): Promise<{
   hasAnyPermission: boolean
   hasDashboard: boolean
   hasClients: boolean
+  hasReminders: boolean
+  hasTodo: boolean
 }> {
   const supabase = await createClient()
   const {
     data: { user },
   } = await supabase.auth.getUser()
   if (!user) {
-    return { hasAnyPermission: false, hasDashboard: false, hasClients: false }
+    return { hasAnyPermission: false, hasDashboard: false, hasClients: false, hasReminders: false, hasTodo: false }
   }
 
   const orgId = await getCurrentOrganizationId()
   if (!orgId) {
-    return { hasAnyPermission: false, hasDashboard: false, hasClients: false }
+    return { hasAnyPermission: false, hasDashboard: false, hasClients: false, hasReminders: false, hasTodo: false }
   }
 
   const { data: member } = await supabase
@@ -85,11 +87,11 @@ export async function getDashboardPermissionContext(): Promise<{
     .maybeSingle()
 
   if (!member) {
-    return { hasAnyPermission: false, hasDashboard: false, hasClients: false }
+    return { hasAnyPermission: false, hasDashboard: false, hasClients: false, hasReminders: false, hasTodo: false }
   }
 
   if (member.role === 'owner' || member.role === 'admin') {
-    return { hasAnyPermission: true, hasDashboard: true, hasClients: true }
+    return { hasAnyPermission: true, hasDashboard: true, hasClients: true, hasReminders: true, hasTodo: true }
   }
 
   const { data: perms } = await supabase
@@ -107,9 +109,11 @@ export async function getDashboardPermissionContext(): Promise<{
   }
   const hasDashboard = map['dashboard'] === true
   const hasClients = map['clients'] === true
+  const hasReminders = map['reminders'] === true
+  const hasTodo = map['todo'] === true
   const featureKeys = ['dashboard', 'clients', 'offers', 'emails', 'accounting', 'reminders', 'settings', 'users', 'todo']
   const hasAnyPermission = featureKeys.some((f) => map[f] === true)
-  return { hasAnyPermission, hasDashboard, hasClients }
+  return { hasAnyPermission, hasDashboard, hasClients, hasReminders, hasTodo }
 }
 
 export async function setCurrentOrganizationId(organizationId: string) {
