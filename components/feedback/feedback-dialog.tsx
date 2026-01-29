@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Select } from '@/components/ui/select'
-import { createFeedback, updateFeedback, deleteFeedback, getFeedback, toggleFeedbackCompleted, type Feedback } from '@/app/actions/feedback'
+import { createFeedback, updateFeedback, deleteFeedback, getFeedback, getFeedbackViewMeta, toggleFeedbackCompleted, type Feedback } from '@/app/actions/feedback'
 import { useToast } from '@/components/ui/toaster'
 import { Edit, Trash2, Plus, Check } from 'lucide-react'
 import { format } from 'date-fns'
@@ -20,6 +20,7 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
   const { toast } = useToast()
   const [loading, setLoading] = useState(false)
   const [feedbackList, setFeedbackList] = useState<Feedback[]>([])
+  const [viewMeta, setViewMeta] = useState<{ isFeedbackAdmin: boolean; userId: string | null }>({ isFeedbackAdmin: false, userId: null })
   const [editingId, setEditingId] = useState<string | null>(null)
   const [formData, setFormData] = useState({
     note: '',
@@ -34,8 +35,9 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
 
   async function loadFeedback() {
     try {
-      const data = await getFeedback()
+      const [data, meta] = await Promise.all([getFeedback(), getFeedbackViewMeta()])
       setFeedbackList(data)
+      setViewMeta(meta)
     } catch (error) {
       console.error('Failed to load feedback:', error)
     }
@@ -216,7 +218,7 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
           {/* List */}
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="font-semibold">Your Feedback</h3>
+              <h3 className="font-semibold">{viewMeta.isFeedbackAdmin ? 'All Feedback' : 'Your Feedback'}</h3>
               {editingId && (
                 <Button
                   variant="ghost"
@@ -244,15 +246,19 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex-1 flex items-start gap-3">
-                        <input
-                          type="checkbox"
-                          checked={feedback.completed || false}
-                          onChange={(e) => handleToggleCompleted(feedback.id, e.target.checked)}
-                          className="mt-1 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
-                          disabled={loading}
-                        />
+                        {(viewMeta.isFeedbackAdmin || (viewMeta.userId && feedback.owner_id === viewMeta.userId)) ? (
+                          <input
+                            type="checkbox"
+                            checked={feedback.completed || false}
+                            onChange={(e) => handleToggleCompleted(feedback.id, e.target.checked)}
+                            className="mt-1 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
+                            disabled={loading}
+                          />
+                        ) : (
+                          <span className="mt-1 w-4 h-4 shrink-0" />
+                        )}
                         <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-2">
+                          <div className="flex items-center gap-2 mb-2 flex-wrap">
                             {feedback.priority && (
                               <span
                                 className={`text-xs px-2 py-0.5 rounded ${
@@ -267,9 +273,15 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
                                   feedback.priority.slice(1)}
                               </span>
                             )}
-                            <span className="text-xs text-muted-foreground">
-                              {format(new Date(feedback.created_at), 'MMM d, yyyy HH:mm')}
-                            </span>
+                            {viewMeta.isFeedbackAdmin ? (
+                              <span className="text-xs text-muted-foreground">
+                                Submitted by {feedback.owner_email ?? 'Unknown'} on {format(new Date(feedback.created_at), 'MMM d, yyyy HH:mm')}
+                              </span>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">
+                                {format(new Date(feedback.created_at), 'MMM d, yyyy HH:mm')}
+                              </span>
+                            )}
                           </div>
                           <p className={`text-sm whitespace-pre-wrap ${feedback.completed ? 'line-through text-muted-foreground' : ''}`}>
                             {feedback.note}
@@ -277,28 +289,32 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
                         </div>
                       </div>
                       <div className="flex items-center gap-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() =>
-                            editingId === feedback.id
-                              ? cancelEdit()
-                              : startEdit(feedback)
-                          }
-                          className="h-8 w-8 p-0"
-                          disabled={loading}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDelete(feedback.id)}
-                          className="h-8 w-8 p-0 text-destructive hover:text-destructive"
-                          disabled={loading}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        {(viewMeta.isFeedbackAdmin || (viewMeta.userId && feedback.owner_id === viewMeta.userId)) && (
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() =>
+                                editingId === feedback.id
+                                  ? cancelEdit()
+                                  : startEdit(feedback)
+                              }
+                              className="h-8 w-8 p-0"
+                              disabled={loading}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDelete(feedback.id)}
+                              className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                              disabled={loading}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </>
+                        )}
                       </div>
                     </div>
                   </div>

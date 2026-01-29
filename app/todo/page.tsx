@@ -542,8 +542,9 @@ export default function TodoPage() {
 
   if (!hasAccess && !permissionsLoading) {
     return (
-      <div className="max-w-3xl mx-auto space-y-4">
-        <Card>
+      <div className="space-y-6">
+        <h1 className="text-3xl font-bold">To-Do List</h1>
+        <Card className="max-w-3xl">
           <CardHeader>
             <CardTitle>Access Required</CardTitle>
           </CardHeader>
@@ -558,10 +559,10 @@ export default function TodoPage() {
 
   if (!activeListId) {
     return (
-      <div className="max-w-4xl mx-auto space-y-6">
+      <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold">To-Do Lists</h1>
+            <h1 className="text-3xl font-bold">To-Do List</h1>
             <p className="text-sm text-muted-foreground">Organized, list-first task management.</p>
           </div>
           <Button onClick={() => setShowCreateDialog(true)}>
@@ -648,7 +649,7 @@ export default function TodoPage() {
   }
 
   return (
-    <div className="flex flex-col lg:flex-row gap-6">
+    <div className="flex flex-col h-full min-h-0 lg:flex-row gap-6">
       <div className="w-full lg:w-52 shrink-0 space-y-2 lg:border-r lg:pr-4">
         <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Tasks</p>
         <Button
@@ -884,13 +885,13 @@ export default function TodoPage() {
         </div>
       </div>
 
-      <div className="lg:w-[360px] w-full">
-        {activeTask ? (
-          <Card className="sticky top-6">
-            <CardHeader>
+      {activeTask && (
+      <div className="lg:w-[380px] w-full shrink-0 min-w-0 flex flex-col">
+          <Card className="sticky top-6 flex flex-col min-h-0 max-h-[calc(100vh-6rem)] overflow-hidden">
+            <CardHeader className="shrink-0">
               <CardTitle>Task Details</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-4 overflow-y-auto min-h-0 flex-1 pb-6">
               <div>
                 <label className="text-sm font-medium">Title</label>
                 <Input
@@ -1076,8 +1077,8 @@ export default function TodoPage() {
                 {timeEntries.length > 0 && (
                   <div className="mt-2 space-y-1.5 min-w-0">
                     <p className="text-xs font-medium text-muted-foreground">Entries</p>
-                    <div className="rounded border overflow-x-auto">
-                      <table className="w-full min-w-0 text-xs table-fixed">
+                    <div className="rounded border overflow-x-auto min-w-0">
+                      <table className="w-full text-xs" style={{ minWidth: 280 }}>
                         <thead>
                           <tr className="border-b bg-muted/50">
                             <th className="text-left p-2 font-medium w-[72px]">Type</th>
@@ -1268,14 +1269,8 @@ export default function TodoPage() {
               </div>
             </CardContent>
           </Card>
-        ) : (
-          <Card className="sticky top-6">
-            <CardContent className="py-10 text-center text-muted-foreground">
-              Select a task to see details.
-            </CardContent>
-          </Card>
-        )}
       </div>
+      )}
 
       <CreateListDialog
         open={showCreateDialog}
