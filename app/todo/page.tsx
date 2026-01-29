@@ -8,6 +8,7 @@ import {
   addManualTimeEntry,
   correctTimeEntry,
   createTodoAttachment,
+  deleteTimeEntry,
   createTodoComment,
   createTodoList,
   createTodoProject,
@@ -21,7 +22,7 @@ import {
   getTodoLists,
   getTodoProjects,
   getTodoTasks,
-  getTotalMinutes,
+  getTotalSeconds,
   joinTodoListByCode,
   startTimer,
   stopTimer,
@@ -101,6 +102,40 @@ const PRIORITY_LABELS: Record<TaskPriority, string> = {
   medium: 'Medium',
   high: 'High',
   critical: 'Critical',
+}
+
+function formatMinutesToHms(totalMinutes: number): string {
+  const h = Math.floor(totalMinutes / 60)
+  const m = Math.floor(totalMinutes % 60)
+  const s = 0
+  return [h, m, s].map((n) => String(n).padStart(2, '0')).join(':')
+}
+
+function formatSecondsToHms(totalSeconds: number): string {
+  const h = Math.floor(totalSeconds / 3600)
+  const m = Math.floor((totalSeconds % 3600) / 60)
+  const s = totalSeconds % 60
+  return [h, m, s].map((n) => String(n).padStart(2, '0')).join(':')
+}
+
+function formatRecordDateTime(isoString: string): string {
+  try {
+    const d = new Date(isoString)
+    return d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+  } catch {
+    return isoString
+  }
+}
+
+/** Effective duration in seconds for display: use duration_seconds, else minutes, else compute from start/end (fixes old 0-minute entries). */
+function entryDisplaySeconds(entry: { duration_minutes: number; duration_seconds: number | null; start_time?: string | null; end_time?: string | null }): number {
+  if (entry.duration_seconds != null && entry.duration_seconds > 0) return entry.duration_seconds
+  if (entry.duration_minutes > 0) return entry.duration_minutes * 60
+  if (entry.start_time && entry.end_time) {
+    const ms = new Date(entry.end_time).getTime() - new Date(entry.start_time).getTime()
+    return Math.max(0, Math.floor(ms / 1000))
+  }
+  return 0
 }
 
 function mapListFromDb(list: any): TodoList {
@@ -194,14 +229,15 @@ export default function TodoPage() {
   const [loadingLists, setLoadingLists] = useState(false)
   const [loadingTasks, setLoadingTasks] = useState(false)
   const [addingTask, setAddingTask] = useState(false)
-  const [timeEntries, setTimeEntries] = useState<Array<{ id: string; entry_type: string; duration_minutes: number; note: string | null; created_at: string; corrected_entry_id: string | null }>>([])
-  const [timeTotalMinutes, setTimeTotalMinutes] = useState(0)
+  const [timeEntries, setTimeEntries] = useState<Array<{ id: string; entry_type: string; duration_minutes: number; duration_seconds: number | null; start_time: string | null; end_time: string | null; note: string | null; created_at: string; corrected_entry_id: string | null; user_email?: string }>>([])
+  const [timeTotalSeconds, setTimeTotalSeconds] = useState(0)
   const [runningTimer, setRunningTimer] = useState<{ id: string; task_id: string; started_at: string } | null>(null)
   const [manualTimeMinutes, setManualTimeMinutes] = useState('')
   const [manualTimeNote, setManualTimeNote] = useState('')
   const [correctingEntryId, setCorrectingEntryId] = useState<string | null>(null)
   const [correctDuration, setCorrectDuration] = useState('')
   const [timerLoading, setTimerLoading] = useState(false)
+  const [elapsedSeconds, setElapsedSeconds] = useState(0)
 
   useEffect(() => {
     async function loadUserContext() {
@@ -343,7 +379,7 @@ export default function TodoPage() {
   useEffect(() => {
     if (!activeTaskId || !activeListId) {
       setTimeEntries([])
-      setTimeTotalMinutes(0)
+      setTimeTotalSeconds(0)
       setRunningTimer(null)
       return
     }
@@ -351,20 +387,32 @@ export default function TodoPage() {
       try {
         const [entries, total, running] = await Promise.all([
           getTimeEntries(activeTaskId),
-          getTotalMinutes(activeTaskId),
+          getTotalSeconds(activeTaskId),
           getRunningTimer(activeListId),
         ])
         setTimeEntries(entries)
-        setTimeTotalMinutes(total)
+        setTimeTotalSeconds(total)
         setRunningTimer(running && running.is_running ? { id: running.id, task_id: running.task_id, started_at: running.started_at } : null)
       } catch {
         setTimeEntries([])
-        setTimeTotalMinutes(0)
+        setTimeTotalSeconds(0)
         setRunningTimer(null)
       }
     }
     loadTime()
   }, [activeTaskId, activeListId])
+
+  useEffect(() => {
+    if (!runningTimer || runningTimer.task_id !== activeTaskId) {
+      setElapsedSeconds(0)
+      return
+    }
+    const start = new Date(runningTimer.started_at).getTime()
+    const tick = () => setElapsedSeconds(Math.floor((Date.now() - start) / 1000))
+    tick()
+    const interval = setInterval(tick, 1000)
+    return () => clearInterval(interval)
+  }, [runningTimer, activeTaskId])
 
   async function refreshLists() {
     const data = await getTodoLists()
@@ -938,34 +986,37 @@ export default function TodoPage() {
                   <Clock className="h-4 w-4" />
                   Time tracking
                 </label>
-                <p className="text-xs text-muted-foreground">Total: {timeTotalMinutes} min</p>
+                <p className="text-xs text-muted-foreground">Total: {formatSecondsToHms(timeTotalSeconds)}</p>
                 <div className="flex flex-wrap items-center gap-2">
                   {runningTimer ? (
                     runningTimer.task_id === activeTask.id ? (
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        disabled={timerLoading}
-                        onClick={async () => {
+                      <>
+                        <span className="text-sm tabular-nums font-medium">{formatSecondsToHms(elapsedSeconds)}</span>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          disabled={timerLoading}
+                          onClick={async () => {
                           setTimerLoading(true)
                           try {
                             await stopTimer(activeTask.id)
                             const [entries, total, running] = await Promise.all([
                               getTimeEntries(activeTask.id),
-                              getTotalMinutes(activeTask.id),
+                              getTotalSeconds(activeTask.id),
                               getRunningTimer(activeTask.listId),
                             ])
                             setTimeEntries(entries)
-                            setTimeTotalMinutes(total)
+                            setTimeTotalSeconds(total)
                             setRunningTimer(running && running.is_running ? { id: running.id, task_id: running.task_id, started_at: running.started_at } : null)
                           } finally {
                             setTimerLoading(false)
                           }
                         }}
                       >
-                        <Square className="h-4 w-4 mr-1" />
-                        Stop timer
-                      </Button>
+                          <Square className="h-4 w-4 mr-1" />
+                          Stop timer
+                        </Button>
+                      </>
                     ) : (
                       <span className="text-xs text-muted-foreground">Timer running on another task. Stop it there first.</span>
                     )
@@ -1014,61 +1065,101 @@ export default function TodoPage() {
                       await addManualTimeEntry(activeTask.id, min, { note: manualTimeNote.trim() || undefined })
                       setManualTimeMinutes('')
                       setManualTimeNote('')
-                      const [entries, total] = await Promise.all([getTimeEntries(activeTask.id), getTotalMinutes(activeTask.id)])
+                      const [entries, total] = await Promise.all([getTimeEntries(activeTask.id), getTotalSeconds(activeTask.id)])
                       setTimeEntries(entries)
-                      setTimeTotalMinutes(total)
+                      setTimeTotalSeconds(total)
                     }}
                   >
                     Add time
                   </Button>
                 </div>
                 {timeEntries.length > 0 && (
-                  <div className="space-y-1.5 mt-2">
+                  <div className="mt-2 space-y-1.5 min-w-0">
                     <p className="text-xs font-medium text-muted-foreground">Entries</p>
-                    {timeEntries.map((entry) => (
-                      <div key={entry.id} className="flex items-center justify-between gap-2 rounded border px-2 py-1.5 text-sm">
-                        <span className="capitalize">{entry.entry_type}</span>
-                        <span>{entry.duration_minutes} min</span>
-                        {entry.note && <span className="truncate text-muted-foreground">{entry.note}</span>}
-                        {entry.entry_type !== 'correction' && (
-                          correctingEntryId === entry.id ? (
-                            <div className="flex gap-1 items-center">
-                              <Input
-                                type="number"
-                                min={0}
-                                value={correctDuration}
-                                onChange={(e) => setCorrectDuration(e.target.value)}
-                                className="w-16 h-8 text-xs"
-                                autoFocus
-                              />
-                              <Button
-                                size="sm"
-                                className="h-8"
-                                onClick={async () => {
-                                  const min = parseInt(correctDuration, 10)
-                                  if (min < 0) return
-                                  await correctTimeEntry(entry.id, min)
-                                  setCorrectingEntryId(null)
-                                  setCorrectDuration('')
-                                  const [entries, total] = await Promise.all([getTimeEntries(activeTask.id), getTotalMinutes(activeTask.id)])
-                                  setTimeEntries(entries)
-                                  setTimeTotalMinutes(total)
-                                }}
-                              >
-                                Save
-                              </Button>
-                              <Button variant="ghost" size="sm" className="h-8" onClick={() => { setCorrectingEntryId(null); setCorrectDuration('') }}>
-                                Cancel
-                              </Button>
-                            </div>
-                          ) : (
-                            <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => { setCorrectingEntryId(entry.id); setCorrectDuration(String(entry.duration_minutes)) }}>
-                              Correct
-                            </Button>
-                          )
-                        )}
-                      </div>
-                    ))}
+                    <div className="rounded border overflow-x-auto">
+                      <table className="w-full min-w-0 text-xs table-fixed">
+                        <thead>
+                          <tr className="border-b bg-muted/50">
+                            <th className="text-left p-2 font-medium w-[72px]">Type</th>
+                            <th className="text-right p-2 font-medium tabular-nums w-[72px]">Duration</th>
+                            <th className="text-left p-2 font-medium">Date & time</th>
+                            <th className="text-right p-2 w-[100px] shrink-0" />
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {timeEntries.map((entry) => {
+                            const tooltipParts: string[] = []
+                            if (entry.note?.trim()) tooltipParts.push(`Note: ${entry.note.trim()}`)
+                            const who = entry.user_email ?? 'Unknown'
+                            tooltipParts.push(`Tracked by: ${who}`)
+                            const typeTooltip = tooltipParts.join('\n')
+                            return (
+                            <tr key={entry.id} className="border-b last:border-b-0">
+                              <td className="p-2 capitalize truncate" title={typeTooltip}>{entry.entry_type}</td>
+                              <td className="p-2 text-right tabular-nums">{formatSecondsToHms(entryDisplaySeconds(entry))}</td>
+                              <td className="p-2 text-muted-foreground truncate">{formatRecordDateTime(entry.created_at)}</td>
+                              <td className="p-2">
+                                <div className="flex items-center justify-end gap-1 flex-wrap">
+                                {entry.entry_type !== 'correction' && (
+                                  correctingEntryId === entry.id ? (
+                                    <div className="flex gap-1 items-center flex-wrap">
+                                      <Input
+                                        type="number"
+                                        min={0}
+                                        value={correctDuration}
+                                        onChange={(e) => setCorrectDuration(e.target.value)}
+                                        className="w-14 h-7 text-xs"
+                                        autoFocus
+                                      />
+                                      <Button size="sm" className="h-7 text-xs" onClick={async () => {
+                                        const min = parseInt(correctDuration, 10)
+                                        if (min < 0) return
+                                        await correctTimeEntry(entry.id, min)
+                                        setCorrectingEntryId(null)
+                                        setCorrectDuration('')
+                                        const [entries, total] = await Promise.all([getTimeEntries(activeTask.id), getTotalSeconds(activeTask.id)])
+                                        setTimeEntries(entries)
+                                        setTimeTotalSeconds(total)
+                                      }}>
+                                        Save
+                                      </Button>
+                                      <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => { setCorrectingEntryId(null); setCorrectDuration('') }}>
+                                        Cancel
+                                      </Button>
+                                    </div>
+                                  ) : (
+                                    <Button variant="ghost" size="sm" className="h-7 text-xs shrink-0" onClick={() => { setCorrectingEntryId(entry.id); setCorrectDuration(String(entry.duration_minutes)) }}>
+                                      Edit
+                                    </Button>
+                                  )
+                                )}
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 w-7 p-0 text-destructive hover:text-destructive shrink-0"
+                                  onClick={async () => {
+                                    await deleteTimeEntry(entry.id)
+                                    const [entries, total] = await Promise.all([getTimeEntries(activeTask.id), getTotalSeconds(activeTask.id)])
+                                    setTimeEntries(entries)
+                                    setTimeTotalSeconds(total)
+                                  }}
+                                  aria-label="Delete entry"
+                                  title="Delete entry"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                                </div>
+                              </td>
+                            </tr>
+                            )
+                          })}
+                          <tr className="bg-muted/30 font-medium">
+                            <td className="p-2" colSpan={2}>Total</td>
+                            <td className="p-2 text-right tabular-nums" colSpan={2}>{formatSecondsToHms(timeTotalSeconds)}</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 )}
               </div>

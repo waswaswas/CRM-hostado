@@ -606,9 +606,11 @@ export type TodoTimeEntry = {
   start_time: string | null
   end_time: string | null
   duration_minutes: number
+  duration_seconds: number | null
   note: string | null
   corrected_entry_id: string | null
   created_at: string
+  user_email?: string
 }
 
 export type TodoTimerSession = {
@@ -737,7 +739,8 @@ export async function stopTimer(taskId: string): Promise<TodoTimeEntry> {
 
   const stoppedAt = new Date()
   const startedAt = new Date(session.started_at)
-  const durationMinutes = Math.max(0, Math.round((stoppedAt.getTime() - startedAt.getTime()) / 60000))
+  const durationSeconds = Math.max(0, Math.floor((stoppedAt.getTime() - startedAt.getTime()) / 1000))
+  const durationMinutes = Math.floor(durationSeconds / 60)
 
   await supabase
     .from('todo_task_timer_sessions')
@@ -753,6 +756,7 @@ export async function stopTimer(taskId: string): Promise<TodoTimeEntry> {
       start_time: session.started_at,
       end_time: stoppedAt.toISOString(),
       duration_minutes: durationMinutes,
+      duration_seconds: durationSeconds,
       note: null,
     })
     .select()
@@ -760,7 +764,7 @@ export async function stopTimer(taskId: string): Promise<TodoTimeEntry> {
 
   if (entryError || !entry) throw new Error(entryError?.message || 'Failed to save time entry')
   await logTodoTaskActivity(supabase, user.id, taskId, 'timer_stopped', {
-    duration_minutes: durationMinutes,
+    duration_seconds: durationSeconds,
     entry_id: entry.id,
   })
   revalidatePath('/todo')
@@ -786,6 +790,7 @@ export async function addManualTimeEntry(
       user_id: user.id,
       entry_type: 'manual',
       duration_minutes: durationMinutes,
+      duration_seconds: durationMinutes * 60,
       note: options?.note ?? null,
       start_time: options?.date ?? null,
       end_time: null,
@@ -830,6 +835,7 @@ export async function correctTimeEntry(
       user_id: user.id,
       entry_type: 'correction',
       duration_minutes: newDurationMinutes,
+      duration_seconds: newDurationMinutes * 60,
       note: note ?? null,
       corrected_entry_id: entryId,
     })
@@ -860,23 +866,72 @@ export async function getTimeEntries(taskId: string): Promise<TodoTimeEntry[]> {
     .order('created_at', { ascending: false })
 
   if (error) return []
-  return (data || []) as TodoTimeEntry[]
+  const entries = (data || []) as TodoTimeEntry[]
+  const userIds = [...new Set(entries.map((e) => e.user_id))]
+  const userEmailsMap = new Map<string, string>()
+  if (userIds.length > 0) {
+    const { data: profiles } = await supabase
+      .from('user_profiles')
+      .select('id, email')
+      .in('id', userIds)
+    profiles?.forEach((p: { id: string; email: string }) => userEmailsMap.set(p.id, p.email))
+  }
+  return entries.map((e) => ({
+    ...e,
+    user_email: userEmailsMap.get(e.user_id),
+  }))
 }
 
-/** Total minutes for task: for each entry use latest correction if any, else original. */
-export async function getTotalMinutes(taskId: string): Promise<number> {
+/** Effective duration in seconds for one entry: use duration_seconds, else minutes, else compute from start/end when stored duration is 0. */
+function effectiveEntrySeconds(e: TodoTimeEntry): number {
+  if (e.duration_seconds != null && e.duration_seconds > 0) return e.duration_seconds
+  if (e.duration_minutes > 0) return e.duration_minutes * 60
+  if (e.start_time && e.end_time) {
+    const ms = new Date(e.end_time).getTime() - new Date(e.start_time).getTime()
+    return Math.max(0, Math.floor(ms / 1000))
+  }
+  return 0
+}
+
+/** Total seconds for task: for each entry use latest correction if any, else original. Use duration_seconds when present, with fallback from start/end for old 0-minute entries. */
+export async function getTotalSeconds(taskId: string): Promise<number> {
   const entries = await getTimeEntries(taskId)
   const effectiveByOriginalId = new Map<string, number>()
   for (const e of entries) {
     if (e.entry_type === 'correction') {
       const origId = e.corrected_entry_id!
-      effectiveByOriginalId.set(origId, e.duration_minutes)
+      effectiveByOriginalId.set(origId, effectiveEntrySeconds(e))
     }
   }
   let total = 0
   for (const e of entries) {
     if (e.entry_type === 'correction') continue
-    total += effectiveByOriginalId.get(e.id) ?? e.duration_minutes
+    total += effectiveByOriginalId.get(e.id) ?? effectiveEntrySeconds(e)
   }
   return total
+}
+
+export async function deleteTimeEntry(entryId: string): Promise<void> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) throw new Error('Unauthorized')
+
+  const { data: row, error: fetchError } = await supabase
+    .from('todo_task_time_entries')
+    .select('id, user_id')
+    .eq('id', entryId)
+    .single()
+
+  if (fetchError || !row) throw new Error('Time entry not found')
+  if (row.user_id !== user.id) throw new Error('You can only delete your own entries')
+
+  const { error } = await supabase
+    .from('todo_task_time_entries')
+    .delete()
+    .eq('id', entryId)
+
+  if (error) throw new Error(error.message)
+  revalidatePath('/todo')
 }
