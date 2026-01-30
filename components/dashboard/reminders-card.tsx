@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Select } from '@/components/ui/select'
 import Link from 'next/link'
-import { Calendar, List, Plus, Edit, Trash2, UserPlus, CheckSquare, CheckCircle2, ChevronRight } from 'lucide-react'
+import { Calendar, List, Plus, Edit, Trash2, UserPlus, CheckSquare, CheckCircle2 } from 'lucide-react'
 import { format, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, startOfWeek, endOfWeek, addMonths, subMonths } from 'date-fns'
 import { createReminder, updateReminder, deleteReminder, markReminderDone, unmarkReminderDone } from '@/app/actions/reminders'
 import { useToast } from '@/components/ui/toaster'
@@ -239,17 +239,8 @@ export function RemindersCard({
     }
   }
 
-  // For list view on dashboard: show at most 4 reminders total (overdue, then today, then upcoming)
-  let rem = 4
-  const overdueDisplay = overdueReminders.slice(0, rem)
-  rem -= overdueDisplay.length
-  const todayDisplay = todayReminders.slice(0, rem)
-  rem -= todayDisplay.length
-  const upcomingDisplay = upcomingReminders.slice(0, rem)
-  const hasMoreReminders = overdueReminders.length + todayReminders.length + upcomingReminders.length > 4
-
   return (
-    <Card id="reminders">
+    <Card>
       <CardHeader>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
@@ -277,7 +268,7 @@ export function RemindersCard({
               className="min-h-[44px] px-3 md:h-8"
             >
               <List className="h-4 w-4 mr-1.5" />
-              <span>List</span>
+              <span className="hidden sm:inline">List</span>
             </Button>
             <Button
               variant={viewMode === 'calendar' ? 'default' : 'ghost'}
@@ -286,7 +277,7 @@ export function RemindersCard({
               className="min-h-[44px] px-3 md:h-8"
             >
               <Calendar className="h-4 w-4 mr-1.5" />
-              <span>Calendar</span>
+              <span className="hidden sm:inline">Calendar</span>
             </Button>
             <Button
               variant={viewMode === 'completed' ? 'default' : 'ghost'}
@@ -304,13 +295,13 @@ export function RemindersCard({
       <CardContent className="space-y-5">
         {viewMode === 'list' && (
           <div className="space-y-5">
-            {overdueDisplay.length > 0 && (
+            {overdueReminders.length > 0 && (
               <section className="space-y-2">
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-destructive/90 px-1">
                   Overdue
                 </h3>
                 <div className="space-y-2">
-                  {overdueDisplay.map((reminder: any) => (
+                  {overdueReminders.map((reminder: any) => (
                     <div
                       key={reminder.id}
                       className="flex items-center gap-3 rounded-xl border-l-4 border-l-destructive/80 bg-destructive/5 dark:bg-destructive/10 p-3.5 hover:bg-destructive/10 dark:hover:bg-destructive/15 transition-colors"
@@ -342,13 +333,13 @@ export function RemindersCard({
               </section>
             )}
 
-            {todayDisplay.length > 0 && (
+            {todayReminders.length > 0 && (
               <section className="space-y-2">
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-primary px-1">
                   Today
                 </h3>
                 <div className="space-y-2">
-                  {todayDisplay.map((reminder: any) => (
+                  {todayReminders.map((reminder: any) => (
                     <div
                       key={reminder.id}
                       className="flex items-center gap-3 rounded-xl border border-border bg-card hover:bg-muted/40 dark:hover:bg-muted/30 transition-colors p-3.5 border-l-4 border-l-primary/60"
@@ -376,13 +367,13 @@ export function RemindersCard({
               </section>
             )}
 
-            {upcomingDisplay.length > 0 && (
+            {upcomingReminders.length > 0 && (
               <section className="space-y-2">
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground px-1">
                   Upcoming
                 </h3>
                 <div className="space-y-2">
-                  {upcomingDisplay.map((reminder: any) => (
+                  {upcomingReminders.map((reminder: any) => (
                     <div
                       key={reminder.id}
                       className="flex items-center gap-3 rounded-xl border border-border bg-card hover:bg-muted/40 dark:hover:bg-muted/30 transition-colors p-3.5"
@@ -410,22 +401,12 @@ export function RemindersCard({
               </section>
             )}
 
-            {overdueDisplay.length === 0 && todayDisplay.length === 0 && upcomingDisplay.length === 0 && (
+            {reminders.length === 0 && (
               <div className="py-10 text-center">
                 <Calendar className="mx-auto h-10 w-10 text-muted-foreground/50 mb-2" />
                 <p className="text-sm text-muted-foreground">No upcoming reminders</p>
                 <p className="text-xs text-muted-foreground mt-1">Use Quick Add to create one</p>
               </div>
-            )}
-
-            {hasMoreReminders && (
-              <Link
-                href="/dashboard#reminders"
-                className="mt-3 flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-muted-foreground/30 py-2.5 text-sm font-medium text-muted-foreground hover:bg-muted/50 hover:text-foreground hover:border-primary/30 transition-colors"
-              >
-                View all reminders
-                <ChevronRight className="h-4 w-4" />
-              </Link>
             )}
           </div>
         )}
