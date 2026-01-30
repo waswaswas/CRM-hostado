@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Bell } from 'lucide-react'
+import { ArrowRight, Bell } from 'lucide-react'
 import { getNotifications, getUnreadNotificationCount, type Notification } from '@/app/actions/notifications'
 import { useRouter } from 'next/navigation'
 import { format } from 'date-fns'
@@ -113,24 +113,33 @@ export function NotificationBadge() {
                     router.push(link)
                   }
                 }}
-                className="flex flex-col items-start gap-1.5 rounded-lg py-3 mx-1 min-h-[52px] cursor-pointer"
+                className="flex flex-col items-start gap-1.5 rounded-lg py-3 mx-1 min-h-[52px] cursor-pointer group"
               >
-                <div className="flex items-center gap-2 w-full min-w-0">
-                  <span className="font-medium truncate text-sm">
-                    {notification.title}
-                  </span>
-                  {!notification.is_read && (
-                    <Badge variant="secondary" className="shrink-0 text-[10px] px-1.5 py-0 rounded-md">New</Badge>
+                <div className="flex items-center justify-between gap-2 w-full min-w-0">
+                  <div className="flex flex-col gap-1 min-w-0 flex-1">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="font-medium truncate text-sm">
+                        {notification.title}
+                      </span>
+                      {!notification.is_read && (
+                        <Badge variant="secondary" className="shrink-0 text-[10px] px-1.5 py-0 rounded-md">New</Badge>
+                      )}
+                    </div>
+                    {notification.message && (
+                      <span className="text-xs text-muted-foreground line-clamp-2">
+                        {notification.message}
+                      </span>
+                    )}
+                    <span className="text-[11px] text-muted-foreground/80">
+                      {format(new Date(notification.created_at), 'MMM d, HH:mm')}
+                    </span>
+                  </div>
+                  {link && (
+                    <span className="shrink-0 rounded p-1 text-muted-foreground group-hover:text-foreground" title="Go to">
+                      <ArrowRight className="h-4 w-4" />
+                    </span>
                   )}
                 </div>
-                {notification.message && (
-                  <span className="text-xs text-muted-foreground line-clamp-2">
-                    {notification.message}
-                  </span>
-                )}
-                <span className="text-[11px] text-muted-foreground/80">
-                  {format(new Date(notification.created_at), 'MMM d, HH:mm')}
-                </span>
               </DropdownMenuItem>
             )
           })

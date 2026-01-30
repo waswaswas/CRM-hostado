@@ -255,8 +255,34 @@ export async function markAllNotificationsAsRead() {
   revalidatePath('/dashboard')
 }
 
+export async function deleteAllNotifications() {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
 
+  if (!user) {
+    throw new Error('Not authenticated')
+  }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    throw new Error('No organization selected')
+  }
+
+  const { error } = await supabase
+    .from('notifications')
+    .delete()
+    .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  revalidatePath('/notifications')
+  revalidatePath('/dashboard')
+}
 
 
 

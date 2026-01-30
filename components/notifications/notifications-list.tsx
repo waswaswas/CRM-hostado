@@ -5,11 +5,11 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { 
-  getNotifications, 
   markNotificationAsRead, 
   markNotificationAsUnread, 
   deleteNotification,
   markAllNotificationsAsRead,
+  deleteAllNotifications,
   type Notification
 } from '@/app/actions/notifications'
 import { useToast } from '@/components/ui/toaster'
@@ -170,26 +170,68 @@ export function NotificationsList({ initialNotifications }: NotificationsListPro
     }
   }
 
+  async function handleDeleteAll() {
+    if (!confirm('Delete all notifications? This cannot be undone.')) return
+    setLoading(true)
+    try {
+      await deleteAllNotifications()
+      setNotifications([])
+      toast({
+        title: 'Success',
+        description: 'All notifications deleted',
+      })
+      router.refresh()
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to delete all notifications',
+        variant: 'destructive',
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const unreadCount = notifications.filter((n) => !n.is_read).length
 
   return (
     <div className="space-y-4">
-      {/* Header with Mark All as Read */}
-      {unreadCount > 0 && (
-        <div className="flex items-center justify-between">
+      {/* Header with Mark all as read and Delete all */}
+      {(unreadCount > 0 || notifications.length > 0) && (
+        <div className="flex items-center justify-between flex-wrap gap-2">
           <p className="text-sm text-muted-foreground">
-            {unreadCount} unread notification{unreadCount > 1 ? 's' : ''}
+            {unreadCount > 0
+              ? `${unreadCount} unread notification${unreadCount > 1 ? 's' : ''}`
+              : notifications.length > 0
+                ? `${notifications.length} notification${notifications.length > 1 ? 's' : ''}`
+                : ''}
           </p>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleMarkAllAsRead}
-            disabled={loading}
-            className="gap-2"
-          >
-            <CheckCheck className="h-4 w-4" />
-            Mark all as read
-          </Button>
+          <div className="flex items-center gap-2">
+            {unreadCount > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleMarkAllAsRead}
+                disabled={loading}
+                className="gap-2"
+              >
+                <CheckCheck className="h-4 w-4" />
+                Mark all as read
+              </Button>
+            )}
+            {notifications.length > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleDeleteAll}
+                disabled={loading}
+                className="gap-2 text-destructive hover:text-destructive hover:bg-destructive/10"
+              >
+                <Trash2 className="h-4 w-4" />
+                Delete all
+              </Button>
+            )}
+          </div>
         </div>
       )}
 

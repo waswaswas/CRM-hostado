@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { cookies } from 'next/headers'
+import { redirect } from 'next/navigation'
 import type { Organization, OrganizationMember } from '@/types/database'
 
 const COOKIE_NAME = 'current_organization_id'
@@ -1070,6 +1071,18 @@ export async function hasFeaturePermission(
     .maybeSingle()
 
   return permission?.has_access || false
+}
+
+/** Use in server layouts/pages: redirects to /dashboard if current user has no access to the feature. */
+export async function requireFeatureAccess(feature: string): Promise<void> {
+  const orgId = await getCurrentOrganizationId()
+  if (!orgId) {
+    redirect('/dashboard')
+  }
+  const hasAccess = await hasFeaturePermission(orgId, feature)
+  if (!hasAccess) {
+    redirect('/dashboard')
+  }
 }
 
 export async function getMemberPermissions(

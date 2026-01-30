@@ -22,7 +22,7 @@ export function RecentClients({ initialClients, customStatuses }: RecentClientsP
   const [clients, setClients] = useState<Client[]>(initialClients)
   const [loading, setLoading] = useState(false)
 
-  const recentClients = useMemo(() => clients.slice(0, 5), [clients])
+  const recentClients = useMemo(() => clients.slice(0, 7), [clients])
 
   useEffect(() => {
     let isMounted = true
@@ -42,7 +42,7 @@ export function RecentClients({ initialClients, customStatuses }: RecentClientsP
           .eq('organization_id', currentOrganization.id)
           .eq('is_deleted', false)
           .order('created_at', { ascending: false })
-          .limit(5)
+          .limit(7)
 
         if (isMounted) {
           setClients(data || [])
@@ -86,7 +86,7 @@ export function RecentClients({ initialClients, customStatuses }: RecentClientsP
             .eq('organization_id', currentOrganization.id)
             .eq('is_deleted', false)
             .order('created_at', { ascending: false })
-            .limit(5)
+            .limit(7)
           setClients(data || [])
         }
       )

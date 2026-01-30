@@ -133,7 +133,7 @@ export default async function DashboardPage() {
   const upcomingReminders = reminders.filter((r: any) => {
     const dueDate = new Date(r.due_at)
     return dueDate >= tomorrow && !r.done
-  }).slice(0, 5)
+  })
 
   const getClientName = (reminder: any) => {
     if (reminder.clients && typeof reminder.clients === 'object') {
