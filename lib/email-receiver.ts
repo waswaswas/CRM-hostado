@@ -2,6 +2,12 @@ import Imap from 'imap'
 import { simpleParser, ParsedMail } from 'mailparser'
 import { createInboundEmail } from '@/app/actions/emails'
 import { parseContactFormEmail } from './contact-form-parser'
+import {
+  subjectMatches,
+  extractWithRule,
+  extractedToFormData,
+  type MagicExtractRule,
+} from './magic-extract-engine'
 
 interface ImapConfig {
   host: string
@@ -338,6 +344,24 @@ async function processEmail(email: ProcessedEmail): Promise<boolean> {
       } else {
         console.warn(`[Email Processing] Failed to parse contact form data for: ${email.subject}`)
         // Fall through to regular email processing
+      }
+    }
+
+    // Magic extract: configurable rules from organization settings (no DB schema change)
+    const { getCurrentOrganizationId } = await import('@/app/actions/organizations')
+    const { getMagicExtractRulesForOrg } = await import('@/app/actions/magic-extract')
+    const organizationId = await getCurrentOrganizationId()
+    if (organizationId) {
+      const rules = await getMagicExtractRulesForOrg(organizationId)
+      const body = email.html || email.text
+      for (const rule of rules) {
+        if (!subjectMatches(rule, email.subject)) continue
+        const extracted = extractWithRule(body, rule)
+        if (!extracted) continue
+        console.log(`[Email Processing] Magic extract rule matched: ${rule.name} for ${email.subject}`)
+        const result = await processMagicExtractInquiry(extracted, email, rule)
+        console.log(`[Email Processing] Magic extract processing result: ${result ? 'success' : 'duplicate'}`)
+        return result
       }
     }
 
@@ -679,6 +703,190 @@ async function processContactFormInquiry(
 
   // Return true if this was a new email/interaction, false if it was a duplicate
   return !existingInteraction
+}
+
+async function processMagicExtractInquiry(
+  extracted: Record<string, string>,
+  email: ProcessedEmail,
+  rule: MagicExtractRule
+): Promise<boolean> {
+  const formData = extractedToFormData(extracted)
+  const { createClientRecord } = await import('@/app/actions/clients')
+  const { createInteraction } = await import('@/app/actions/interactions')
+  const { createClient: createSupabaseClient } = await import('@/lib/supabase/server')
+
+  const supabase = await createSupabaseClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) throw new Error('Unauthorized')
+
+  const { getCurrentOrganizationId } = await import('@/app/actions/organizations')
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) throw new Error('No organization selected')
+
+  const receivedAt = email.date.toISOString()
+  const normalizedMessage = (formData.message || '').trim().replace(/\s+/g, ' ')
+
+  let existingEmail: { id: string; is_deleted?: boolean; provider_message_id?: string } | null = null
+  if (email.messageId) {
+    const { data: emailByMessageId } = await supabase
+      .from('emails')
+      .select('id, is_deleted, provider_message_id')
+      .eq('owner_id', user.id)
+      .eq('organization_id', organizationId)
+      .eq('provider_message_id', email.messageId)
+      .maybeSingle()
+    existingEmail = emailByMessageId
+  }
+  if (!existingEmail) {
+    const twoHours = 2 * 60 * 60 * 1000
+    const { data: recentEmails } = await supabase
+      .from('emails')
+      .select('id, body_text, sent_at, is_deleted')
+      .eq('owner_id', user.id)
+      .eq('organization_id', organizationId)
+      .eq('from_email', formData.email)
+      .eq('subject', email.subject)
+      .eq('direction', 'inbound')
+      .gte('sent_at', new Date(new Date(receivedAt).getTime() - twoHours).toISOString())
+      .lte('sent_at', new Date(new Date(receivedAt).getTime() + twoHours).toISOString())
+      .order('sent_at', { ascending: false })
+      .limit(5)
+
+    const match = (recentEmails || []).find((row: any) => {
+      const body = (row.body_text || '').trim().replace(/\s+/g, ' ')
+      return body === normalizedMessage
+    })
+    if (match) existingEmail = match
+  }
+
+  if (existingEmail) {
+    if (existingEmail.is_deleted) {
+      await supabase
+        .from('emails')
+        .update({
+          is_deleted: false,
+          deleted_at: null,
+          folder: 'inbox',
+          is_read: false,
+        })
+        .eq('id', existingEmail.id)
+        .eq('owner_id', user.id)
+        .eq('organization_id', organizationId)
+      return false
+    }
+    return false
+  }
+
+  const { data: existingClients } = await supabase
+    .from('clients')
+    .select('id, name, email, phone, is_deleted')
+    .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
+    .eq('email', formData.email)
+
+  let clientId: string | null = null
+  if (existingClients && existingClients.length > 0) {
+    if (existingClients[0].is_deleted) {
+      clientId = null
+    } else {
+      clientId = existingClients[0].id
+      const needsUpdate =
+        !!clientId &&
+        (!existingClients[0].name || existingClients[0].name !== formData.name || (!existingClients[0].phone && formData.phone))
+      if (needsUpdate) {
+        await supabase
+          .from('clients')
+          .update({
+            name: formData.name,
+            phone: formData.phone || existingClients[0].phone,
+          })
+          .eq('id', clientId)
+      }
+    }
+  } else {
+    const newClient = await createClientRecord({
+      name: formData.name,
+      email: formData.email,
+      phone: formData.phone,
+      company: formData.company,
+      notes_summary: formData.notes_summary,
+      client_type: 'presales',
+      status: 'follow_up_required',
+      source: 'magic_extract',
+    })
+    clientId = newClient.id
+  }
+
+  const toEmail = email.to[0]?.address || process.env.SMTP_FROM_EMAIL || ''
+  const toName = email.to[0]?.name || process.env.SMTP_FROM_NAME || 'Pre-Sales CRM'
+
+  const emailInsertData: any = {
+    owner_id: user.id,
+    organization_id: organizationId,
+    subject: email.subject,
+    body_html: email.html || email.text,
+    body_text: email.text || (email.html ? email.html.replace(/<[^>]*>/g, '') : ''),
+    from_email: formData.email,
+    from_name: formData.name,
+    to_email: toEmail,
+    to_name: toName,
+    cc_emails: [],
+    bcc_emails: [],
+    status: 'sent',
+    sent_at: receivedAt,
+    folder: 'inbox',
+    direction: 'inbound',
+    is_read: false,
+    is_deleted: false,
+    provider_message_id: email.messageId || null,
+    client_id: clientId,
+  }
+
+  const { data: emailRecord, error: emailError } = await supabase
+    .from('emails')
+    .insert(emailInsertData)
+    .select()
+    .single()
+
+  if (emailError) throw new Error(`Failed to create email record: ${emailError.message}`)
+
+  if (emailRecord && rule.create_notification) {
+    try {
+      const { createNotification } = await import('@/app/actions/notifications')
+      await createNotification({
+        type: 'email',
+        title: rule.name,
+        message: `New inquiry from ${formData.name || formData.email}`,
+        related_id: emailRecord.id,
+        related_type: 'email',
+        metadata: { from_email: formData.email, from_name: formData.name },
+      })
+    } catch (err) {
+      console.error('Failed to create notification for Magic extract email:', err)
+    }
+  }
+
+  if (clientId && rule.create_interaction) {
+    try {
+      const interactionNotes = formData.message || email.text || (email.html ? email.html.replace(/<[^>]*>/g, '') : '')
+      await createInteraction({
+        client_id: clientId,
+        type: 'email',
+        direction: 'inbound',
+        date: receivedAt,
+        subject: 'Initial request',
+        notes: interactionNotes,
+        email_id: emailRecord.id,
+      })
+    } catch (err) {
+      console.error('Failed to create interaction for Magic extract email:', err)
+    }
+  }
+
+  return true
 }
 
 export function isImapConfigured(): boolean {

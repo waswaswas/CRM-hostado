@@ -19,7 +19,7 @@ import { Select } from '@/components/ui/select'
 import { useToast } from '@/components/ui/toaster'
 import { format } from 'date-fns'
 import Link from 'next/link'
-import { Mail, Trash2, Eye, Send, Clock, XCircle, CheckCircle, FileText, Reply, Forward, MailOpen, Archive, RefreshCw } from 'lucide-react'
+import { Mail, Trash2, Eye, Send, Clock, XCircle, CheckCircle, FileText, Reply, Forward, MailOpen, Archive, RefreshCw, Wand2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useOrganization } from '@/lib/organization-context'
 
@@ -442,6 +442,13 @@ export function EmailList({ initialEmails = [], clientId }: EmailListProps) {
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <h1 className="text-2xl md:text-3xl font-bold">Emails</h1>
         <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+          <Link href="/emails/magic-extract" className="flex-1 sm:flex-initial">
+            <Button variant="outline" className="w-full sm:w-auto min-h-[44px]">
+              <Wand2 className="mr-2 h-4 w-4" />
+              <span className="hidden sm:inline">Magic extract</span>
+              <span className="sm:hidden">Magic</span>
+            </Button>
+          </Link>
           <Link href="/emails/templates" className="flex-1 sm:flex-initial">
             <Button variant="outline" className="w-full sm:w-auto min-h-[44px]">
               <FileText className="mr-2 h-4 w-4" />

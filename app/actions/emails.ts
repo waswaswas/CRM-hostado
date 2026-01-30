@@ -4,6 +4,8 @@ import { createClient } from '@/lib/supabase/server'
 import { sendEmail } from '@/lib/email-provider'
 import { createInteraction } from './interactions'
 import { getCurrentOrganizationId } from './organizations'
+import { getMagicExtractRulesForOrg } from './magic-extract'
+import { subjectMatches, extractWithRule, extractedToFormData } from '@/lib/magic-extract-engine'
 
 export type EmailStatus = 'draft' | 'scheduled' | 'sending' | 'sent' | 'failed' | 'bounced'
 
@@ -185,6 +187,23 @@ export async function createInboundEmail(input: CreateInboundEmailInput): Promis
   if (!organizationId) {
     throw new Error('No organization selected')
   }
+
+  // Magic extract: if subject matches a rule, use extracted from_email/from_name and find or create client
+  let effectiveFromEmail = input.from_email
+  let effectiveFromName = input.from_name
+  let magicExtractResult: { formData: ReturnType<typeof extractedToFormData>; rule: { create_notification: boolean; create_interaction: boolean; name: string } } | null = null
+  const rules = await getMagicExtractRulesForOrg(organizationId)
+  const bodyForExtract = input.body_html || input.body_text || ''
+  for (const rule of rules) {
+    if (!subjectMatches(rule, input.subject)) continue
+    const extracted = extractWithRule(bodyForExtract, rule)
+    if (!extracted) continue
+    const formData = extractedToFormData(extracted)
+    effectiveFromEmail = formData.email
+    effectiveFromName = formData.name
+    magicExtractResult = { formData, rule }
+    break
+  }
   
   // Check for existing email by from_email and subject (wider time window - 24 hours)
   const { data: existingEmail } = await supabase
@@ -192,7 +211,7 @@ export async function createInboundEmail(input: CreateInboundEmailInput): Promis
     .select('id, client_id, from_email, sent_at')
     .eq('owner_id', user.id)
     .eq('organization_id', organizationId)
-    .eq('from_email', input.from_email)
+    .eq('from_email', effectiveFromEmail)
     .eq('subject', input.subject)
     .eq('direction', 'inbound')
     .gte('sent_at', new Date(new Date(receivedAt).getTime() - 24 * 60 * 60 * 1000).toISOString()) // Within 24 hours
@@ -208,7 +227,7 @@ export async function createInboundEmail(input: CreateInboundEmailInput): Promis
       .select('id, client_id, from_email, sent_at')
       .eq('owner_id', user.id)
       .eq('organization_id', organizationId)
-      .eq('from_email', input.from_email)
+      .eq('from_email', effectiveFromEmail)
       .eq('subject', input.subject)
       .eq('direction', 'inbound')
       .order('sent_at', { ascending: false })
@@ -224,13 +243,13 @@ export async function createInboundEmail(input: CreateInboundEmailInput): Promis
       
       if (timeDiff < oneDay) {
         // Email exists, skip processing
-        console.log(`[Email] Email already processed, skipping: ${input.subject} from ${input.from_email} (existing email ID: ${emailBySenderAndSubject.id})`)
+        console.log(`[Email] Email already processed, skipping: ${input.subject} from ${effectiveFromEmail} (existing email ID: ${emailBySenderAndSubject.id})`)
         throw new Error('This email has already been processed')
       }
     }
   } else {
     // Email exists within 24 hours, skip processing
-    console.log(`[Email] Email already processed, skipping: ${input.subject} from ${input.from_email} (existing email ID: ${existingEmail.id})`)
+    console.log(`[Email] Email already processed, skipping: ${input.subject} from ${effectiveFromEmail} (existing email ID: ${existingEmail.id})`)
     throw new Error('This email has already been processed')
   }
 
@@ -238,13 +257,13 @@ export async function createInboundEmail(input: CreateInboundEmailInput): Promis
   // If we do, and the client was deleted, don't recreate it, but still save the email
   let shouldSkipClientCreation = false
   let useExistingClientId: string | null = null
-  if (!input.client_id && input.from_email) {
+  if (!input.client_id && effectiveFromEmail) {
     const { data: anyEmailsFromSender } = await supabase
       .from('emails')
       .select('id, from_email, sent_at, client_id')
       .eq('owner_id', user.id)
       .eq('organization_id', organizationId)
-      .eq('from_email', input.from_email)
+      .eq('from_email', effectiveFromEmail)
       .eq('direction', 'inbound')
       .order('sent_at', { ascending: false })
       .limit(1)
@@ -259,14 +278,14 @@ export async function createInboundEmail(input: CreateInboundEmailInput): Promis
         .select('id')
         .eq('owner_id', user.id)
         .eq('organization_id', organizationId)
-        .eq('email', input.from_email)
+        .eq('email', effectiveFromEmail)
         .single()
 
       if (!existingClient) {
         // We have emails from this sender but no client exists
         // This means the client was deleted - don't recreate it, but still save the email
         // Use the client_id from the existing email (may be null if migration was run)
-        console.log(`[Email] Found emails from ${input.from_email} but client was deleted. Saving email with existing client_id to prevent recreation.`)
+        console.log(`[Email] Found emails from ${effectiveFromEmail} but client was deleted. Saving email with existing client_id to prevent recreation.`)
         shouldSkipClientCreation = true
         useExistingClientId = anyEmailsFromSender.client_id // May be null if migration was run
       }
@@ -274,35 +293,63 @@ export async function createInboundEmail(input: CreateInboundEmailInput): Promis
   }
 
   // Try to find client by email if client_id not provided
-  // Only create new clients for contact form inquiries
+  // Only create new clients for contact form inquiries or Magic extract matches
   const isContactFormInquiry = input.subject === 'Ново запитване от контактната форма'
   
   let clientId: string | null | undefined = input.client_id
-  if (!clientId && input.from_email && !shouldSkipClientCreation) {
-    const { data: client } = await supabase
-      .from('clients')
-      .select('id')
-      .eq('email', input.from_email)
-      .eq('owner_id', user.id)
-      .eq('organization_id', organizationId)
-      .single()
-
-    if (client) {
-      clientId = client.id
-    } else if (isContactFormInquiry) {
-      // Only create a new client if this is a contact form inquiry
-      // (not for delivery failures or other system emails)
-      const { createClientRecord } = await import('./clients')
-      const newClient = await createClientRecord({
-        name: input.from_name || input.from_email.split('@')[0],
-        email: input.from_email,
-        client_type: 'presales',
-      })
-      clientId = newClient.id
+  if (!clientId && effectiveFromEmail && !shouldSkipClientCreation) {
+    if (magicExtractResult) {
+      const { formData } = magicExtractResult
+      const { data: existingClient } = await supabase
+        .from('clients')
+        .select('id')
+        .eq('email', formData.email)
+        .eq('owner_id', user.id)
+        .eq('organization_id', organizationId)
+        .eq('is_deleted', false)
+        .maybeSingle()
+      if (existingClient) {
+        clientId = existingClient.id
+      } else {
+        const { createClientRecord } = await import('./clients')
+        const newClient = await createClientRecord({
+          name: formData.name,
+          email: formData.email,
+          phone: formData.phone,
+          company: formData.company,
+          notes_summary: formData.notes_summary,
+          client_type: 'presales',
+          status: 'follow_up_required',
+          source: 'magic_extract',
+        })
+        clientId = newClient.id
+      }
     } else {
-      // Not a contact form inquiry - don't create a client
-      console.log(`[Email] Skipping client creation for email with subject: "${input.subject}"`)
-      clientId = null
+      const { data: client } = await supabase
+        .from('clients')
+        .select('id')
+        .eq('email', effectiveFromEmail)
+        .eq('owner_id', user.id)
+        .eq('organization_id', organizationId)
+        .single()
+
+      if (client) {
+        clientId = client.id
+      } else if (isContactFormInquiry) {
+        // Only create a new client if this is a contact form inquiry
+        // (not for delivery failures or other system emails)
+        const { createClientRecord } = await import('./clients')
+        const newClient = await createClientRecord({
+          name: effectiveFromName || effectiveFromEmail.split('@')[0],
+          email: effectiveFromEmail,
+          client_type: 'presales',
+        })
+        clientId = newClient.id
+      } else {
+        // Not a contact form inquiry - don't create a client
+        console.log(`[Email] Skipping client creation for email with subject: "${input.subject}"`)
+        clientId = null
+      }
     }
   }
 
@@ -325,8 +372,8 @@ export async function createInboundEmail(input: CreateInboundEmailInput): Promis
       subject: input.subject,
       body_html: input.body_html,
       body_text: input.body_text || input.body_html.replace(/<[^>]*>/g, ''),
-      from_email: input.from_email,
-      from_name: input.from_name,
+      from_email: effectiveFromEmail,
+      from_name: effectiveFromName,
       to_email: toEmail,
       to_name: toName,
       cc_emails: input.cc_emails || [],
@@ -350,19 +397,20 @@ export async function createInboundEmail(input: CreateInboundEmailInput): Promis
     throw new Error(`Failed to create inbound email: ${error.message}`)
   }
 
-  // Create notification for new inbound email (only for contact form inquiries)
-  if (data && isContactFormInquiry) {
+  // Create notification for new inbound email (contact form or Magic extract with create_notification)
+  const shouldNotify = isContactFormInquiry || (magicExtractResult?.rule.create_notification === true)
+  if (data && shouldNotify) {
     try {
       const { createNotification } = await import('./notifications')
       await createNotification({
         type: 'email',
-        title: 'New contact form inquiry',
-        message: `New inquiry from ${input.from_name || input.from_email}`,
+        title: magicExtractResult ? magicExtractResult.rule.name : 'New contact form inquiry',
+        message: `New inquiry from ${effectiveFromName || effectiveFromEmail}`,
         related_id: data.id,
         related_type: 'email',
         metadata: {
-          from_email: input.from_email,
-          from_name: input.from_name,
+          from_email: effectiveFromEmail,
+          from_name: effectiveFromName,
         },
       })
     } catch (error) {
@@ -371,8 +419,9 @@ export async function createInboundEmail(input: CreateInboundEmailInput): Promis
     }
   }
 
-  // Create interaction (only if client_id exists)
-  if (clientId) {
+  // Create interaction (only if client_id exists and not Magic extract with create_interaction false)
+  const shouldCreateInteraction = clientId && (!magicExtractResult || magicExtractResult.rule.create_interaction)
+  if (shouldCreateInteraction && clientId) {
     try {
       await createInteraction({
         client_id: clientId,
