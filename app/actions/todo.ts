@@ -384,6 +384,8 @@ export async function joinTodoListByCode(code: string): Promise<TodoList> {
   return list as TodoList
 }
 
+const LIST_OWNER_ONLY_MESSAGE = 'No permission to rename the list. Contact the owner if needed.'
+
 export async function updateTodoList(listId: string, updates: { name?: string; color?: string }): Promise<void> {
   const supabase = await createClient()
   const {
@@ -391,6 +393,15 @@ export async function updateTodoList(listId: string, updates: { name?: string; c
   } = await supabase.auth.getUser()
 
   if (!user) throw new Error('Unauthorized')
+
+  const { data: list } = await supabase
+    .from('todo_lists')
+    .select('created_by')
+    .eq('id', listId)
+    .single()
+
+  if (!list) throw new Error('List not found')
+  if (list.created_by !== user.id) throw new Error(LIST_OWNER_ONLY_MESSAGE)
 
   const { error } = await supabase
     .from('todo_lists')
@@ -408,10 +419,86 @@ export async function deleteTodoList(listId: string): Promise<void> {
   } = await supabase.auth.getUser()
   if (!user) throw new Error('Unauthorized')
 
+  const { data: list } = await supabase
+    .from('todo_lists')
+    .select('created_by')
+    .eq('id', listId)
+    .single()
+
+  if (!list) throw new Error('List not found')
+  if (list.created_by !== user.id) throw new Error('No permission to delete the list. Contact the owner if needed.')
+
   const { error } = await supabase
     .from('todo_lists')
     .delete()
     .eq('id', listId)
+
+  if (error) throw new Error(error.message)
+  revalidatePath('/todo')
+}
+
+export type TodoListMemberDetail = {
+  user_id: string
+  role: 'owner' | 'member'
+  email: string | null
+}
+
+export async function getTodoListMemberDetails(listId: string): Promise<TodoListMemberDetail[]> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return []
+
+  const { data: members, error } = await supabase
+    .from('todo_list_members')
+    .select('user_id, role')
+    .eq('list_id', listId)
+
+  if (error || !members?.length) return []
+
+  const userIds = members.map((m) => m.user_id)
+  const emailsMap = new Map<string, string>()
+  const { data: profiles } = await supabase
+    .from('user_profiles')
+    .select('id, email')
+    .in('id', userIds)
+  profiles?.forEach((p: { id: string; email: string }) => emailsMap.set(p.id, p.email))
+
+  return members.map((m) => ({
+    user_id: m.user_id,
+    role: m.role,
+    email: emailsMap.get(m.user_id) ?? null,
+  }))
+}
+
+export async function removeTodoListMember(listId: string, memberUserId: string): Promise<void> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) throw new Error('Unauthorized')
+
+  const { data: list } = await supabase
+    .from('todo_lists')
+    .select('created_by')
+    .eq('id', listId)
+    .single()
+
+  if (!list) throw new Error('List not found')
+  if (list.created_by === memberUserId) throw new Error('Cannot remove the list owner')
+
+  const role = await getCurrentUserOrgRole()
+  const isOrgAdmin = role === 'owner' || role === 'admin'
+  if (list.created_by !== user.id && !isOrgAdmin) {
+    throw new Error('Only the list owner or an organization admin can remove members')
+  }
+
+  const { error } = await supabase
+    .from('todo_list_members')
+    .delete()
+    .eq('list_id', listId)
+    .eq('user_id', memberUserId)
 
   if (error) throw new Error(error.message)
   revalidatePath('/todo')

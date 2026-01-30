@@ -19,11 +19,13 @@ import {
   deleteTodoTask,
   getRunningTimer,
   getTimeEntries,
+  getTodoListMemberDetails,
   getTodoLists,
   getTodoProjects,
   getTodoTasks,
   getTotalSeconds,
   joinTodoListByCode,
+  removeTodoListMember,
   startTimer,
   stopTimer,
   toggleTodoSubtask,
@@ -40,7 +42,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { useToast } from '@/components/ui/toaster'
-import { Archive, Calendar, Check, Clock, Copy, FolderOpen, Pencil, Plus, Search, Settings, Square, Trash2, Users } from 'lucide-react'
+import { Archive, Calendar, Check, Clock, Copy, FolderOpen, Pencil, Plus, Search, Settings, Square, Trash2, UserMinus, Users } from 'lucide-react'
 
 type UserRole = 'owner' | 'admin' | 'moderator' | 'viewer'
 type TaskStatus = 'to_do' | 'in_progress' | 'blocked' | 'done'
@@ -226,7 +228,7 @@ export default function TodoPage() {
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('')
   const [newComment, setNewComment] = useState('')
   const [newAttachmentUrl, setNewAttachmentUrl] = useState('')
-  const [loadingLists, setLoadingLists] = useState(false)
+  const [loadingLists, setLoadingLists] = useState(true)
   const [loadingTasks, setLoadingTasks] = useState(false)
   const [addingTask, setAddingTask] = useState(false)
   const [timeEntries, setTimeEntries] = useState<Array<{ id: string; entry_type: string; duration_minutes: number; duration_seconds: number | null; start_time: string | null; end_time: string | null; note: string | null; created_at: string; corrected_entry_id: string | null; user_email?: string }>>([])
@@ -255,8 +257,14 @@ export default function TodoPage() {
   }, [currentOrganization?.id])
 
   useEffect(() => {
-    if (!currentOrganization?.id || permissionsLoading) return
-    if (!permissions.todo) return
+    if (!currentOrganization?.id || permissionsLoading) {
+      setLoadingLists(false)
+      return
+    }
+    if (!permissions.todo) {
+      setLoadingLists(false)
+      return
+    }
     async function loadLists() {
       setLoadingLists(true)
       try {
@@ -531,13 +539,20 @@ export default function TodoPage() {
 
   async function handleDeleteList() {
     if (!activeList || !userId) return
-    const canDelete = activeList.createdBy === userId || userRole === 'owner'
-    if (!canDelete) return
-    await deleteTodoList(activeList.id)
-    await refreshLists()
-    setActiveListId(null)
-    setActiveTaskId(null)
-    setShowSettingsDialog(false)
+    if (activeList.createdBy !== userId) return
+    try {
+      await deleteTodoList(activeList.id)
+      await refreshLists()
+      setActiveListId(null)
+      setActiveTaskId(null)
+      setShowSettingsDialog(false)
+    } catch (err) {
+      toast({
+        title: 'Cannot delete list',
+        description: err instanceof Error ? err.message : 'No permission to delete the list. Contact the owner if needed.',
+        variant: 'destructive',
+      })
+    }
   }
 
   if (!hasAccess && !permissionsLoading) {
@@ -1294,6 +1309,7 @@ export default function TodoPage() {
           await refreshLists()
         }}
         onDelete={handleDeleteList}
+        onMembersChange={refreshLists}
       />
     </div>
   )
@@ -1487,6 +1503,7 @@ function ListSettingsDialog({
   userRole,
   onSave,
   onDelete,
+  onMembersChange,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -1495,10 +1512,15 @@ function ListSettingsDialog({
   userRole: UserRole
   onSave: (updates: Partial<TodoList>) => void
   onDelete: () => void
+  onMembersChange?: () => Promise<void>
 }) {
   const [name, setName] = useState('')
   const [color, setColor] = useState(COLORS[0])
   const [copied, setCopied] = useState(false)
+  const [memberDetails, setMemberDetails] = useState<Array<{ user_id: string; role: 'owner' | 'member'; email: string | null }>>([])
+  const [membersLoading, setMembersLoading] = useState(false)
+  const [removingId, setRemovingId] = useState<string | null>(null)
+  const { toast } = useToast()
 
   useEffect(() => {
     if (!list) return
@@ -1506,9 +1528,49 @@ function ListSettingsDialog({
     setColor(list.color)
   }, [list])
 
+  useEffect(() => {
+    if (!open || !list) {
+      setMemberDetails([])
+      return
+    }
+    let cancelled = false
+    setMembersLoading(true)
+    getTodoListMemberDetails(list.id)
+      .then((data) => {
+        if (!cancelled) setMemberDetails(data)
+      })
+      .finally(() => {
+        setMembersLoading(false)
+      })
+    return () => { cancelled = true }
+  }, [open, list?.id])
+
   if (!list) return null
 
-  const canDelete = userId === list.createdBy || userRole === 'owner'
+  const isListOwner = userId === list.createdBy
+  const canDelete = isListOwner
+  const canRemoveMembers = userId === list.createdBy || userRole === 'owner' || userRole === 'admin'
+
+  async function handleRemoveMember(memberUserId: string) {
+    if (!list || !canRemoveMembers || memberUserId === list.createdBy) return
+    if (!confirm('Remove this member from the list? They will lose access.')) return
+    setRemovingId(memberUserId)
+    try {
+      await removeTodoListMember(list.id, memberUserId)
+      await onMembersChange?.()
+      const next = memberDetails.filter((m) => m.user_id !== memberUserId)
+      setMemberDetails(next)
+      toast({ title: 'Member removed' })
+    } catch (err) {
+      toast({
+        title: 'Could not remove member',
+        description: err instanceof Error ? err.message : 'Something went wrong',
+        variant: 'destructive',
+      })
+    } finally {
+      setRemovingId(null)
+    }
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -1518,9 +1580,19 @@ function ListSettingsDialog({
           <DialogDescription>Manage list details and sharing.</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
+          {!isListOwner && (
+            <p className="text-sm text-muted-foreground rounded-lg border p-3 bg-muted/30">
+              Only the list owner can rename, change colors, or delete the list.
+            </p>
+          )}
           <div>
             <label className="text-sm font-medium">Name</label>
-            <Input value={name} onChange={(event) => setName(event.target.value)} />
+            <Input
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              disabled={!isListOwner}
+              readOnly={!isListOwner}
+            />
           </div>
           <div>
             <label className="text-sm font-medium">Color</label>
@@ -1529,9 +1601,10 @@ function ListSettingsDialog({
                 <button
                   key={option}
                   type="button"
-                  className={`h-8 w-8 rounded-full border ${color === option ? 'border-primary' : 'border-transparent'}`}
+                  disabled={!isListOwner}
+                  className={`h-8 w-8 rounded-full border ${color === option ? 'border-primary' : 'border-transparent'} ${!isListOwner ? 'cursor-not-allowed opacity-70' : ''}`}
                   style={{ backgroundColor: option }}
-                  onClick={() => setColor(option)}
+                  onClick={() => isListOwner && setColor(option)}
                 />
               ))}
             </div>
@@ -1568,9 +1641,37 @@ function ListSettingsDialog({
               <Users className="h-4 w-4 text-muted-foreground" />
               <p className="text-sm font-medium">Members</p>
             </div>
-            <div className="text-xs text-muted-foreground">
-              {list.members.length} members
-            </div>
+            {membersLoading ? (
+              <p className="text-xs text-muted-foreground">Loading members...</p>
+            ) : memberDetails.length === 0 ? (
+              <p className="text-xs text-muted-foreground">No members</p>
+            ) : (
+              <ul className="space-y-2">
+                {memberDetails.map((member) => (
+                  <li
+                    key={member.user_id}
+                    className="flex items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium truncate">{member.email ?? member.user_id}</p>
+                      <p className="text-xs text-muted-foreground capitalize">{member.role}</p>
+                    </div>
+                    {canRemoveMembers && member.user_id !== list.createdBy && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-destructive hover:text-destructive shrink-0"
+                        disabled={removingId === member.user_id}
+                        onClick={() => handleRemoveMember(member.user_id)}
+                      >
+                        <UserMinus className="h-4 w-4 mr-1" />
+                        Remove
+                      </Button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
           <div className="rounded-lg border p-3 text-xs text-muted-foreground">
             <p>Created by: {list.createdBy}</p>
@@ -1579,9 +1680,18 @@ function ListSettingsDialog({
           <div className="flex justify-between gap-2 border-t pt-4">
             <Button
               variant="outline"
-              onClick={() => {
-                onSave({ name: name.trim() || list.name, color })
-                onOpenChange(false)
+              disabled={!isListOwner}
+              onClick={async () => {
+                try {
+                  await onSave({ name: name.trim() || list.name, color })
+                  onOpenChange(false)
+                } catch (err) {
+                  toast({
+                    title: 'Cannot save',
+                    description: err instanceof Error ? err.message : 'No permission to rename the list. Contact the owner if needed.',
+                    variant: 'destructive',
+                  })
+                }
               }}
             >
               Save changes

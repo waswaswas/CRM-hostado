@@ -7,7 +7,6 @@ import { LayoutDashboard, Users, Settings, FileText, Mail, Building2, Menu, X, U
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Skeleton } from '@/components/ui/skeleton'
 import { useFeaturePermissions } from '@/lib/hooks/use-feature-permissions'
 import { useOrganization } from '@/lib/organization-context'
 
@@ -36,8 +35,10 @@ export function Sidebar({ userName, collapsed = false, onToggleCollapse }: Sideb
 
   const isLoading = orgLoading || permissionsLoading
 
-  // Filter navigation based on permissions
-  const navigation = allNavigation.filter(item => permissions[item.feature])
+  // Show all nav items while loading (static buttons); filter by permissions when ready
+  const navigation = isLoading
+    ? allNavigation
+    : allNavigation.filter(item => permissions[item.feature])
 
   const showCollapseToggle = Boolean(onToggleCollapse)
 
@@ -96,17 +97,7 @@ export function Sidebar({ userName, collapsed = false, onToggleCollapse }: Sideb
             </div>
           </div>
           <nav className="flex-1 space-y-1 overflow-y-auto overflow-x-hidden p-3 sm:p-4">
-            {isLoading ? (
-              <>
-                {[ { width: 'w-24' }, { width: 'w-20' }, { width: 'w-28' }, { width: 'w-24' }, { width: 'w-32' } ].map((item, i) => (
-                  <div key={i} className="flex items-center gap-3 rounded-lg px-3 py-3 min-h-[44px]">
-                    <Skeleton className="h-5 w-5 rounded flex-shrink-0" />
-                    <Skeleton className={cn('h-4', item.width)} />
-                  </div>
-                ))}
-              </>
-            ) : (
-              navigation.map((item) => {
+            {navigation.map((item) => {
                 const isActive = pathname === item.href || pathname?.startsWith(item.href + '/')
                 return (
                   <Link
@@ -131,8 +122,7 @@ export function Sidebar({ userName, collapsed = false, onToggleCollapse }: Sideb
                     )}
                   </Link>
                 )
-              })
-            )}
+              })}
           </nav>
           {userName && (
             <div className={cn('border-t p-3 sm:p-4', collapsed && showCollapseToggle && 'md:hidden')}>
@@ -143,13 +133,7 @@ export function Sidebar({ userName, collapsed = false, onToggleCollapse }: Sideb
             </div>
           )}
           <div className={cn('border-t p-3 sm:p-4', collapsed && showCollapseToggle && 'md:hidden')}>
-            {isLoading ? (
-              <div className="flex items-center gap-3 rounded-lg px-3 py-3 min-h-[44px]">
-                <Skeleton className="h-5 w-5 rounded flex-shrink-0" />
-                <Skeleton className="h-4 w-20" />
-              </div>
-            ) : (
-              <Link
+            <Link
                 href="/settings"
                 onClick={() => setMobileMenuOpen(false)}
                 className={cn(
@@ -162,7 +146,6 @@ export function Sidebar({ userName, collapsed = false, onToggleCollapse }: Sideb
                 <Settings className="h-5 w-5 shrink-0" />
                 Settings
               </Link>
-            )}
           </div>
         </div>
 
