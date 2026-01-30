@@ -4,7 +4,14 @@ import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Users, ChevronRight } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { Users, ChevronRight, Plus, ChevronDown } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useOrganization } from '@/lib/organization-context'
 import type { Client } from '@/types/database'
@@ -100,11 +107,36 @@ export function RecentClients({ initialClients, customStatuses }: RecentClientsP
   return (
     <Card>
       <CardHeader className="pb-3">
-        <CardTitle className="flex items-center gap-2 text-base font-semibold">
-          <Users className="h-5 w-5 text-muted-foreground" />
-          Recent Clients
-        </CardTitle>
-        <CardDescription className="text-sm">Recently added clients</CardDescription>
+        <div className="flex flex-col gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <CardTitle className="flex items-center gap-2 text-base font-semibold">
+              <Users className="h-5 w-5 text-muted-foreground shrink-0" />
+              Recent Clients
+            </CardTitle>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="min-h-[44px] px-3 md:h-8 shrink-0"
+                >
+                  <Plus className="h-4 w-4 mr-1.5" />
+                  <span className="hidden sm:inline">Quick add</span>
+                  <ChevronDown className="h-4 w-4 ml-0.5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem asChild>
+                  <Link href="/clients/new?type=presales">Presales</Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/clients/new?type=customer">Customer</Link>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+          <CardDescription className="text-sm">Recently added clients</CardDescription>
+        </div>
       </CardHeader>
       <CardContent className="space-y-2">
         {loading && recentClients.length === 0 ? (

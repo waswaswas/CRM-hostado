@@ -256,26 +256,28 @@ export default function TodoPage() {
     loadUserContext()
   }, [currentOrganization?.id])
 
+  // Load lists as soon as org is available; do not wait for permissions (layout already enforces todo access)
   useEffect(() => {
-    if (!currentOrganization?.id || permissionsLoading) {
+    if (!currentOrganization?.id) {
       setLoadingLists(false)
       return
     }
-    if (!permissions.todo) {
-      setLoadingLists(false)
-      return
+    let cancelled = false
+    setLoadingLists(true)
+    getTodoLists()
+      .then((data) => {
+        if (!cancelled) setLists(data.map(mapListFromDb))
+      })
+      .catch(() => {
+        if (!cancelled) setLists([])
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingLists(false)
+      })
+    return () => {
+      cancelled = true
     }
-    async function loadLists() {
-      setLoadingLists(true)
-      try {
-        const data = await getTodoLists()
-        setLists(data.map(mapListFromDb))
-      } finally {
-        setLoadingLists(false)
-      }
-    }
-    loadLists()
-  }, [currentOrganization?.id, permissions.todo, permissionsLoading])
+  }, [currentOrganization?.id])
 
   useEffect(() => {
     if (!activeListId) {

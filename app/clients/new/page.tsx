@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect, useMemo } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { AppLayoutClient } from '@/components/layout/app-layout-client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -22,8 +22,13 @@ const CUSTOM_SOURCE_VALUE = '__custom__'
 
 export default function NewClientPage() {
   const router = useRouter()
-  const { toast } = useToast()
+  const searchParams = useSearchParams()
+  const typeFromUrl = useMemo(() => {
+    const t = searchParams.get('type')
+    return t === 'presales' || t === 'customer' ? t : null
+  }, [searchParams])
   const [clientType, setClientType] = useState<ClientType>(null)
+  const [typeInitialized, setTypeInitialized] = useState(false)
   const [loading, setLoading] = useState(false)
   const [sourceMode, setSourceMode] = useState<'preset' | 'custom'>('preset')
   const [customStatuses, setCustomStatuses] = useState<StatusConfig[]>([])
@@ -49,6 +54,13 @@ export default function NewClientPage() {
     }
     loadCustomStatuses()
   }, [])
+
+  // Pre-select client type from URL (e.g. /clients/new?type=presales)
+  useEffect(() => {
+    if (typeInitialized) return
+    setTypeInitialized(true)
+    if (typeFromUrl) setClientType(typeFromUrl)
+  }, [typeFromUrl, typeInitialized])
 
   // Update status when client type changes
   useEffect(() => {

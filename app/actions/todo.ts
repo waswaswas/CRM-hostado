@@ -59,6 +59,10 @@ function generateInviteCode(): string {
   return Math.random().toString(36).slice(2, 8).toUpperCase()
 }
 
+type TodoListRow = TodoList & {
+  todo_list_members?: { user_id: string; role: 'owner' | 'member' }[] | null
+}
+
 export async function getTodoLists(): Promise<TodoList[]> {
   const supabase = await createClient()
   const {
@@ -75,36 +79,23 @@ export async function getTodoLists(): Promise<TodoList[]> {
   const role = await getCurrentUserOrgRole()
   const isOwnerOrAdmin = role === 'owner' || role === 'admin'
 
-  async function attachMembers(lists: TodoList[]): Promise<TodoList[]> {
-    if (lists.length === 0) return lists
-    const listIds = lists.map((l) => l.id)
-    const { data: members } = await supabase
-      .from('todo_list_members')
-      .select('list_id, user_id, role')
-      .in('list_id', listIds)
-    const byList = new Map<string, { user_id: string; role: 'owner' | 'member' }[]>()
-    for (const m of members || []) {
-      const arr = byList.get(m.list_id) || []
-      arr.push({ user_id: m.user_id, role: m.role })
-      byList.set(m.list_id, arr)
-    }
-    return lists.map((list) => ({
-      ...list,
-      todo_list_members: byList.get(list.id) || [],
-    }))
-  }
+  // Single query with embedded members to avoid a second round-trip
+  const selectWithMembers = '*, todo_list_members(user_id, role)'
 
   if (isOwnerOrAdmin) {
     const { data, error } = await supabase
       .from('todo_lists')
-      .select('*')
+      .select(selectWithMembers)
       .eq('organization_id', organizationId)
       .order('created_at', { ascending: false })
 
     if (error) {
       throw new Error(error.message)
     }
-    return attachMembers((data || []) as TodoList[])
+    return (data || []).map((row: TodoListRow) => ({
+      ...row,
+      todo_list_members: row.todo_list_members ?? [],
+    })) as TodoList[]
   }
 
   const { data: memberListIds } = await supabase
@@ -117,7 +108,7 @@ export async function getTodoLists(): Promise<TodoList[]> {
 
   const { data, error } = await supabase
     .from('todo_lists')
-    .select('*')
+    .select(selectWithMembers)
     .in('id', listIds)
     .eq('organization_id', organizationId)
     .order('created_at', { ascending: false })
@@ -126,7 +117,10 @@ export async function getTodoLists(): Promise<TodoList[]> {
     throw new Error(error.message)
   }
 
-  return attachMembers((data || []) as TodoList[])
+  return (data || []).map((row: TodoListRow) => ({
+    ...row,
+    todo_list_members: row.todo_list_members ?? [],
+  })) as TodoList[]
 }
 
 export async function getTodoProjects(listId: string): Promise<TodoProject[]> {
