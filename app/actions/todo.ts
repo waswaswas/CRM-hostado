@@ -65,18 +65,29 @@ type TodoListRow = TodoList & {
 
 export async function getTodoLists(): Promise<TodoList[]> {
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const [
+    { data: { user } },
+    organizationId,
+  ] = await Promise.all([
+    supabase.auth.getUser(),
+    getCurrentOrganizationId(),
+  ])
 
   if (!user) {
     throw new Error('Unauthorized')
   }
-
-  const organizationId = await getCurrentOrganizationId()
   if (!organizationId) return []
 
-  const role = await getCurrentUserOrgRole()
+  // Single role lookup (avoid getCurrentUserOrgRole which repeats getUser + getCurrentOrganizationId)
+  const { data: member } = await supabase
+    .from('organization_members')
+    .select('role')
+    .eq('organization_id', organizationId)
+    .eq('user_id', user.id)
+    .eq('is_active', true)
+    .maybeSingle()
+
+  const role = (member?.role as 'owner' | 'admin' | 'moderator' | 'viewer') ?? null
   const isOwnerOrAdmin = role === 'owner' || role === 'admin'
 
   // Single query with embedded members to avoid a second round-trip
