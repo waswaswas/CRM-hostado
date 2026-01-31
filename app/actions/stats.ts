@@ -31,11 +31,12 @@ export async function getDashboardStats() {
       }
     }
 
-    // Get all user's clients
+    // Get all user's clients (exclude deleted so counts reflect active clients only)
     const { data: clients, error } = await supabase
       .from('clients')
       .select('*')
       .eq('organization_id', organizationId)
+      .eq('is_deleted', false)
 
     if (error) {
       if (error.message.includes('Could not find the table') || error.message.includes('relation') || error.message.includes('does not exist')) {
