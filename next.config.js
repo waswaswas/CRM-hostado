@@ -1,5 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Fix vendor-chunks resolution for lucide-react (client detail page, etc.)
+  transpilePackages: ['lucide-react'],
   // Output configuration for cPanel
   output: 'standalone',
   
