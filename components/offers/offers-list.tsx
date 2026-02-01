@@ -323,6 +323,11 @@ export function OffersList({ initialOffers }: OffersListProps) {
                           Published
                         </Badge>
                       )}
+                      {offer.opened_at && (
+                        <Badge variant="outline" className="bg-blue-50 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
+                          Opened
+                        </Badge>
+                      )}
                     </div>
                     <div className="flex items-center gap-4 text-sm text-muted-foreground mb-2">
                       <Link href={`/clients/${offer.client_id}`} className="hover:underline">

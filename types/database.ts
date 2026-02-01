@@ -95,6 +95,7 @@ export interface OfferMetadata {
   published_at?: string
   unpublish_after_days?: number
   is_archived?: boolean
+  opened_at?: string | null
   line_items?: OfferLineItem[]
   recipient_snapshot?: OfferRecipientSnapshot | null
 }
@@ -128,6 +129,7 @@ export interface Offer {
   published_at?: string | null
   unpublish_after_days?: number | null
   is_archived?: boolean
+  opened_at?: string | null
   line_items?: OfferLineItem[]
   recipient_snapshot?: OfferRecipientSnapshot | null
 }

@@ -20,6 +20,7 @@ function normalizeOffer(row: Record<string, unknown> | null | undefined): Offer 
     published_at: meta.published_at ?? null,
     unpublish_after_days: meta.unpublish_after_days ?? null,
     is_archived: meta.is_archived ?? false,
+    opened_at: meta.opened_at ?? null,
     line_items: meta.line_items ?? [],
     recipient_snapshot: meta.recipient_snapshot ?? null,
   } as Offer
@@ -120,6 +121,70 @@ export async function getOfferByToken(token: string) {
     throw new Error('Offer not found')
   }
   return offer
+}
+
+/** Mark offer as opened when an external customer opens the link. Call from public page on mount. No auth. */
+export async function markOfferOpened(offerId: string, token: string): Promise<{ ok: boolean }> {
+  const supabase = await createClient()
+  const { data: row, error: fetchErr } = await supabase
+    .from('offers')
+    .select('id, metadata')
+    .eq('id', offerId)
+    .eq('payment_token', token)
+    .single()
+  if (fetchErr || !row) return { ok: false }
+  const meta = (row.metadata as OfferMetadata) || {}
+  if (meta.opened_at) return { ok: true }
+  const nextMeta: OfferMetadata = { ...meta, opened_at: new Date().toISOString() }
+  const { error: updateErr } = await supabase
+    .from('offers')
+    .update({ metadata: nextMeta })
+    .eq('id', offerId)
+    .eq('payment_token', token)
+  if (updateErr) return { ok: false }
+  return { ok: true }
+}
+
+/** Accept offer by token (external customer). No auth. */
+export async function acceptOfferByToken(token: string): Promise<Offer> {
+  const supabase = await createClient()
+  const { data: row, error: fetchErr } = await supabase
+    .from('offers')
+    .select('*')
+    .eq('payment_token', token)
+    .single()
+  if (fetchErr || !row) throw new Error('Offer not found')
+  const offer = normalizeOffer(row) as Offer
+  if (!offer.is_public || !offer.is_published) throw new Error('Offer not found')
+  const { error: updateErr } = await supabase
+    .from('offers')
+    .update({ status: 'accepted' })
+    .eq('id', offer.id)
+    .eq('payment_token', token)
+  if (updateErr) throw new Error(updateErr.message)
+  return { ...offer, status: 'accepted' }
+}
+
+/** Request correction for an offer (message + contact email). No auth. */
+export async function requestOfferCorrection(token: string, message: string, email: string): Promise<{ ok: boolean }> {
+  const supabase = await createClient()
+  const { data: row, error: fetchErr } = await supabase
+    .from('offers')
+    .select('id, metadata')
+    .eq('payment_token', token)
+    .single()
+  if (fetchErr || !row) return { ok: false }
+  const meta = (row.metadata as OfferMetadata) || {}
+  const requests = Array.isArray((meta as any).correction_requests) ? (meta as any).correction_requests : []
+  requests.push({ message, email, at: new Date().toISOString() })
+  const nextMeta = { ...meta, correction_requests: requests }
+  const { error: updateErr } = await supabase
+    .from('offers')
+    .update({ metadata: nextMeta })
+    .eq('id', row.id)
+    .eq('payment_token', token)
+  if (updateErr) return { ok: false }
+  return { ok: true }
 }
 
 export async function getOffersForClient(clientId: string) {

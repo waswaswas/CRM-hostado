@@ -127,6 +127,64 @@ export async function createPaymentRecord(data: {
   return payment as Payment
 }
 
+/** Create payment from public offer page (no auth). Validates token. */
+export async function createPaymentRecordByToken(
+  token: string,
+  data: {
+    offer_id: string
+    amount: number
+    currency: string
+    status: PaymentStatus
+    payment_provider: PaymentProvider
+    payment_id?: string
+    payment_method?: string
+    client_email?: string
+    client_name?: string
+    metadata?: Record<string, any>
+  }
+) {
+  const supabase = await createClient()
+  const { data: offer, error: offerErr } = await supabase
+    .from('offers')
+    .select('id, organization_id, payment_token')
+    .eq('id', data.offer_id)
+    .eq('payment_token', token)
+    .single()
+  if (offerErr || !offer || (offer as any).payment_token !== token) {
+    throw new Error('Offer not found')
+  }
+  const organizationId = (offer as any).organization_id
+  const insertData: any = {
+    ...data,
+    organization_id: organizationId,
+  }
+  if (data.status === 'completed') {
+    insertData.paid_at = new Date().toISOString()
+  }
+  const { data: payment, error } = await supabase
+    .from('payments')
+    .insert(insertData)
+    .select()
+    .single()
+  if (error) throw new Error(error.message)
+  if (data.status === 'completed') {
+    await supabase
+      .from('offers')
+      .update({
+        status: 'paid',
+        payment_status: 'completed',
+        paid_at: new Date().toISOString(),
+        payment_id: data.payment_id || null,
+        payment_method: data.payment_method || null,
+      })
+      .eq('id', data.offer_id)
+      .eq('payment_token', token)
+  }
+  revalidatePath(`/offers/${data.offer_id}`)
+  revalidatePath('/offers')
+  return payment as Payment
+}
+
 export async function updatePaymentStatus(
   paymentId: string,
   status: PaymentStatus,

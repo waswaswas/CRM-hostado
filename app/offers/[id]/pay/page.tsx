@@ -20,7 +20,7 @@ export default async function PayOfferPage({
     if (offer.id !== id) {
       notFound()
     }
-    return <PublicPaymentPage offer={offer} />
+    return <PublicPaymentPage offer={offer} token={token} />
   } catch (error) {
     notFound()
   }

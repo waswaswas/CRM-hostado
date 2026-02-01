@@ -280,7 +280,15 @@ export function OfferDetail({ initialOffer }: OfferDetailProps) {
               autoFocus
             />
           ) : (
-            <h1 className="text-3xl font-bold">{offer.title}</h1>
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-3xl font-bold">{offer.title}</h1>
+              {offer.is_public && offer.is_published && (
+                <Badge variant="outline" className="bg-green-50 text-green-800 dark:bg-green-900/30 dark:text-green-300">Published</Badge>
+              )}
+              {offer.opened_at && (
+                <Badge variant="outline" className="bg-blue-50 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">Opened</Badge>
+              )}
+            </div>
           )}
         </div>
         <div className="flex items-center gap-2">

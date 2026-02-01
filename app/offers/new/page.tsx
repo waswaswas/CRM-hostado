@@ -11,17 +11,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { createOffer } from '@/app/actions/offers'
 import { useToast } from '@/components/ui/toaster'
 import { OfferStatus, PaymentProvider } from '@/types/database'
-import type { OfferLineItem, OfferRecipientSnapshot } from '@/types/database'
+import type { OfferLineItem } from '@/types/database'
 import { getClients, getClient } from '@/app/actions/clients'
 import type { Client } from '@/types/database'
 import { ArrowLeft, Plus, Trash2 } from 'lucide-react'
 
 const UNPUBLISH_DAYS_OPTIONS = [3, 7, 14, 30] as const
 const emptyLineItem: OfferLineItem = { name: '', quantity: 1, unit_price: 0 }
-const emptyRecipient: OfferRecipientSnapshot = {
-  name: '', company: null, email: null, phone: null,
-  address: null, city: null, tax_number: null, mol: null, client_type: null,
-}
 
 function NewOfferContent() {
   const router = useRouter()
@@ -44,7 +40,6 @@ function NewOfferContent() {
     unpublish_after_days: 14,
   })
   const [lineItems, setLineItems] = useState<OfferLineItem[]>([{ ...emptyLineItem }])
-  const [recipient, setRecipient] = useState<OfferRecipientSnapshot>({ ...emptyRecipient })
 
   useEffect(() => {
     async function loadClients() {
@@ -57,27 +52,6 @@ function NewOfferContent() {
     }
     loadClients()
   }, [])
-
-  async function loadRecipientFromClient() {
-    if (!formData.client_id) return
-    try {
-      const client = await getClient(formData.client_id)
-      setRecipient({
-        name: client.name || '',
-        company: client.company ?? null,
-        email: client.email ?? null,
-        phone: client.phone ?? null,
-        address: null,
-        city: null,
-        tax_number: null,
-        mol: null,
-        client_type: client.client_type ?? null,
-      })
-      toast({ title: 'Loaded', description: 'Recipient filled from client' })
-    } catch {
-      toast({ title: 'Error', description: 'Could not load client', variant: 'destructive' })
-    }
-  }
 
   const totalFromLines = lineItems.reduce((s, i) => s + i.quantity * i.unit_price, 0)
   const useLineItems = lineItems.some((i) => i.name.trim() && (i.quantity * i.unit_price) > 0)
@@ -138,6 +112,23 @@ function NewOfferContent() {
     setLoading(true)
 
     try {
+      let recipientSnapshot: { name: string; company: string | null; email: string | null; phone: string | null; address: string | null; city: string | null; tax_number: string | null; mol: string | null; client_type: string | null } | undefined
+      try {
+        const client = await getClient(formData.client_id)
+        recipientSnapshot = {
+          name: client.name || '',
+          company: client.company ?? null,
+          email: client.email ?? null,
+          phone: client.phone ?? null,
+          address: null,
+          city: null,
+          tax_number: null,
+          mol: null,
+          client_type: client.client_type ?? null,
+        }
+      } catch {
+        recipientSnapshot = undefined
+      }
       const offer = await createOffer({
         client_id: formData.client_id,
         title: formData.title,
@@ -152,7 +143,7 @@ function NewOfferContent() {
         is_public: formData.is_public,
         unpublish_after_days: formData.is_public ? formData.unpublish_after_days : undefined,
         line_items: useLineItems ? lineItems.filter((i) => i.name.trim() && (i.quantity * i.unit_price) > 0) : undefined,
-        recipient_snapshot: recipient.name.trim() ? recipient : undefined,
+        recipient_snapshot: recipientSnapshot?.name ? recipientSnapshot : undefined,
       })
 
       toast({
@@ -174,49 +165,40 @@ function NewOfferContent() {
 
   return (
     <AppLayoutClient>
-      <div className="mx-auto max-w-3xl space-y-6">
+      <div className="mx-auto max-w-4xl px-4 py-6 space-y-6">
         <div className="flex items-center gap-4">
-          <Button
-            variant="ghost"
-            onClick={() => router.back()}
-          >
+          <Button variant="ghost" onClick={() => router.back()}>
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back
           </Button>
           <h1 className="text-3xl font-bold">New Offer</h1>
         </div>
 
-        <Card>
-          <CardHeader>
+        <Card className="overflow-hidden">
+          <CardHeader className="border-b bg-muted/30">
             <CardTitle>Create Offer</CardTitle>
             <CardDescription>Create a new offer for a client</CardDescription>
           </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
+          <CardContent className="p-6">
+            <form onSubmit={handleSubmit} className="space-y-6">
               <div className="space-y-2">
                 <label htmlFor="client_id" className="text-sm font-medium">
                   Client <span className="text-destructive">*</span>
                 </label>
-                <div className="flex gap-2">
-                  <Select
-                    id="client_id"
-                    value={formData.client_id}
-                    onChange={(e) => setFormData({ ...formData, client_id: e.target.value })}
-                    required
-                    disabled={loading}
-                    className="flex-1"
-                  >
-                    <option value="">None</option>
-                    {clients.map((client) => (
-                      <option key={client.id} value={client.id}>
-                        {client.name} {client.company ? `(${client.company})` : ''}
-                      </option>
-                    ))}
-                  </Select>
-                  <Button type="button" variant="outline" onClick={loadRecipientFromClient} disabled={loading || !formData.client_id}>
-                    Load recipient
-                  </Button>
-                </div>
+                <Select
+                  id="client_id"
+                  value={formData.client_id}
+                  onChange={(e) => setFormData({ ...formData, client_id: e.target.value })}
+                  required
+                  disabled={loading}
+                >
+                  <option value="">None</option>
+                  {clients.map((client) => (
+                    <option key={client.id} value={client.id}>
+                      {client.name} {client.company ? `(${client.company})` : ''}
+                    </option>
+                  ))}
+                </Select>
               </div>
 
               <div className="space-y-2">
@@ -258,20 +240,6 @@ function NewOfferContent() {
                     </Select>
                   </div>
                 )}
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Recipient (for document)</label>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  <Input placeholder="Name" value={recipient.name} onChange={(e) => setRecipient({ ...recipient, name: e.target.value })} disabled={loading} />
-                  <Input placeholder="Company" value={recipient.company || ''} onChange={(e) => setRecipient({ ...recipient, company: e.target.value || null })} disabled={loading} />
-                  <Input type="email" placeholder="Email" value={recipient.email || ''} onChange={(e) => setRecipient({ ...recipient, email: e.target.value || null })} disabled={loading} />
-                  <Input placeholder="Phone" value={recipient.phone || ''} onChange={(e) => setRecipient({ ...recipient, phone: e.target.value || null })} disabled={loading} />
-                  <Input placeholder="Address" value={recipient.address || ''} onChange={(e) => setRecipient({ ...recipient, address: e.target.value || null })} disabled={loading} className="sm:col-span-2" />
-                  <Input placeholder="City" value={recipient.city || ''} onChange={(e) => setRecipient({ ...recipient, city: e.target.value || null })} disabled={loading} />
-                  <Input placeholder="Tax number (EIK/Булстат)" value={recipient.tax_number || ''} onChange={(e) => setRecipient({ ...recipient, tax_number: e.target.value || null })} disabled={loading} />
-                  <Input placeholder="MOL" value={recipient.mol || ''} onChange={(e) => setRecipient({ ...recipient, mol: e.target.value || null })} disabled={loading} />
-                </div>
               </div>
 
               <div className="space-y-2">
