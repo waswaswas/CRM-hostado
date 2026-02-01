@@ -2,11 +2,30 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
-import type { Offer, OfferStatus, PaymentProvider } from '@/types/database'
+import type { Offer, OfferMetadata, OfferStatus, PaymentProvider } from '@/types/database'
 import { randomBytes } from 'crypto'
 import { getCurrentOrganizationId } from './organizations'
 
-export async function getOffers() {
+/** Flatten metadata onto offer for app use. Handles missing metadata column. */
+function normalizeOffer(row: Record<string, unknown> | null | undefined): Offer {
+  if (!row || typeof row !== 'object') {
+    throw new Error('Invalid offer row')
+  }
+  const meta = (row.metadata as OfferMetadata | null) || {}
+  return {
+    ...row,
+    metadata: meta,
+    is_public: meta.is_public ?? false,
+    is_published: meta.is_published ?? false,
+    published_at: meta.published_at ?? null,
+    unpublish_after_days: meta.unpublish_after_days ?? null,
+    is_archived: meta.is_archived ?? false,
+    line_items: meta.line_items ?? [],
+    recipient_snapshot: meta.recipient_snapshot ?? null,
+  } as Offer
+}
+
+export async function getOffers(options?: { includeArchived?: boolean }) {
   const supabase = await createClient()
   const {
     data: { user },
@@ -29,13 +48,22 @@ export async function getOffers() {
     .order('created_at', { ascending: false })
 
   if (error) {
-    if (error.message.includes('Could not find the table') || error.message.includes('relation') || error.message.includes('does not exist')) {
-      return []
-    }
-    throw new Error(error.message)
+    console.warn('getOffers error:', error.message)
+    return []
   }
 
-  return (data || []) as Offer[]
+  const rows = Array.isArray(data) ? data : []
+  let list: Offer[] = []
+  try {
+    list = rows.map((r) => normalizeOffer(r as Record<string, unknown>)) as Offer[]
+  } catch (e) {
+    console.warn('getOffers normalize error:', e)
+    return []
+  }
+  if (!options?.includeArchived) {
+    list = list.filter((o) => !o.is_archived)
+  }
+  return list
 }
 
 export async function getOffer(id: string) {
@@ -68,7 +96,7 @@ export async function getOffer(id: string) {
     throw new Error(error.message)
   }
 
-  return data as Offer
+  return normalizeOffer(data) as Offer
 }
 
 export async function getOfferByToken(token: string) {
@@ -80,14 +108,18 @@ export async function getOfferByToken(token: string) {
     .eq('payment_token', token)
     .single()
 
-  if (error) {
-    if (error.code === 'PGRST116') {
+  if (error || !data) {
+    if (error?.code === 'PGRST116') {
       throw new Error('Offer not found')
     }
-    throw new Error(error.message)
+    throw new Error(error?.message ?? 'Offer not found')
   }
 
-  return data as Offer
+  const offer = normalizeOffer(data) as Offer
+  if (!offer.is_public || !offer.is_published) {
+    throw new Error('Offer not found')
+  }
+  return offer
 }
 
 export async function getOffersForClient(clientId: string) {
@@ -126,7 +158,7 @@ export async function getOffersForClient(clientId: string) {
     throw new Error(error.message)
   }
 
-  return (data || []) as Offer[]
+  return ((data || []) as Record<string, unknown>[]).map(normalizeOffer) as Offer[]
 }
 
 export async function createOffer(data: {
@@ -140,6 +172,10 @@ export async function createOffer(data: {
   notes?: string
   payment_enabled?: boolean
   payment_provider?: PaymentProvider
+  is_public?: boolean
+  unpublish_after_days?: number
+  line_items?: { name: string; quantity: number; unit_price: number; catalog_no?: string }[]
+  recipient_snapshot?: Offer['recipient_snapshot']
 }) {
   const supabase = await createClient()
   const {
@@ -155,23 +191,41 @@ export async function createOffer(data: {
     throw new Error('No organization selected')
   }
 
-  // Generate secure payment token
   const paymentToken = randomBytes(32).toString('hex')
+  const lineItems = data.line_items?.length ? data.line_items : undefined
+  const amount = lineItems?.length
+    ? lineItems.reduce((sum, i) => sum + i.quantity * i.unit_price, 0)
+    : data.amount
 
-  const insertData: any = {
-    ...data,
+  const metadata: OfferMetadata = {
+    is_public: data.is_public ?? false,
+    is_published: false,
+    unpublish_after_days: data.unpublish_after_days ?? 14,
+    is_archived: false,
+    line_items: lineItems ?? [],
+    recipient_snapshot: data.recipient_snapshot ?? null,
+  }
+
+  const insertData: Record<string, unknown> = {
+    client_id: data.client_id,
+    title: data.title,
+    description: data.description ?? null,
+    amount,
+    currency: data.currency ?? 'EUR',
+    status: data.status ?? 'draft',
+    valid_until: data.valid_until ?? null,
+    notes: data.notes ?? null,
     owner_id: user.id,
     organization_id: organizationId,
-    currency: data.currency || 'BGN',
-    status: data.status || 'draft',
     payment_enabled: data.payment_enabled !== false,
     payment_token: paymentToken,
+    metadata,
   }
 
   const { data: offer, error } = await supabase
     .from('offers')
     .insert(insertData)
-    .select()
+    .select('*')
     .single()
 
   if (error) {
@@ -181,7 +235,7 @@ export async function createOffer(data: {
   revalidatePath('/offers')
   revalidatePath(`/offers/${offer.id}`)
   revalidatePath(`/clients/${data.client_id}`)
-  return offer as Offer
+  return normalizeOffer(offer) as Offer
 }
 
 export async function updateOffer(
@@ -196,6 +250,9 @@ export async function updateOffer(
     notes: string
     payment_enabled: boolean
     payment_provider: PaymentProvider
+    unpublish_after_days: number
+    line_items: Offer['line_items']
+    recipient_snapshot: Offer['recipient_snapshot']
   }>
 ) {
   const supabase = await createClient()
@@ -212,13 +269,34 @@ export async function updateOffer(
     throw new Error('No organization selected')
   }
 
+  const hasMeta = data.unpublish_after_days !== undefined || data.line_items !== undefined || data.recipient_snapshot !== undefined
+  let updatePayload: Record<string, unknown> = { ...data }
+  delete (updatePayload as Record<string, unknown>).line_items
+  delete (updatePayload as Record<string, unknown>).recipient_snapshot
+  delete (updatePayload as Record<string, unknown>).unpublish_after_days
+
+  if (hasMeta) {
+    const { data: current } = await supabase
+      .from('offers')
+      .select('metadata')
+      .eq('id', id)
+      .eq('owner_id', user.id)
+      .eq('organization_id', organizationId)
+      .single()
+    const meta = (current?.metadata as OfferMetadata) || {}
+    if (data.unpublish_after_days !== undefined) meta.unpublish_after_days = data.unpublish_after_days
+    if (data.line_items !== undefined) meta.line_items = data.line_items
+    if (data.recipient_snapshot !== undefined) meta.recipient_snapshot = data.recipient_snapshot
+    updatePayload.metadata = meta
+  }
+
   const { data: offer, error } = await supabase
     .from('offers')
-    .update(data)
+    .update(updatePayload)
     .eq('id', id)
     .eq('owner_id', user.id)
     .eq('organization_id', organizationId)
-    .select()
+    .select('*')
     .single()
 
   if (error) {
@@ -228,9 +306,121 @@ export async function updateOffer(
   revalidatePath('/offers')
   revalidatePath(`/offers/${id}`)
   if (offer) {
-    revalidatePath(`/clients/${offer.client_id}`)
+    revalidatePath(`/clients/${(offer as Offer).client_id}`)
   }
-  return offer as Offer
+  return normalizeOffer(offer) as Offer
+}
+
+export async function toggleOfferPublished(id: string): Promise<Offer> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) throw new Error('Not authenticated')
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) throw new Error('No organization selected')
+
+  const { data: row, error: fetchErr } = await supabase
+    .from('offers')
+    .select('*')
+    .eq('id', id)
+    .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
+    .single()
+  if (fetchErr || !row) throw new Error('Offer not found')
+
+  const meta = (row.metadata as OfferMetadata) || {}
+  const nextPublished = !meta.is_published
+  const nextMeta: OfferMetadata = {
+    ...meta,
+    is_public: meta.is_public ?? false,
+    is_published: nextPublished,
+    published_at: nextPublished ? new Date().toISOString() : (meta.published_at ?? undefined),
+    unpublish_after_days: meta.unpublish_after_days ?? 14,
+  }
+
+  const { data: offer, error } = await supabase
+    .from('offers')
+    .update({ metadata: nextMeta })
+    .eq('id', id)
+    .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
+    .select('*')
+    .single()
+  if (error) throw new Error(error.message)
+  revalidatePath('/offers')
+  revalidatePath(`/offers/${id}`)
+  return normalizeOffer(offer) as Offer
+}
+
+export async function archiveOffer(id: string): Promise<Offer> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) throw new Error('Not authenticated')
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) throw new Error('No organization selected')
+
+  const { data: row, error: fetchErr } = await supabase
+    .from('offers')
+    .select('metadata')
+    .eq('id', id)
+    .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
+    .single()
+  if (fetchErr || !row) throw new Error('Offer not found')
+
+  const meta = (row.metadata as OfferMetadata) || {}
+  const nextMeta: OfferMetadata = { ...meta, is_archived: true }
+
+  const { data: offer, error } = await supabase
+    .from('offers')
+    .update({ metadata: nextMeta })
+    .eq('id', id)
+    .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
+    .select('*')
+    .single()
+  if (error) throw new Error(error.message)
+  revalidatePath('/offers')
+  revalidatePath(`/offers/${id}`)
+  return normalizeOffer(offer) as Offer
+}
+
+export async function restoreOffer(id: string): Promise<Offer> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) throw new Error('Not authenticated')
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) throw new Error('No organization selected')
+
+  const { data: row, error: fetchErr } = await supabase
+    .from('offers')
+    .select('metadata')
+    .eq('id', id)
+    .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
+    .single()
+  if (fetchErr || !row) throw new Error('Offer not found')
+
+  const meta = (row.metadata as OfferMetadata) || {}
+  const nextMeta: OfferMetadata = { ...meta, is_archived: false }
+
+  const { data: offer, error } = await supabase
+    .from('offers')
+    .update({ metadata: nextMeta })
+    .eq('id', id)
+    .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
+    .select('*')
+    .single()
+  if (error) throw new Error(error.message)
+  revalidatePath('/offers')
+  revalidatePath(`/offers/${id}`)
+  return normalizeOffer(offer) as Offer
 }
 
 export async function deleteOffer(id: string) {
@@ -293,7 +483,17 @@ export async function duplicateOffer(id: string) {
   // Generate new payment token
   const paymentToken = randomBytes(32).toString('hex')
 
-  // Create duplicate with new token and draft status
+  const meta = (original.metadata as OfferMetadata) || {}
+  const dupMeta: OfferMetadata = {
+    is_public: meta.is_public,
+    is_published: false,
+    published_at: undefined,
+    unpublish_after_days: meta.unpublish_after_days ?? 14,
+    is_archived: false,
+    line_items: meta.line_items ?? [],
+    recipient_snapshot: meta.recipient_snapshot ?? null,
+  }
+
   const { data: duplicate, error: insertError } = await supabase
     .from('offers')
     .insert({
@@ -310,8 +510,9 @@ export async function duplicateOffer(id: string) {
       payment_enabled: original.payment_enabled,
       payment_provider: original.payment_provider,
       payment_token: paymentToken,
+      metadata: dupMeta,
     })
-    .select()
+    .select('*')
     .single()
 
   if (insertError) {
@@ -319,7 +520,7 @@ export async function duplicateOffer(id: string) {
   }
 
   revalidatePath('/offers')
-  return duplicate as Offer
+  return normalizeOffer(duplicate) as Offer
 }
 
 export async function generatePaymentLink(offerId: string) {

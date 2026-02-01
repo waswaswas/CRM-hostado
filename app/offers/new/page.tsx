@@ -8,12 +8,20 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Select } from '@/components/ui/select'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { createOffer, updateOffer } from '@/app/actions/offers'
+import { createOffer } from '@/app/actions/offers'
 import { useToast } from '@/components/ui/toaster'
 import { OfferStatus, PaymentProvider } from '@/types/database'
-import { getClients } from '@/app/actions/clients'
+import type { OfferLineItem, OfferRecipientSnapshot } from '@/types/database'
+import { getClients, getClient } from '@/app/actions/clients'
 import type { Client } from '@/types/database'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, Plus, Trash2 } from 'lucide-react'
+
+const UNPUBLISH_DAYS_OPTIONS = [3, 7, 14, 30] as const
+const emptyLineItem: OfferLineItem = { name: '', quantity: 1, unit_price: 0 }
+const emptyRecipient: OfferRecipientSnapshot = {
+  name: '', company: null, email: null, phone: null,
+  address: null, city: null, tax_number: null, mol: null, client_type: null,
+}
 
 function NewOfferContent() {
   const router = useRouter()
@@ -26,13 +34,17 @@ function NewOfferContent() {
     title: '',
     description: '',
     amount: '',
-    currency: 'BGN',
+    currency: 'EUR',
     status: 'draft' as OfferStatus,
     valid_until: '',
     notes: '',
     payment_enabled: true,
     payment_provider: 'stripe' as PaymentProvider,
+    is_public: false,
+    unpublish_after_days: 14,
   })
+  const [lineItems, setLineItems] = useState<OfferLineItem[]>([{ ...emptyLineItem }])
+  const [recipient, setRecipient] = useState<OfferRecipientSnapshot>({ ...emptyRecipient })
 
   useEffect(() => {
     async function loadClients() {
@@ -45,6 +57,45 @@ function NewOfferContent() {
     }
     loadClients()
   }, [])
+
+  async function loadRecipientFromClient() {
+    if (!formData.client_id) return
+    try {
+      const client = await getClient(formData.client_id)
+      setRecipient({
+        name: client.name || '',
+        company: client.company ?? null,
+        email: client.email ?? null,
+        phone: client.phone ?? null,
+        address: null,
+        city: null,
+        tax_number: null,
+        mol: null,
+        client_type: client.client_type ?? null,
+      })
+      toast({ title: 'Loaded', description: 'Recipient filled from client' })
+    } catch {
+      toast({ title: 'Error', description: 'Could not load client', variant: 'destructive' })
+    }
+  }
+
+  const totalFromLines = lineItems.reduce((s, i) => s + i.quantity * i.unit_price, 0)
+  const useLineItems = lineItems.some((i) => i.name.trim() && (i.quantity * i.unit_price) > 0)
+  const amount = useLineItems ? totalFromLines : parseFloat(formData.amount) || 0
+
+  function updateLineItem(index: number, patch: Partial<OfferLineItem>) {
+    setLineItems((prev) => {
+      const next = [...prev]
+      next[index] = { ...next[index], ...patch }
+      return next
+    })
+  }
+  function addLineItem() {
+    setLineItems((prev) => [...prev, { ...emptyLineItem }])
+  }
+  function removeLineItem(index: number) {
+    setLineItems((prev) => prev.filter((_, i) => i !== index))
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -67,10 +118,18 @@ function NewOfferContent() {
       return
     }
 
-    if (!formData.amount || parseFloat(formData.amount) <= 0) {
+    if (!useLineItems && (!formData.amount || parseFloat(formData.amount) <= 0)) {
       toast({
         title: 'Error',
-        description: 'Please enter a valid amount',
+        description: 'Please enter a valid amount or add line items',
+        variant: 'destructive',
+      })
+      return
+    }
+    if (useLineItems && lineItems.every((i) => !i.name.trim())) {
+      toast({
+        title: 'Error',
+        description: 'Add at least one line item with a name',
         variant: 'destructive',
       })
       return
@@ -83,13 +142,17 @@ function NewOfferContent() {
         client_id: formData.client_id,
         title: formData.title,
         description: formData.description || undefined,
-        amount: parseFloat(formData.amount),
+        amount,
         currency: formData.currency,
         status: formData.status,
         valid_until: formData.valid_until || undefined,
         notes: formData.notes || undefined,
         payment_enabled: formData.payment_enabled,
         payment_provider: formData.payment_enabled ? formData.payment_provider : undefined,
+        is_public: formData.is_public,
+        unpublish_after_days: formData.is_public ? formData.unpublish_after_days : undefined,
+        line_items: useLineItems ? lineItems.filter((i) => i.name.trim() && (i.quantity * i.unit_price) > 0) : undefined,
+        recipient_snapshot: recipient.name.trim() ? recipient : undefined,
       })
 
       toast({
@@ -134,20 +197,102 @@ function NewOfferContent() {
                 <label htmlFor="client_id" className="text-sm font-medium">
                   Client <span className="text-destructive">*</span>
                 </label>
-                <Select
-                  id="client_id"
-                  value={formData.client_id}
-                  onChange={(e) => setFormData({ ...formData, client_id: e.target.value })}
-                  required
-                  disabled={loading}
-                >
-                  <option value="">None</option>
-                  {clients.map((client) => (
-                    <option key={client.id} value={client.id}>
-                      {client.name} {client.company ? `(${client.company})` : ''}
-                    </option>
-                  ))}
-                </Select>
+                <div className="flex gap-2">
+                  <Select
+                    id="client_id"
+                    value={formData.client_id}
+                    onChange={(e) => setFormData({ ...formData, client_id: e.target.value })}
+                    required
+                    disabled={loading}
+                    className="flex-1"
+                  >
+                    <option value="">None</option>
+                    {clients.map((client) => (
+                      <option key={client.id} value={client.id}>
+                        {client.name} {client.company ? `(${client.company})` : ''}
+                      </option>
+                    ))}
+                  </Select>
+                  <Button type="button" variant="outline" onClick={loadRecipientFromClient} disabled={loading || !formData.client_id}>
+                    Load recipient
+                  </Button>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Create as</label>
+                <div className="flex gap-4">
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="radio"
+                      name="visibility"
+                      checked={!formData.is_public}
+                      onChange={() => setFormData({ ...formData, is_public: false })}
+                      disabled={loading}
+                    />
+                    Internal
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="radio"
+                      name="visibility"
+                      checked={formData.is_public}
+                      onChange={() => setFormData({ ...formData, is_public: true })}
+                      disabled={loading}
+                    />
+                    Public (shareable link)
+                  </label>
+                </div>
+                {formData.is_public && (
+                  <div className="flex items-center gap-2 mt-2">
+                    <span className="text-sm text-muted-foreground">Auto-unpublish after</span>
+                    <Select
+                      value={String(formData.unpublish_after_days)}
+                      onChange={(e) => setFormData({ ...formData, unpublish_after_days: Number(e.target.value) })}
+                      disabled={loading}
+                      className="w-24"
+                    >
+                      {UNPUBLISH_DAYS_OPTIONS.map((d) => (
+                        <option key={d} value={d}>{d} days</option>
+                      ))}
+                    </Select>
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Recipient (for document)</label>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <Input placeholder="Name" value={recipient.name} onChange={(e) => setRecipient({ ...recipient, name: e.target.value })} disabled={loading} />
+                  <Input placeholder="Company" value={recipient.company || ''} onChange={(e) => setRecipient({ ...recipient, company: e.target.value || null })} disabled={loading} />
+                  <Input type="email" placeholder="Email" value={recipient.email || ''} onChange={(e) => setRecipient({ ...recipient, email: e.target.value || null })} disabled={loading} />
+                  <Input placeholder="Phone" value={recipient.phone || ''} onChange={(e) => setRecipient({ ...recipient, phone: e.target.value || null })} disabled={loading} />
+                  <Input placeholder="Address" value={recipient.address || ''} onChange={(e) => setRecipient({ ...recipient, address: e.target.value || null })} disabled={loading} className="sm:col-span-2" />
+                  <Input placeholder="City" value={recipient.city || ''} onChange={(e) => setRecipient({ ...recipient, city: e.target.value || null })} disabled={loading} />
+                  <Input placeholder="Tax number (EIK/Булстат)" value={recipient.tax_number || ''} onChange={(e) => setRecipient({ ...recipient, tax_number: e.target.value || null })} disabled={loading} />
+                  <Input placeholder="MOL" value={recipient.mol || ''} onChange={(e) => setRecipient({ ...recipient, mol: e.target.value || null })} disabled={loading} />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Line items (Артикул, Количество, Цена без ДДС)</label>
+                {lineItems.map((item, i) => (
+                  <div key={i} className="flex flex-wrap gap-2 items-end border p-2 rounded-md">
+                    <Input placeholder="Артикул / Name" value={item.name} onChange={(e) => updateLineItem(i, { name: e.target.value })} disabled={loading} className="min-w-[140px]" />
+                    <Input placeholder="Каталожен №" value={item.catalog_no || ''} onChange={(e) => updateLineItem(i, { catalog_no: e.target.value || undefined })} disabled={loading} className="w-24" />
+                    <Input type="number" min={0.01} step={0.01} placeholder="Количество" value={item.quantity || ''} onChange={(e) => updateLineItem(i, { quantity: Number(e.target.value) || 0 })} disabled={loading} className="w-24" />
+                    <Input type="number" min={0} step={0.01} placeholder="Цена без ДДС" value={item.unit_price || ''} onChange={(e) => updateLineItem(i, { unit_price: Number(e.target.value) || 0 })} disabled={loading} className="w-28" />
+                    <span className="text-sm text-muted-foreground w-20">= {(item.quantity * item.unit_price).toFixed(2)}</span>
+                    <Button type="button" variant="ghost" size="sm" onClick={() => removeLineItem(i)} disabled={loading || lineItems.length <= 1}>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+                <Button type="button" variant="outline" size="sm" onClick={addLineItem} disabled={loading}>
+                  <Plus className="h-4 w-4 mr-1" />
+                  Add line
+                </Button>
+                {useLineItems && <p className="text-sm font-medium">Total: {totalFromLines.toFixed(2)} {formData.currency}</p>}
               </div>
 
               <div className="space-y-2">
@@ -179,23 +324,23 @@ function NewOfferContent() {
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <label htmlFor="amount" className="text-sm font-medium">
-                    Amount <span className="text-destructive">*</span>
-                  </label>
-                  <Input
-                    id="amount"
-                    type="number"
-                    step="0.01"
-                    min="0.01"
-                    value={formData.amount}
-                    onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
-                    required
-                    disabled={loading}
-                    placeholder="0.00"
-                  />
-                </div>
-
+                {!useLineItems && (
+                  <div className="space-y-2">
+                    <label htmlFor="amount" className="text-sm font-medium">
+                      Amount <span className="text-destructive">*</span>
+                    </label>
+                    <Input
+                      id="amount"
+                      type="number"
+                      step="0.01"
+                      min="0.01"
+                      value={formData.amount}
+                      onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
+                      disabled={loading}
+                      placeholder="0.00"
+                    />
+                  </div>
+                )}
                 <div className="space-y-2">
                   <label htmlFor="currency" className="text-sm font-medium">
                     Currency
@@ -206,8 +351,8 @@ function NewOfferContent() {
                     onChange={(e) => setFormData({ ...formData, currency: e.target.value })}
                     disabled={loading}
                   >
-                    <option value="BGN">BGN (Bulgarian Lev)</option>
                     <option value="EUR">EUR (Euro)</option>
+                    <option value="BGN">BGN (Bulgarian Lev)</option>
                     <option value="USD">USD (US Dollar)</option>
                     <option value="GBP">GBP (British Pound)</option>
                   </Select>

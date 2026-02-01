@@ -90,7 +90,7 @@ export async function getFeedback(): Promise<Feedback[]> {
   }
 
   const entries = (data || []) as Feedback[]
-  const ownerIds = [...new Set(entries.map((e) => e.owner_id))]
+  const ownerIds = Array.from(new Set(entries.map((e) => e.owner_id)))
   const ownerEmailsMap = new Map<string, string>()
   if (ownerIds.length > 0) {
     const { data: profiles } = await supabase

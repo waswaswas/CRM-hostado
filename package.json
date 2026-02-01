@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start",
+    "start": "node scripts/start-server.js",
     "lint": "next lint",
     "build:production": "NODE_ENV=production next build",
     "deploy:prepare": "npm run build:production && npm run lint"

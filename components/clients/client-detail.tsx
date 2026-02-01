@@ -24,7 +24,7 @@ import {
   markReminderDone,
   deleteReminder,
 } from '@/app/actions/reminders'
-import { getNotesForClient, createNote, toggleNotePin, deleteNote } from '@/app/actions/notes'
+import { getNotesForClient, createNote, updateNote, toggleNotePin, deleteNote } from '@/app/actions/notes'
 import { getOffersForClient } from '@/app/actions/offers'
 import { updateClient } from '@/app/actions/clients'
 import { useToast } from '@/components/ui/toaster'
@@ -80,6 +80,8 @@ export function ClientDetail({ client: initialClient, linkedAccountingCustomers 
   })
   const [customStatuses, setCustomStatuses] = useState<StatusConfig[]>([])
   const [showLinkMenu, setShowLinkMenu] = useState(false)
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null)
+  const [editingNoteContent, setEditingNoteContent] = useState('')
 
   // Load custom statuses on mount
   useEffect(() => {
@@ -619,63 +621,129 @@ export function ClientDetail({ client: initialClient, linkedAccountingCustomers 
                                 Pinned
                               </Badge>
                             )}
-                            <p className="whitespace-pre-wrap">{note.content}</p>
-                            <p className="mt-2 text-xs text-muted-foreground">
-                              {format(new Date(note.created_at), 'MMM d, yyyy HH:mm')}
-                            </p>
+                            {editingNoteId === note.id ? (
+                              <div className="space-y-2">
+                                <Textarea
+                                  value={editingNoteContent}
+                                  onChange={(e) => setEditingNoteContent(e.target.value)}
+                                  rows={4}
+                                  className="min-h-[80px]"
+                                />
+                                <div className="flex gap-2">
+                                  <Button
+                                    size="sm"
+                                    onClick={async () => {
+                                      try {
+                                        await updateNote(note.id, client.id, editingNoteContent)
+                                        setNotes((prev) =>
+                                          prev.map((n) =>
+                                            n.id === note.id ? { ...n, content: editingNoteContent } : n
+                                          )
+                                        )
+                                        setEditingNoteId(null)
+                                        setEditingNoteContent('')
+                                        toast({ title: 'Success', description: 'Note updated' })
+                                      } catch (error) {
+                                        toast({
+                                          title: 'Error',
+                                          description: 'Failed to update note',
+                                          variant: 'destructive',
+                                        })
+                                      }
+                                    }}
+                                  >
+                                    <Check className="h-4 w-4 mr-1" /> Save
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => {
+                                      setEditingNoteId(null)
+                                      setEditingNoteContent('')
+                                    }}
+                                  >
+                                    <X className="h-4 w-4 mr-1" /> Cancel
+                                  </Button>
+                                </div>
+                              </div>
+                            ) : (
+                              <>
+                                <p className="whitespace-pre-wrap">{note.content}</p>
+                                <p className="mt-2 text-xs text-muted-foreground">
+                                  {format(new Date(note.created_at), 'MMM d, yyyy HH:mm')}
+                                </p>
+                              </>
+                            )}
                           </div>
-                          <div className="flex gap-2">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={async () => {
-                                try {
-                                  await toggleNotePin(note.id, client.id, !note.pinned)
-                                  setNotes((prev) =>
-                                    prev.map((n) =>
-                                      n.id === note.id ? { ...n, pinned: !n.pinned } : n
-                                    )
-                                  )
-                                } catch (error) {
-                                  toast({
-                                    title: 'Error',
-                                    description: 'Failed to toggle pin',
-                                    variant: 'destructive',
-                                  })
-                                }
-                              }}
-                            >
-                              {note.pinned ? (
-                                <PinOff className="h-4 w-4" />
-                              ) : (
-                                <Pin className="h-4 w-4" />
-                              )}
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={async () => {
-                                if (confirm('Delete this note?')) {
+                          {editingNoteId !== note.id && (
+                            <div className="flex gap-2">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => {
+                                  setEditingNoteId(note.id)
+                                  setEditingNoteContent(note.content)
+                                }}
+                                title="Edit note"
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={async () => {
                                   try {
-                                    await deleteNote(note.id, client.id)
-                                    setNotes((prev) => prev.filter((n) => n.id !== note.id))
-                                    toast({
-                                      title: 'Success',
-                                      description: 'Note deleted',
-                                    })
+                                    await toggleNotePin(note.id, client.id, !note.pinned)
+                                    setNotes((prev) =>
+                                      prev.map((n) =>
+                                        n.id === note.id ? { ...n, pinned: !n.pinned } : n
+                                      )
+                                    )
                                   } catch (error) {
                                     toast({
                                       title: 'Error',
-                                      description: 'Failed to delete note',
+                                      description: 'Failed to toggle pin',
                                       variant: 'destructive',
                                     })
                                   }
-                                }
-                              }}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
+                                }}
+                              >
+                                {note.pinned ? (
+                                  <PinOff className="h-4 w-4" />
+                                ) : (
+                                  <Pin className="h-4 w-4" />
+                                )}
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={async () => {
+                                  if (confirm('Delete this note?')) {
+                                    try {
+                                      await deleteNote(note.id, client.id)
+                                      setNotes((prev) => prev.filter((n) => n.id !== note.id))
+                                      if (editingNoteId === note.id) {
+                                        setEditingNoteId(null)
+                                        setEditingNoteContent('')
+                                      }
+                                      toast({
+                                        title: 'Success',
+                                        description: 'Note deleted',
+                                      })
+                                    } catch (error) {
+                                      toast({
+                                        title: 'Error',
+                                        description: 'Failed to delete note',
+                                        variant: 'destructive',
+                                      })
+                                    }
+                                  }
+                                }}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          )}
                         </div>
                       </CardContent>
                     </Card>

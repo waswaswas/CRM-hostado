@@ -66,6 +66,39 @@ export type OfferStatus = 'draft' | 'sent' | 'accepted' | 'rejected' | 'expired'
 export type PaymentStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'refunded'
 export type PaymentProvider = 'stripe' | 'epay' | 'paypal' | 'manual'
 
+/** Line item for offer document (Bulgarian: Артикул, Количество, Цена без ДДС, Стойност) */
+export interface OfferLineItem {
+  name: string
+  quantity: number
+  unit_price: number
+  /** Optional catalog/sku number */
+  catalog_no?: string
+}
+
+/** Recipient snapshot for offer document (EIK/Булстат, МОЛ, Град, Адрес, Получател, VAT, client type) */
+export interface OfferRecipientSnapshot {
+  name: string
+  company: string | null
+  email: string | null
+  phone: string | null
+  address: string | null
+  city: string | null
+  tax_number: string | null
+  mol: string | null
+  client_type: string | null
+}
+
+/** Stored in offers.metadata JSONB (minimal DB: one column). Run migration_offers_metadata.sql when Supabase is available. */
+export interface OfferMetadata {
+  is_public?: boolean
+  is_published?: boolean
+  published_at?: string
+  unpublish_after_days?: number
+  is_archived?: boolean
+  line_items?: OfferLineItem[]
+  recipient_snapshot?: OfferRecipientSnapshot | null
+}
+
 export interface Offer {
   id: string
   created_at: string
@@ -88,6 +121,15 @@ export interface Offer {
   payment_id: string | null
   paid_at: string | null
   payment_method: string | null
+  /** From metadata JSONB when present */
+  metadata?: OfferMetadata | null
+  is_public?: boolean
+  is_published?: boolean
+  published_at?: string | null
+  unpublish_after_days?: number | null
+  is_archived?: boolean
+  line_items?: OfferLineItem[]
+  recipient_snapshot?: OfferRecipientSnapshot | null
 }
 
 export interface Payment {

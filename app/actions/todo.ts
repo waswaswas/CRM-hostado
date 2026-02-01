@@ -462,7 +462,7 @@ export async function getTodoListMemberDetails(listId: string): Promise<TodoList
 
   if (error || !members?.length) return []
 
-  const userIds = members.map((m) => m.user_id)
+  const userIds = members.map((m: { user_id: string; role: string }) => m.user_id)
   const emailsMap = new Map<string, string>()
   const { data: profiles } = await supabase
     .from('user_profiles')
@@ -470,7 +470,7 @@ export async function getTodoListMemberDetails(listId: string): Promise<TodoList
     .in('id', userIds)
   profiles?.forEach((p: { id: string; email: string }) => emailsMap.set(p.id, p.email))
 
-  return members.map((m) => ({
+  return members.map((m: { user_id: string; role: string }) => ({
     user_id: m.user_id,
     role: m.role,
     email: emailsMap.get(m.user_id) ?? null,
@@ -781,7 +781,7 @@ export async function startTimer(taskId: string): Promise<TodoTimerSession> {
 
   const listTaskIds = existing
     ? (await Promise.all(
-        (existing as { task_id: string }[]).map(async (row) => {
+        (existing as { id: string; task_id: string }[]).map(async (row) => {
           const lid = await getTaskListId(supabase, row.task_id)
           return lid === listId ? row.id : null
         })
@@ -959,7 +959,7 @@ export async function getTimeEntries(taskId: string): Promise<TodoTimeEntry[]> {
 
   if (error) return []
   const entries = (data || []) as TodoTimeEntry[]
-  const userIds = [...new Set(entries.map((e) => e.user_id))]
+  const userIds = Array.from(new Set(entries.map((e) => e.user_id)))
   const userEmailsMap = new Map<string, string>()
   if (userIds.length > 0) {
     const { data: profiles } = await supabase

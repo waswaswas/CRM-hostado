@@ -22,6 +22,7 @@ const CUSTOM_SOURCE_VALUE = '__custom__'
 
 export default function NewClientPage() {
   const router = useRouter()
+  const { toast } = useToast()
   const searchParams = useSearchParams()
   const typeFromUrl = useMemo(() => {
     const t = searchParams.get('type')

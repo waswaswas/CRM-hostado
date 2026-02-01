@@ -9,11 +9,11 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Select } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
-import { updateOffer, deleteOffer, generatePaymentLink, markOfferAsPaid, duplicateOffer } from '@/app/actions/offers'
+import { updateOffer, deleteOffer, generatePaymentLink, markOfferAsPaid, duplicateOffer, toggleOfferPublished, archiveOffer, restoreOffer } from '@/app/actions/offers'
 import { getPaymentHistory } from '@/app/actions/payments'
 import { useToast } from '@/components/ui/toaster'
 import { format } from 'date-fns'
-import { ArrowLeft, Copy, Trash2, Check, Edit, Plus } from 'lucide-react'
+import { ArrowLeft, Copy, Trash2, Check, Edit, Plus, Archive, ArchiveRestore, FileText, Globe, Lock } from 'lucide-react'
 import Link from 'next/link'
 import type { Payment } from '@/types/database'
 import { getClient } from '@/app/actions/clients'
@@ -40,6 +40,7 @@ export function OfferDetail({ initialOffer }: OfferDetailProps) {
     valid_until: offer.valid_until ? format(new Date(offer.valid_until), 'yyyy-MM-dd') : '',
     notes: offer.notes || '',
     payment_enabled: offer.payment_enabled,
+    unpublish_after_days: offer.unpublish_after_days ?? 14,
   })
 
   useEffect(() => {
@@ -70,6 +71,7 @@ export function OfferDetail({ initialOffer }: OfferDetailProps) {
         valid_until: editValues.valid_until || undefined,
         notes: editValues.notes || undefined,
         payment_enabled: editValues.payment_enabled,
+        unpublish_after_days: editValues.unpublish_after_days,
       })
       setOffer(updated)
       setEditing(false)
@@ -191,6 +193,56 @@ export function OfferDetail({ initialOffer }: OfferDetailProps) {
     return statusLabels[status] || status
   }
 
+  async function handleTogglePublished() {
+    try {
+      const updated = await toggleOfferPublished(offer.id)
+      setOffer(updated)
+      toast({
+        title: 'Success',
+        description: updated.is_published ? 'Offer is now published' : 'Offer is now unpublished',
+      })
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to update',
+        variant: 'destructive',
+      })
+    }
+  }
+
+  async function handleArchive() {
+    try {
+      const updated = await archiveOffer(offer.id)
+      setOffer(updated)
+      toast({ title: 'Success', description: 'Offer archived' })
+      router.push('/offers')
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to archive',
+        variant: 'destructive',
+      })
+    }
+  }
+
+  async function handleRestore() {
+    try {
+      const updated = await restoreOffer(offer.id)
+      setOffer(updated)
+      toast({ title: 'Success', description: 'Offer restored' })
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to restore',
+        variant: 'destructive',
+      })
+    }
+  }
+
+  const documentViewUrl = `/offers/${offer.id}/document`
+  const documentPdfUrl = `/api/offers/${offer.id}/document?format=pdf`
+  const documentPngUrl = `/api/offers/${offer.id}/document?format=png`
+
   function getStatusColor(status: string) {
     switch (status) {
       case 'draft':
@@ -238,6 +290,12 @@ export function OfferDetail({ initialOffer }: OfferDetailProps) {
                 <Edit className="h-4 w-4 mr-2" />
                 Edit
               </Button>
+              {offer.is_public && (
+                <Button variant="outline" onClick={handleTogglePublished}>
+                  {offer.is_published ? <Lock className="h-4 w-4 mr-2" /> : <Globe className="h-4 w-4 mr-2" />}
+                  {offer.is_published ? 'Unpublish' : 'Publish'}
+                </Button>
+              )}
               {offer.payment_enabled && offer.payment_token && (
                 <Button variant="outline" onClick={handleCopyPaymentLink}>
                   <Copy className="h-4 w-4 mr-2" />
@@ -248,6 +306,17 @@ export function OfferDetail({ initialOffer }: OfferDetailProps) {
                 <Button variant="outline" onClick={handleMarkAsPaid}>
                   <Check className="h-4 w-4 mr-2" />
                   Mark as Paid
+                </Button>
+              )}
+              {offer.is_archived ? (
+                <Button variant="outline" onClick={handleRestore}>
+                  <ArchiveRestore className="h-4 w-4 mr-2" />
+                  Restore
+                </Button>
+              ) : (
+                <Button variant="outline" onClick={handleArchive}>
+                  <Archive className="h-4 w-4 mr-2" />
+                  Archive
                 </Button>
               )}
               <Button variant="destructive" onClick={handleDelete}>
@@ -268,6 +337,7 @@ export function OfferDetail({ initialOffer }: OfferDetailProps) {
                   valid_until: offer.valid_until ? format(new Date(offer.valid_until), 'yyyy-MM-dd') : '',
                   notes: offer.notes || '',
                   payment_enabled: offer.payment_enabled,
+                  unpublish_after_days: offer.unpublish_after_days ?? 14,
                 })
               }}>
                 Cancel
@@ -372,6 +442,21 @@ export function OfferDetail({ initialOffer }: OfferDetailProps) {
                       className="mt-1"
                     />
                   </div>
+                  {offer.is_public && (
+                    <div>
+                      <label className="text-sm font-medium">Auto-unpublish after (days)</label>
+                      <Select
+                        value={String(editValues.unpublish_after_days)}
+                        onChange={(e) => setEditValues({ ...editValues, unpublish_after_days: Number(e.target.value) })}
+                        className="mt-1 w-24"
+                      >
+                        <option value={3}>3</option>
+                        <option value={7}>7</option>
+                        <option value={14}>14</option>
+                        <option value={30}>30</option>
+                      </Select>
+                    </div>
+                  )}
                 </>
               ) : (
                 <>
@@ -407,8 +492,71 @@ export function OfferDetail({ initialOffer }: OfferDetailProps) {
                       <p className="mt-1 whitespace-pre-wrap">{offer.notes}</p>
                     </div>
                   )}
+                  {(offer.line_items?.length ?? 0) > 0 && (
+                    <div>
+                      <label className="text-sm font-medium text-muted-foreground">Line items</label>
+                      <div className="mt-2 border rounded-md overflow-hidden">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="bg-muted">
+                              <th className="text-left p-2">Артикул / Name</th>
+                              <th className="text-right p-2">Количество</th>
+                              <th className="text-right p-2">Цена без ДДС</th>
+                              <th className="text-right p-2">Стойност</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {offer.line_items!.map((item, i) => (
+                              <tr key={i} className="border-t">
+                                <td className="p-2">{item.name}{item.catalog_no ? ` (${item.catalog_no})` : ''}</td>
+                                <td className="p-2 text-right">{item.quantity}</td>
+                                <td className="p-2 text-right">{item.unit_price}</td>
+                                <td className="p-2 text-right">{(item.quantity * item.unit_price).toFixed(2)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                        <div className="p-2 border-t font-medium text-right">
+                          Общо: {offer.line_items!.reduce((s, i) => s + i.quantity * i.unit_price, 0).toFixed(2)} {offer.currency}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  {offer.recipient_snapshot && (offer.recipient_snapshot.name || offer.recipient_snapshot.company) && (
+                    <div>
+                      <label className="text-sm font-medium text-muted-foreground">Recipient (document)</label>
+                      <div className="mt-1 text-sm space-y-0.5">
+                        {offer.recipient_snapshot.name && <p>{offer.recipient_snapshot.name}</p>}
+                        {offer.recipient_snapshot.company && <p>{offer.recipient_snapshot.company}</p>}
+                        {offer.recipient_snapshot.address && <p>{offer.recipient_snapshot.address}</p>}
+                        {offer.recipient_snapshot.city && <p>{offer.recipient_snapshot.city}</p>}
+                        {offer.recipient_snapshot.tax_number && <p>EIK/Булстат: {offer.recipient_snapshot.tax_number}</p>}
+                        {offer.recipient_snapshot.mol && <p>МОЛ: {offer.recipient_snapshot.mol}</p>}
+                      </div>
+                    </div>
+                  )}
                 </>
               )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Document (Оферта)</CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-wrap gap-2">
+              <Link href={documentViewUrl} target="_blank">
+                <Button variant="outline" size="sm">
+                  <FileText className="h-4 w-4 mr-2" />
+                  View document
+                </Button>
+              </Link>
+              <a href={documentPdfUrl} download={`offer-${offer.id}.pdf`} target="_blank" rel="noopener noreferrer">
+                <Button variant="outline" size="sm">Download PDF</Button>
+              </a>
+              <a href={documentPngUrl} download={`offer-${offer.id}.png`} target="_blank" rel="noopener noreferrer">
+                <Button variant="outline" size="sm">Download PNG</Button>
+              </a>
             </CardContent>
           </Card>
 

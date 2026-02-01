@@ -98,6 +98,34 @@ export async function getNotesForClient(clientId: string) {
   return data || []
 }
 
+export async function updateNote(id: string, clientId: string, content: string) {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    throw new Error('Not authenticated')
+  }
+
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    throw new Error('No organization selected')
+  }
+
+  const { error } = await supabase
+    .from('client_notes')
+    .update({ content })
+    .eq('id', id)
+    .eq('organization_id', organizationId)
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  revalidatePath(`/clients/${clientId}`)
+}
+
 export async function toggleNotePin(id: string, clientId: string, pinned: boolean) {
   const supabase = await createClient()
   const {

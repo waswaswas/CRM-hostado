@@ -10,13 +10,7 @@ const nextConfig = {
     unoptimized: false,
   },
   
-  // Environment variables that should be available on the client
-  env: {
-    NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
-    NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-    NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
-  },
-  
+  // Don't bake env into build - use process.env at runtime to avoid startup validation errors
   // Production optimizations
   compress: true,
   poweredByHeader: false,

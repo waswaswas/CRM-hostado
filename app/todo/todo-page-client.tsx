@@ -404,12 +404,14 @@ export function TodoPageClient({
       setRunningTimer(null)
       return
     }
+    const taskId = activeTaskId
+    const listId = activeListId
     async function loadTime() {
       try {
         const [entries, total, running] = await Promise.all([
-          getTimeEntries(activeTaskId),
-          getTotalSeconds(activeTaskId),
-          getRunningTimer(activeListId),
+          getTimeEntries(taskId),
+          getTotalSeconds(taskId),
+          getRunningTimer(listId),
         ])
         setTimeEntries(entries)
         setTimeTotalSeconds(total)

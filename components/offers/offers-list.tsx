@@ -10,7 +10,7 @@ import { Offer, OfferStatus, PaymentStatus } from '@/types/database'
 import Link from 'next/link'
 import { Plus, Search, Trash2, Copy, Eye } from 'lucide-react'
 import { format } from 'date-fns'
-import { deleteOffer, duplicateOffer, generatePaymentLink, markOfferAsPaid } from '@/app/actions/offers'
+import { deleteOffer, duplicateOffer, generatePaymentLink, markOfferAsPaid, getOffers } from '@/app/actions/offers'
 import { useToast } from '@/components/ui/toaster'
 import { getClients } from '@/app/actions/clients'
 import type { Client } from '@/types/database'
@@ -28,6 +28,8 @@ export function OffersList({ initialOffers }: OffersListProps) {
   const [statusFilter, setStatusFilter] = useState<OfferStatus | 'all'>('all')
   const [paymentStatusFilter, setPaymentStatusFilter] = useState<PaymentStatus | 'all' | 'not_paid'>('all')
   const [clientFilter, setClientFilter] = useState<string>('all')
+  const [showArchived, setShowArchived] = useState(false)
+  const [loadingArchived, setLoadingArchived] = useState(false)
 
   useEffect(() => {
     async function loadClients() {
@@ -80,6 +82,23 @@ export function OffersList({ initialOffers }: OffersListProps) {
 
     setFilteredOffers(filtered)
   }, [search, statusFilter, paymentStatusFilter, clientFilter, offers, clients])
+
+  async function handleToggleArchived(checked: boolean) {
+    setShowArchived(checked)
+    if (checked) {
+      setLoadingArchived(true)
+      try {
+        const all = await getOffers({ includeArchived: true })
+        setOffers(all)
+      } catch {
+        setShowArchived(false)
+      } finally {
+        setLoadingArchived(false)
+      }
+    } else {
+      setOffers(initialOffers)
+    }
+  }
 
   async function handleDeleteOffer(offerId: string, offerTitle: string, e: React.MouseEvent) {
     e.preventDefault()
@@ -217,6 +236,20 @@ export function OffersList({ initialOffers }: OffersListProps) {
           />
         </div>
 
+        <div className="flex flex-wrap items-center gap-4">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={showArchived}
+              onChange={(e) => handleToggleArchived(e.target.checked)}
+              disabled={loadingArchived}
+              className="rounded border-gray-300"
+            />
+            <span className="text-sm font-medium">Show archived</span>
+          </label>
+          {loadingArchived && <span className="text-sm text-muted-foreground">Loading…</span>}
+        </div>
+
         <div className="grid gap-4 sm:grid-cols-3">
           <div className="space-y-2">
             <label className="text-sm font-medium">Status</label>
@@ -280,6 +313,16 @@ export function OffersList({ initialOffers }: OffersListProps) {
                         {getStatusLabel(offer.status)}
                       </Badge>
                       {getPaymentStatusBadge(offer)}
+                      {offer.is_archived && (
+                        <Badge variant="outline" className="bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300">
+                          Archived
+                        </Badge>
+                      )}
+                      {offer.is_public && offer.is_published && (
+                        <Badge variant="outline" className="bg-green-50 text-green-800 dark:bg-green-900/30 dark:text-green-300">
+                          Published
+                        </Badge>
+                      )}
                     </div>
                     <div className="flex items-center gap-4 text-sm text-muted-foreground mb-2">
                       <Link href={`/clients/${offer.client_id}`} className="hover:underline">

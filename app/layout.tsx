@@ -7,6 +7,9 @@ import { OrganizationProvider } from '@/lib/organization-context'
 
 const inter = Inter({ subsets: ['latin'] })
 
+// Use cookies/session in app - avoid static generation errors at build
+export const dynamic = 'force-dynamic'
+
 export const metadata: Metadata = {
   title: 'Pre-Sales CRM',
   description: 'Simple, intuitive pre-sales CRM platform',
