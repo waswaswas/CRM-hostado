@@ -9,11 +9,12 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Select } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { updateOffer, deleteOffer, generatePaymentLink, markOfferAsPaid, duplicateOffer, toggleOfferPublished, archiveOffer, restoreOffer } from '@/app/actions/offers'
 import { getPaymentHistory } from '@/app/actions/payments'
 import { useToast } from '@/components/ui/toaster'
 import { format } from 'date-fns'
-import { ArrowLeft, Copy, Trash2, Check, Edit, Plus, Archive, ArchiveRestore, FileText, Globe, Lock } from 'lucide-react'
+import { ArrowLeft, Copy, Trash2, Check, Edit, Plus, Archive, ArchiveRestore, FileText, Globe, Lock, ChevronDown } from 'lucide-react'
 import Link from 'next/link'
 import type { Payment } from '@/types/database'
 import { getClient } from '@/app/actions/clients'
@@ -239,9 +240,46 @@ export function OfferDetail({ initialOffer }: OfferDetailProps) {
     }
   }
 
+  async function handleSetStatusToPending() {
+    try {
+      const updated = await updateOffer(offer.id, { status: 'sent' })
+      setOffer(updated)
+      setEditValues((prev) => ({ ...prev, status: 'sent' }))
+      toast({ title: 'Success', description: 'Offer set to Pending; recipient can accept again.' })
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to update status',
+        variant: 'destructive',
+      })
+    }
+  }
+
   const documentViewUrl = `/offers/${offer.id}/document`
   const documentPdfUrl = `/api/offers/${offer.id}/document?format=pdf`
   const documentPngUrl = `/api/offers/${offer.id}/document?format=png`
+
+  const [paymentToggleLoading, setPaymentToggleLoading] = useState(false)
+  async function handleTogglePaymentEnabled() {
+    setPaymentToggleLoading(true)
+    try {
+      const updated = await updateOffer(offer.id, { payment_enabled: !offer.payment_enabled })
+      setOffer(updated)
+      setEditValues((prev) => ({ ...prev, payment_enabled: updated.payment_enabled }))
+      toast({
+        title: 'Updated',
+        description: updated.payment_enabled ? 'Payment enabled for this offer' : 'Payment disabled for this offer',
+      })
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to update payment option',
+        variant: 'destructive',
+      })
+    } finally {
+      setPaymentToggleLoading(false)
+    }
+  }
 
   function getStatusColor(status: string) {
     switch (status) {
@@ -482,9 +520,32 @@ export function OfferDetail({ initialOffer }: OfferDetailProps) {
                     <div>
                       <label className="text-sm font-medium text-muted-foreground">Status</label>
                       <div className="mt-1">
-                        <Badge className={getStatusColor(offer.status)}>
-                          {getStatusLabel(offer.status)}
-                        </Badge>
+                        {offer.status === 'accepted' ? (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button type="button" className="inline-flex items-center gap-1 rounded-md border-0 outline-none ring-offset-background focus:ring-2 focus:ring-ring">
+                                <Badge className={getStatusColor(offer.status)}>
+                                  {getStatusLabel(offer.status)}
+                                </Badge>
+                                <ChevronDown className="h-4 w-4 opacity-70" />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="start">
+                              <DropdownMenuItem onClick={handleSetStatusToPending}>
+                                <span className="inline-block w-2 h-2 rounded-full bg-yellow-500 mr-2" />
+                                Set to Pending
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={handleArchive}>
+                                <span className="inline-block w-2 h-2 rounded-full bg-orange-500 mr-2" />
+                                Archive
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        ) : (
+                          <Badge className={getStatusColor(offer.status)}>
+                            {getStatusLabel(offer.status)}
+                          </Badge>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -509,7 +570,7 @@ export function OfferDetail({ initialOffer }: OfferDetailProps) {
                             <tr className="bg-muted">
                               <th className="text-left p-2">Артикул / Name</th>
                               <th className="text-right p-2">Количество</th>
-                              <th className="text-right p-2">Цена без ДДС</th>
+                              <th className="text-right p-2">Крайна цена</th>
                               <th className="text-right p-2">Стойност</th>
                             </tr>
                           </thead>
@@ -603,6 +664,24 @@ export function OfferDetail({ initialOffer }: OfferDetailProps) {
               <CardTitle>Payment Information</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
+              <div className="flex items-center justify-between gap-4 py-2 border-b">
+                <label htmlFor="payment-toggle" className="text-sm font-medium cursor-pointer">
+                  Enable Payment
+                </label>
+                <button
+                  id="payment-toggle"
+                  type="button"
+                  role="switch"
+                  aria-checked={offer.payment_enabled}
+                  disabled={paymentToggleLoading}
+                  onClick={handleTogglePaymentEnabled}
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 ${offer.payment_enabled ? 'bg-primary' : 'bg-muted'}`}
+                >
+                  <span
+                    className={`pointer-events-none block h-5 w-5 rounded-full bg-background shadow-lg ring-0 transition-transform ${offer.payment_enabled ? 'translate-x-5' : 'translate-x-0.5'}`}
+                  />
+                </button>
+              </div>
               {offer.payment_enabled ? (
                 <>
                   <div>

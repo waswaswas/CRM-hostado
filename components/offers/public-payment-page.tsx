@@ -1,12 +1,14 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Image from 'next/image'
 import { Offer } from '@/types/database'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
+import { ThemeToggle } from '@/components/theme-toggle'
 import { createPaymentRecordByToken } from '@/app/actions/payments'
 import { markOfferOpened, acceptOfferByToken, requestOfferCorrection } from '@/app/actions/offers'
 import { useToast } from '@/components/ui/toaster'
@@ -142,20 +144,20 @@ export function PublicPaymentPage({ offer, token }: PublicPaymentPageProps) {
 
   return (
     <div className="min-h-screen bg-background p-4">
-      <div className="mx-auto max-w-2xl space-y-6 py-8">
+      <header className="mx-auto max-w-2xl flex items-center justify-between py-4 mb-6 border-b border-border">
+        <Image src="/hostado-logo.png" alt="Hostado" width={200} height={56} className="h-14 w-auto object-contain" />
+        <ThemeToggle />
+      </header>
+      <div className="mx-auto max-w-2xl space-y-6 pb-8">
         <Card>
-          <CardHeader>
-            <div className="flex flex-wrap items-center gap-2 mb-2">
-              <CardTitle>{offer.title}</CardTitle>
-              <Badge variant="outline" className="bg-muted capitalize">{offer.status}</Badge>
-              <Badge variant="outline" className="bg-green-50 text-green-800 dark:bg-green-900/30 dark:text-green-300">Published</Badge>
-              {offer.opened_at && (
-                <Badge variant="outline" className="bg-blue-50 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">Opened</Badge>
-              )}
-            </div>
-            <CardDescription>{offer.description || 'Offer details'}</CardDescription>
+          <CardHeader className="space-y-4 pb-2">
+            <CardTitle className="text-2xl">{offer.title}</CardTitle>
+            <CardDescription className="text-base mt-4">{offer.description || 'Offer details'}</CardDescription>
+            <p className="text-sm text-muted-foreground mt-6">
+              Recipient name: {offer.recipient_snapshot?.name || '—'}
+            </p>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-4 pt-4">
             {lineItems.length > 0 ? (
               <>
                 <div className="border rounded-md overflow-hidden">
@@ -164,7 +166,7 @@ export function PublicPaymentPage({ offer, token }: PublicPaymentPageProps) {
                       <tr className="bg-muted">
                         <th className="text-left p-2 font-medium">Артикул / Name</th>
                         <th className="text-right p-2 font-medium">Количество</th>
-                        <th className="text-right p-2 font-medium">Цена без ДДС</th>
+                        <th className="text-right p-2 font-medium">Крайна цена</th>
                         <th className="text-right p-2 font-medium">Стойност</th>
                       </tr>
                     </thead>
@@ -207,13 +209,20 @@ export function PublicPaymentPage({ offer, token }: PublicPaymentPageProps) {
                     <MessageSquare className="h-4 w-4 mr-2" />
                     Request correction
                   </Button>
-                  {!accepted && (
+                  {!accepted && !offer.is_archived && (
                     <Button type="button" variant="outline" size="sm" onClick={handleAccept}>
                       <Check className="h-4 w-4 mr-2" />
                       Accept
                     </Button>
                   )}
-                  {accepted && <Badge className="bg-green-50 text-green-800 dark:bg-green-900/30 dark:text-green-300">Accepted</Badge>}
+                  {accepted && (
+                    <div className="space-y-1">
+                      <Badge className="bg-green-50 text-green-800 dark:bg-green-900/30 dark:text-green-300">Accepted</Badge>
+                      <p className="text-sm text-muted-foreground">
+                        Благодарим Ви за приемането на офертата, ще се свържем с Вас за уточняване на детайлите.
+                      </p>
+                    </div>
+                  )}
                   {offer.payment_enabled && !showPayForm && (
                     <Button type="button" size="sm" onClick={() => setShowPayForm(true)}>
                       <CreditCard className="h-4 w-4 mr-2" />

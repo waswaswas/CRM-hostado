@@ -61,7 +61,7 @@ export function OffertaDocument({ offer, senderName = 'Hostado' }: OffertaDocume
               <th className="border border-gray-300 p-2 text-left">№</th>
               <th className="border border-gray-300 p-2 text-left">Артикул и Каталожен №</th>
               <th className="border border-gray-300 p-2 text-right">Количество</th>
-              <th className="border border-gray-300 p-2 text-right">Цена без ДДС</th>
+              <th className="border border-gray-300 p-2 text-right">Крайна цена</th>
               <th className="border border-gray-300 p-2 text-right">Стойност</th>
             </tr>
           </thead>
