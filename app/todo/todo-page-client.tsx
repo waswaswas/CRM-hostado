@@ -23,6 +23,7 @@ import {
   getTodoLists,
   getTodoProjects,
   getTodoTasks,
+  getRecentTodoTasks,
   getTotalSeconds,
   joinTodoListByCode,
   removeTodoListMember,
@@ -215,6 +216,7 @@ export function TodoPageClient({
   const [lists, setLists] = useState<TodoList[]>(() => (initialLists || []).map(mapListFromDb))
   const [projects, setProjects] = useState<TodoProject[]>([])
   const [tasks, setTasks] = useState<TodoTask[]>([])
+  const [recentTasks, setRecentTasks] = useState<TodoTask[]>([])
   const [activeListId, setActiveListId] = useState<string | null>(null)
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null)
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null)
@@ -288,6 +290,13 @@ export function TodoPageClient({
     return () => {
       cancelled = true
     }
+  }, [currentOrganization?.id])
+
+  useEffect(() => {
+    if (!currentOrganization?.id) return
+    getRecentTodoTasks()
+      .then((data) => setRecentTasks(data.map(mapTaskFromDb)))
+      .catch(() => setRecentTasks([]))
   }, [currentOrganization?.id])
 
   useEffect(() => {
@@ -452,6 +461,12 @@ export function TodoPageClient({
     setTasks(data.map(mapTaskFromDb))
   }
 
+  async function refreshRecentTasks() {
+    getRecentTodoTasks()
+      .then((data) => setRecentTasks(data.map(mapTaskFromDb)))
+      .catch(() => setRecentTasks([]))
+  }
+
   async function handleCreateList(data: { name: string; color: string }) {
     if (!userId) return
     const newList = await createTodoList({ name: data.name, color: data.color })
@@ -479,6 +494,7 @@ export function TodoPageClient({
       await createTodoTask(activeListId, newTaskTitle.trim(), activeProjectId ?? undefined)
       setNewTaskTitle('')
       await refreshTasks(activeListId, activeProjectId)
+      await refreshRecentTasks()
     } catch (err) {
       toast({
         title: 'Could not create task',
@@ -505,6 +521,7 @@ export function TodoPageClient({
     )
     try {
       await updateTodoTask(taskId, updates as any)
+      await refreshRecentTasks()
     } catch (error) {
       if (activeListId) {
         await refreshTasks(activeListId, activeProjectId)
@@ -514,6 +531,7 @@ export function TodoPageClient({
 
   async function handleDeleteTask(taskId: string) {
     await deleteTodoTask(taskId)
+    await refreshRecentTasks()
     setTasks((prev) => prev.filter((task) => task.id !== taskId))
     setSelectedTaskIds((prev) => {
       const next = new Set(prev)
@@ -525,6 +543,7 @@ export function TodoPageClient({
   async function handleBulkDelete() {
     await Promise.all(Array.from(selectedTaskIds).map((taskId) => deleteTodoTask(taskId)))
     setSelectedTaskIds(new Set())
+    await refreshRecentTasks()
     if (activeListId) {
       await refreshTasks(activeListId, activeProjectId)
     }
@@ -543,10 +562,12 @@ export function TodoPageClient({
       tags: task.tags,
     } as any)
     await refreshTasks(activeListId, activeProjectId)
+    await refreshRecentTasks()
   }
 
   async function handleArchiveTask(taskId: string) {
     await updateTodoTask(taskId, { status: 'done', completed: true } as any)
+    await refreshRecentTasks()
     if (activeListId) {
       await refreshTasks(activeListId, activeProjectId)
     }
@@ -712,6 +733,33 @@ export function TodoPageClient({
           <Plus className="h-4 w-4 mr-2" />
           Create project
         </Button>
+
+        {recentTasks.length > 0 && (
+          <div className="space-y-2 pt-2 border-t border-border">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Recent</p>
+            {recentTasks.map((task) => {
+              const list = lists.find((l) => l.id === task.listId)
+              return (
+                <button
+                  key={task.id}
+                  type="button"
+                  className="w-full text-left px-3 py-2 rounded-md text-sm hover:bg-accent truncate block"
+                  onClick={() => {
+                    setActiveListId(task.listId)
+                    setActiveProjectId(task.projectId)
+                    setActiveTaskId(task.id)
+                  }}
+                  title={task.title}
+                >
+                  <span className="truncate block">{task.title}</span>
+                  {list && (
+                    <span className="text-xs text-muted-foreground truncate block">{list.name}</span>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+        )}
       </div>
       <div className="flex-1 min-w-0 space-y-4">
         <div className="flex flex-col gap-3">

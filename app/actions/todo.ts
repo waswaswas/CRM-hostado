@@ -307,6 +307,78 @@ export async function getTodoTasks(listId: string, projectId?: string | null): P
   })) as TodoTask[]
 }
 
+/** Last 4 modified tasks across all lists the user has access to. */
+export async function getRecentTodoTasks(): Promise<TodoTask[]> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return []
+  }
+
+  const { data: tasks, error } = await supabase
+    .from('todo_tasks')
+    .select('*')
+    .order('updated_at', { ascending: false })
+    .limit(4)
+
+  if (error) {
+    return []
+  }
+
+  const taskIds = (tasks || []).map((task: { id: string }) => task.id)
+  const [subtasksResult, commentsResult, attachmentsResult] = await Promise.all([
+    taskIds.length
+      ? supabase
+          .from('todo_task_subtasks')
+          .select('id, task_id, title, done, due_date')
+          .in('task_id', taskIds)
+      : Promise.resolve({ data: [] as any[] }),
+    taskIds.length
+      ? supabase
+          .from('todo_task_comments')
+          .select('id, task_id, content, created_at')
+          .in('task_id', taskIds)
+      : Promise.resolve({ data: [] as any[] }),
+    taskIds.length
+      ? supabase
+          .from('todo_task_attachments')
+          .select('id, task_id, file_name, file_url')
+          .in('task_id', taskIds)
+      : Promise.resolve({ data: [] as any[] }),
+  ])
+
+  const subtasksByTask = new Map<string, { id: string; title: string; done: boolean; due_date: string | null }[]>()
+  const commentsByTask = new Map<string, { id: string; content: string; created_at: string }[]>()
+  const attachmentsByTask = new Map<string, { id: string; file_name: string; file_url: string }[]>()
+
+  ;(subtasksResult.data || []).forEach((row: any) => {
+    const list = subtasksByTask.get(row.task_id) || []
+    list.push({ id: row.id, title: row.title, done: row.done, due_date: row.due_date ?? null })
+    subtasksByTask.set(row.task_id, list)
+  })
+  ;(commentsResult.data || []).forEach((row: any) => {
+    const list = commentsByTask.get(row.task_id) || []
+    list.push({ id: row.id, content: row.content, created_at: row.created_at })
+    commentsByTask.set(row.task_id, list)
+  })
+  ;(attachmentsResult.data || []).forEach((row: any) => {
+    const list = attachmentsByTask.get(row.task_id) || []
+    list.push({ id: row.id, file_name: row.file_name, file_url: row.file_url })
+    attachmentsByTask.set(row.task_id, list)
+  })
+
+  return (tasks || []).map((task: any) => ({
+    ...task,
+    tags: task.tags || [],
+    subtasks: subtasksByTask.get(task.id) || [],
+    comments: commentsByTask.get(task.id) || [],
+    attachments: attachmentsByTask.get(task.id) || [],
+  })) as TodoTask[]
+}
+
 export async function createTodoList(input: { name: string; color?: string }): Promise<TodoList> {
   const supabase = await createClient()
   const {
