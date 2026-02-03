@@ -6,6 +6,8 @@ import { getCurrentOrganizationId } from './organizations'
 
 const FEEDBACK_ADMIN_EMAIL = 'waswaswas28@gmail.com'
 
+export type FeedbackStatus = 'pending' | 'working_on' | 'done'
+
 export interface Feedback {
   id: string
   created_at: string
@@ -14,6 +16,7 @@ export interface Feedback {
   note: string
   priority?: string | null
   completed?: boolean
+  status?: FeedbackStatus | null
   owner_email?: string
 }
 
@@ -123,6 +126,7 @@ export async function updateFeedback(
     note?: string
     priority?: string | null
     completed?: boolean
+    status?: FeedbackStatus | null
   }
 ): Promise<Feedback> {
   const supabase = await createClient()
@@ -148,6 +152,55 @@ export async function updateFeedback(
 
   revalidatePath('/dashboard')
   return feedback as Feedback
+}
+
+export interface FeedbackComment {
+  id: string
+  feedback_id: string
+  user_id: string
+  content: string
+  created_at: string
+  user_email?: string
+}
+
+export async function getFeedbackComments(feedbackId: string): Promise<FeedbackComment[]> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return []
+
+  const { data: rows, error } = await supabase
+    .from('feedback_comments')
+    .select('*')
+    .eq('feedback_id', feedbackId)
+    .order('created_at', { ascending: true })
+
+  if (error || !rows?.length) return []
+
+  const userIds = Array.from(new Set(rows.map((r: any) => r.user_id)))
+  const { data: profiles } = await supabase.from('user_profiles').select('id, email').in('id', userIds)
+  const emailMap = new Map<string, string>()
+  profiles?.forEach((p: { id: string; email: string }) => emailMap.set(p.id, p.email))
+
+  return rows.map((r: any) => ({
+    ...r,
+    user_email: emailMap.get(r.user_id),
+  })) as FeedbackComment[]
+}
+
+export async function createFeedbackComment(feedbackId: string, content: string): Promise<FeedbackComment> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Not authenticated')
+
+  const { data: comment, error } = await supabase
+    .from('feedback_comments')
+    .insert({ feedback_id: feedbackId, user_id: user.id, content: content.trim() })
+    .select()
+    .single()
+
+  if (error) throw new Error(error.message)
+  revalidatePath('/dashboard')
+  return { ...comment, user_email: user.email } as FeedbackComment
 }
 
 export async function deleteFeedback(id: string): Promise<void> {
@@ -186,7 +239,7 @@ export async function toggleFeedbackCompleted(id: string, completed: boolean): P
   }
 
   const isFeedbackAdmin = user.email === FEEDBACK_ADMIN_EMAIL
-  const query = supabase.from('feedback').update({ completed }).eq('id', id)
+  const query = supabase.from('feedback').update({ completed, status: completed ? 'done' : 'pending' }).eq('id', id)
   if (!isFeedbackAdmin) {
     query.eq('owner_id', user.id)
   }

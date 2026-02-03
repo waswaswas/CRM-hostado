@@ -12,6 +12,8 @@ import {
   createTodoComment,
   createTodoList,
   createTodoProject,
+  deleteTodoProject,
+  updateTodoProject,
   createTodoSubtask,
   createTodoTask,
   deleteTodoList,
@@ -26,6 +28,7 @@ import {
   getRecentTodoTasks,
   getTotalSeconds,
   joinTodoListByCode,
+  notifyTaskMention,
   removeTodoListMember,
   startTimer,
   stopTimer,
@@ -43,10 +46,12 @@ import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { useToast } from '@/components/ui/toaster'
-import { Archive, Calendar, Check, Clock, Copy, FolderOpen, Pencil, Plus, Search, Settings, Square, Trash2, UserMinus, Users } from 'lucide-react'
+import { Archive, Calendar, Check, ChevronDown, Clock, Copy, FolderOpen, Pencil, Plus, Search, Settings, Square, Trash2, UserMinus, Users } from 'lucide-react'
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu'
+import { MentionTextarea } from '@/components/todo/mention-textarea'
 
 type UserRole = 'owner' | 'admin' | 'moderator' | 'viewer'
-type TaskStatus = 'to_do' | 'in_progress' | 'blocked' | 'done'
+type TaskStatus = 'to_do' | 'in_progress' | 'blocked' | 'done' | 'info_needed'
 type TaskPriority = 'low' | 'medium' | 'high' | 'critical'
 
 type TodoListMember = {
@@ -98,6 +103,7 @@ const STATUS_LABELS: Record<TaskStatus, string> = {
   in_progress: 'In Progress',
   blocked: 'Blocked',
   done: 'Done',
+  info_needed: 'Info needed',
 }
 
 const PRIORITY_LABELS: Record<TaskPriority, string> = {
@@ -205,8 +211,12 @@ type ServerTodoList = Awaited<ReturnType<typeof getTodoLists>>[number]
 
 export function TodoPageClient({
   initialLists = [],
+  initialListId = null,
+  initialTaskId = null,
 }: {
   initialLists?: ServerTodoList[]
+  initialListId?: string | null
+  initialTaskId?: string | null
 }) {
   const { currentOrganization } = useOrganization()
   const { permissions, loading: permissionsLoading } = useFeaturePermissions()
@@ -217,11 +227,14 @@ export function TodoPageClient({
   const [projects, setProjects] = useState<TodoProject[]>([])
   const [tasks, setTasks] = useState<TodoTask[]>([])
   const [recentTasks, setRecentTasks] = useState<TodoTask[]>([])
-  const [activeListId, setActiveListId] = useState<string | null>(null)
+  const [listMemberDetails, setListMemberDetails] = useState<Array<{ user_id: string; role: 'owner' | 'member'; email: string | null }>>([])
+  const [activeListId, setActiveListId] = useState<string | null>(initialListId ?? null)
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null)
-  const [activeTaskId, setActiveTaskId] = useState<string | null>(null)
+  const [activeTaskId, setActiveTaskId] = useState<string | null>(initialTaskId ?? null)
   const [showCreateDialog, setShowCreateDialog] = useState(false)
   const [showCreateProjectDialog, setShowCreateProjectDialog] = useState(false)
+  const [renamingProjectId, setRenamingProjectId] = useState<string | null>(null)
+  const [renamingProjectName, setRenamingProjectName] = useState('')
   const [showSettingsDialog, setShowSettingsDialog] = useState(false)
   const [inviteCodeInput, setInviteCodeInput] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
@@ -304,6 +317,7 @@ export function TodoPageClient({
       setProjects([])
       setTasks([])
       setActiveProjectId(null)
+      setListMemberDetails([])
       return
     }
     setActiveProjectId(null)
@@ -317,6 +331,7 @@ export function TodoPageClient({
       }
     }
     loadProjects()
+    getTodoListMemberDetails(listId).then(setListMemberDetails).catch(() => setListMemberDetails([]))
   }, [activeListId])
 
   useEffect(() => {
@@ -511,6 +526,23 @@ export function TodoPageClient({
     await createTodoProject(activeListId, { name: name.trim() })
     await refreshProjects(activeListId)
     setShowCreateProjectDialog(false)
+  }
+
+  async function handleRenameProject(projectId: string, name: string) {
+    if (!name.trim()) return
+    await updateTodoProject(projectId, { name: name.trim() })
+    await refreshProjects(activeListId!)
+    setRenamingProjectId(null)
+    setRenamingProjectName('')
+  }
+
+  async function handleDeleteProject(projectId: string) {
+    if (!confirm('Delete this project? Tasks will be moved to "No project".')) return
+    if (!activeListId) return
+    await deleteTodoProject(projectId)
+    if (activeProjectId === projectId) setActiveProjectId(null)
+    await refreshProjects(activeListId)
+    await refreshTasks(activeListId, activeProjectId === projectId ? null : activeProjectId)
   }
 
   async function handleUpdateTask(taskId: string, updates: Partial<TodoTask>) {
@@ -713,16 +745,54 @@ export function TodoPageClient({
           All tasks
         </Button>
         {projects.map((project) => (
-          <Button
-            key={project.id}
-            variant={activeProjectId === project.id ? 'secondary' : 'ghost'}
-            size="sm"
-            className="w-full justify-start truncate"
-            onClick={() => setActiveProjectId(project.id)}
-          >
-            <FolderOpen className="h-4 w-4 mr-2 shrink-0" />
-            <span className="truncate">{project.name}</span>
-          </Button>
+          <div key={project.id} className="flex items-center gap-1">
+            {renamingProjectId === project.id ? (
+              <div className="flex-1 flex items-center gap-1">
+                <Input
+                  value={renamingProjectName}
+                  onChange={(e) => setRenamingProjectName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleRenameProject(project.id, renamingProjectName)
+                    if (e.key === 'Escape') setRenamingProjectId(null)
+                  }}
+                  className="h-8 text-sm"
+                  autoFocus
+                />
+                <Button size="sm" variant="ghost" onClick={() => handleRenameProject(project.id, renamingProjectName)}>
+                  <Check className="h-4 w-4" />
+                </Button>
+              </div>
+            ) : (
+              <>
+                <Button
+                  variant={activeProjectId === project.id ? 'secondary' : 'ghost'}
+                  size="sm"
+                  className="flex-1 justify-start truncate min-w-0"
+                  onClick={() => setActiveProjectId(project.id)}
+                >
+                  <FolderOpen className="h-4 w-4 mr-2 shrink-0" />
+                  <span className="truncate">{project.name}</span>
+                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0 shrink-0">
+                      <ChevronDown className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => { setRenamingProjectId(project.id); setRenamingProjectName(project.name) }}>
+                      <Pencil className="h-4 w-4 mr-2" />
+                      Rename
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleDeleteProject(project.id)} className="text-destructive">
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Delete
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </>
+            )}
+          </div>
         ))}
         <Button
           variant="outline"
@@ -798,6 +868,7 @@ export function TodoPageClient({
           <Select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="min-w-[140px]">
             <option value="all">All status</option>
             <option value="to_do">To Do</option>
+            <option value="info_needed">Info needed</option>
             <option value="in_progress">In Progress</option>
             <option value="blocked">Blocked</option>
             <option value="done">Done</option>
@@ -979,9 +1050,17 @@ export function TodoPageClient({
               </div>
               <div>
                 <label className="text-sm font-medium">Description</label>
-                <Textarea
+                <MentionTextarea
                   value={activeTask.description}
-                  onChange={(event) => handleUpdateTask(activeTask.id, { description: event.target.value })}
+                  onChange={(desc) => handleUpdateTask(activeTask.id, { description: desc })}
+                  onMention={async (userId) => {
+                    try {
+                      await notifyTaskMention(activeTask.id, userId, activeTask.title, activeListId!)
+                    } catch {
+                      // Notification may fail (e.g. RLS); don't block the UI
+                    }
+                  }}
+                  options={listMemberDetails.map((m) => ({ user_id: m.user_id, email: m.email }))}
                   rows={4}
                 />
               </div>
@@ -995,6 +1074,7 @@ export function TodoPageClient({
                     <option value="to_do">To Do</option>
                     <option value="in_progress">In Progress</option>
                     <option value="blocked">Blocked</option>
+                    <option value="info_needed">Info needed</option>
                     <option value="done">Done</option>
                   </Select>
                 </div>
@@ -1020,7 +1100,11 @@ export function TodoPageClient({
                   }
                 >
                   <option value="">Unassigned</option>
-                  {userId && <option value={userId}>Me</option>}
+                  {listMemberDetails.map((m) => (
+                    <option key={m.user_id} value={m.user_id}>
+                      {m.user_id === userId ? 'Me' : m.email ?? m.user_id.slice(0, 8)}
+                    </option>
+                  ))}
                 </Select>
               </div>
               <div>

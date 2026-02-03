@@ -39,6 +39,9 @@ function getNotificationIcon(type: string) {
       return Bell
     case 'tag_removed':
       return Tag
+    case 'task_assigned':
+    case 'task_mention':
+      return Tag
     default:
       return Bell
   }
@@ -52,6 +55,9 @@ function getNotificationColor(type: string) {
       return 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200'
     case 'tag_removed':
       return 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200'
+    case 'task_assigned':
+    case 'task_mention':
+      return 'bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-200'
     default:
       return 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200'
   }
@@ -66,6 +72,10 @@ function getNotificationLink(notification: Notification): string | null {
   }
   if (notification.related_type === 'client' && notification.related_id) {
     return `/clients/${notification.related_id}`
+  }
+  if (notification.related_type === 'todo_task' && notification.related_id) {
+    const listId = notification.metadata?.list_id
+    return listId ? `/todo?list=${listId}&task=${notification.related_id}` : '/todo'
   }
   return null
 }

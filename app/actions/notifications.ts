@@ -4,7 +4,14 @@ import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { getCurrentOrganizationId } from './organizations'
 
-export type NotificationType = 'email' | 'reminder' | 'tag_removed' | 'other'
+export type NotificationType = 'email' | 'reminder' | 'tag_removed' | 'other' | 'task_assigned' | 'task_mention'
+
+export interface NotificationPreferences {
+  reminders_enabled: boolean
+  reminders_include_completed: boolean
+  contacts_enabled: boolean
+  tasks_enabled: boolean
+}
 
 export interface Notification {
   id: string
@@ -20,6 +27,64 @@ export interface Notification {
   metadata: Record<string, any>
 }
 
+async function getPreferencesForUser(userId: string): Promise<NotificationPreferences | null> {
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from('notification_preferences')
+    .select('*')
+    .eq('user_id', userId)
+    .maybeSingle()
+  if (data) return data as NotificationPreferences
+  return null
+}
+
+export async function getNotificationPreferences(): Promise<NotificationPreferences> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    return {
+      reminders_enabled: true,
+      reminders_include_completed: true,
+      contacts_enabled: true,
+      tasks_enabled: true,
+    }
+  }
+  const { data } = await supabase
+    .from('notification_preferences')
+    .select('*')
+    .eq('user_id', user.id)
+    .maybeSingle()
+  if (data) return data as NotificationPreferences
+  return {
+    reminders_enabled: true,
+    reminders_include_completed: true,
+    contacts_enabled: true,
+    tasks_enabled: true,
+  }
+}
+
+export async function updateNotificationPreferences(prefs: Partial<NotificationPreferences>): Promise<void> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Not authenticated')
+
+  const payload: Record<string, unknown> = {
+    ...prefs,
+    updated_at: new Date().toISOString(),
+  }
+
+  const { error } = await supabase
+    .from('notification_preferences')
+    .upsert(
+      { user_id: user.id, ...payload },
+      { onConflict: 'user_id' }
+    )
+
+  if (error) throw new Error(error.message)
+  revalidatePath('/notifications')
+  revalidatePath('/dashboard')
+}
+
 export async function createNotification(data: {
   type: NotificationType
   title: string
@@ -27,6 +92,8 @@ export async function createNotification(data: {
   related_id?: string
   related_type?: string
   metadata?: Record<string, any>
+  /** Override owner (e.g. for task_assigned to assignee) */
+  owner_id?: string
 }) {
   const supabase = await createClient()
   const {
@@ -38,13 +105,25 @@ export async function createNotification(data: {
   }
 
   const organizationId = await getCurrentOrganizationId()
-  // Notifications are scoped to organization, but if no org selected, still create notification
-  // (for system notifications that might not have org context)
+  const ownerId = data.owner_id ?? user.id
+
+  let prefs: NotificationPreferences | null = null
+  try {
+    prefs = await getPreferencesForUser(ownerId)
+  } catch {
+    /* preferences table may not exist yet */
+  }
+  if (prefs) {
+    if (data.type === 'reminder' && !prefs.reminders_enabled) return null as any
+    if (data.type === 'reminder' && (data.metadata as any)?.is_completion && !prefs.reminders_include_completed) return null as any
+    if (data.type === 'email' && !prefs.contacts_enabled) return null as any
+    if ((data.type === 'task_assigned' || data.type === 'task_mention') && !prefs.tasks_enabled) return null as any
+  }
 
   const { data: notification, error } = await supabase
     .from('notifications')
     .insert({
-      owner_id: user.id,
+      owner_id: ownerId,
       organization_id: organizationId || null,
       type: data.type,
       title: data.title,

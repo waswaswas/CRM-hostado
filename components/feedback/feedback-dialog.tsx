@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Select } from '@/components/ui/select'
-import { createFeedback, updateFeedback, deleteFeedback, getFeedback, getFeedbackViewMeta, toggleFeedbackCompleted, type Feedback } from '@/app/actions/feedback'
+import { createFeedback, updateFeedback, deleteFeedback, getFeedback, getFeedbackViewMeta, toggleFeedbackCompleted, getFeedbackComments, createFeedbackComment, type Feedback, type FeedbackStatus, type FeedbackComment } from '@/app/actions/feedback'
 import { useToast } from '@/components/ui/toaster'
 import { Edit, Trash2, Plus, Check } from 'lucide-react'
 import { format } from 'date-fns'
@@ -22,6 +22,9 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
   const [feedbackList, setFeedbackList] = useState<Feedback[]>([])
   const [viewMeta, setViewMeta] = useState<{ isFeedbackAdmin: boolean; userId: string | null }>({ isFeedbackAdmin: false, userId: null })
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [commentsByFeedback, setCommentsByFeedback] = useState<Record<string, FeedbackComment[]>>({})
+  const [newCommentByFeedback, setNewCommentByFeedback] = useState<Record<string, string>>({})
   const [formData, setFormData] = useState({
     note: '',
     priority: '',
@@ -143,6 +146,53 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
     }
   }
 
+  async function handleStatusChange(id: string, status: FeedbackStatus) {
+    try {
+      await updateFeedback(id, { status, completed: status === 'done' })
+      loadFeedback()
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to update feedback',
+        variant: 'destructive',
+      })
+    }
+  }
+
+  const STATUS_OPTIONS: { value: FeedbackStatus; label: string }[] = [
+    { value: 'pending', label: 'Pending' },
+    { value: 'working_on', label: 'Working on' },
+    { value: 'done', label: 'Done' },
+  ]
+
+  async function loadComments(feedbackId: string) {
+    try {
+      const comments = await getFeedbackComments(feedbackId)
+      setCommentsByFeedback((prev) => ({ ...prev, [feedbackId]: comments }))
+    } catch {
+      setCommentsByFeedback((prev) => ({ ...prev, [feedbackId]: [] }))
+    }
+  }
+
+  async function handleAddComment(feedbackId: string) {
+    const content = newCommentByFeedback[feedbackId]?.trim()
+    if (!content) return
+    setLoading(true)
+    try {
+      await createFeedbackComment(feedbackId, content)
+      setNewCommentByFeedback((prev) => ({ ...prev, [feedbackId]: '' }))
+      await loadComments(feedbackId)
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to add comment',
+        variant: 'destructive',
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
@@ -259,6 +309,31 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
                         )}
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-2 flex-wrap">
+                            {(viewMeta.isFeedbackAdmin || (viewMeta.userId && feedback.owner_id === viewMeta.userId)) ? (
+                              <Select
+                                value={feedback.status || (feedback.completed ? 'done' : 'pending')}
+                                onChange={(e) => handleStatusChange(feedback.id, e.target.value as FeedbackStatus)}
+                                className="w-auto h-7 text-xs"
+                              >
+                                {STATUS_OPTIONS.map((opt) => (
+                                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                ))}
+                              </Select>
+                            ) : (
+                              (feedback.status || (feedback.completed ? 'done' : 'pending')) && (
+                                <span
+                                  className={`text-xs px-2 py-0.5 rounded ${
+                                    (feedback.status || (feedback.completed ? 'done' : 'pending')) === 'done'
+                                      ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-200'
+                                      : (feedback.status || '') === 'working_on'
+                                      ? 'bg-blue-500/20 text-blue-700 dark:text-blue-500'
+                                      : 'bg-gray-500/20 text-gray-700 dark:text-gray-400'
+                                  }`}
+                                >
+                                  {STATUS_OPTIONS.find((o) => o.value === (feedback.status || (feedback.completed ? 'done' : 'pending')))?.label || 'Pending'}
+                                </span>
+                              )
+                            )}
                             {feedback.priority && (
                               <span
                                 className={`text-xs px-2 py-0.5 rounded ${
@@ -286,6 +361,47 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
                           <p className={`text-sm whitespace-pre-wrap ${feedback.completed ? 'line-through text-muted-foreground' : ''}`}>
                             {feedback.note}
                           </p>
+                          <div className="mt-3 pt-3 border-t">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-xs"
+                              onClick={() => {
+                                if (expandedId === feedback.id) {
+                                  setExpandedId(null)
+                                } else {
+                                  setExpandedId(feedback.id)
+                                  loadComments(feedback.id)
+                                }
+                              }}
+                            >
+                              {expandedId === feedback.id ? 'Hide comments' : 'Comments'}
+                              {commentsByFeedback[feedback.id]?.length ? ` (${commentsByFeedback[feedback.id].length})` : ''}
+                            </Button>
+                            {expandedId === feedback.id && (
+                              <div className="mt-2 space-y-2">
+                                {(commentsByFeedback[feedback.id] || []).map((c) => (
+                                  <div key={c.id} className="text-xs bg-muted/50 rounded p-2">
+                                    <span className="font-medium text-muted-foreground">{c.user_email ?? 'Unknown'}</span>
+                                    <span className="text-muted-foreground ml-1">{format(new Date(c.created_at), 'MMM d, HH:mm')}</span>
+                                    <p className="mt-1 whitespace-pre-wrap">{c.content}</p>
+                                  </div>
+                                ))}
+                                <div className="flex gap-2">
+                                  <Textarea
+                                    placeholder="Add a comment..."
+                                    value={newCommentByFeedback[feedback.id] ?? ''}
+                                    onChange={(e) => setNewCommentByFeedback((prev) => ({ ...prev, [feedback.id]: e.target.value }))}
+                                    rows={2}
+                                    className="text-sm"
+                                  />
+                                  <Button size="sm" onClick={() => handleAddComment(feedback.id)} disabled={loading || !(newCommentByFeedback[feedback.id]?.trim())}>
+                                    Add
+                                  </Button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
                       <div className="flex items-center gap-1">

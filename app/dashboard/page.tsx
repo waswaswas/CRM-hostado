@@ -8,7 +8,7 @@ import { getDashboardStats } from '@/app/actions/stats'
 import { getSettings } from '@/app/actions/settings'
 import { formatStatus, getStatusColor } from '@/lib/status-utils'
 import Link from 'next/link'
-import { Calendar, Users, AlertCircle, TrendingUp, Clock, Tag, List } from 'lucide-react'
+import { Calendar, Users, AlertCircle, TrendingUp, Clock, Tag, List, LayoutDashboard, FileText } from 'lucide-react'
 import type { Client } from '@/types/database'
 import { RemindersCard } from '@/components/dashboard/reminders-card'
 import { RecentClients } from '@/components/dashboard/recent-clients'
@@ -186,6 +186,38 @@ export default async function DashboardPage() {
 
           {permContext.hasClients && (
             <RecentClients initialClients={clients} customStatuses={customStatuses} />
+          )}
+
+          {!permContext.hasReminders && !permContext.hasClients && (
+            <Card className="md:col-span-2">
+              <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+                <LayoutDashboard className="h-12 w-12 text-muted-foreground mb-4" />
+                <h2 className="text-xl font-semibold mb-2">Welcome to your Dashboard</h2>
+                <p className="text-muted-foreground max-w-md mb-6">
+                  Use the sidebar to navigate to Clients, Offers, Emails, To-Do List, or other sections you have access to.
+                </p>
+                <div className="flex flex-wrap gap-2 justify-center">
+                  <Link href="/clients">
+                    <Button variant="outline" size="sm" className="gap-2">
+                      <Users className="h-4 w-4" />
+                      Clients
+                    </Button>
+                  </Link>
+                  <Link href="/offers">
+                    <Button variant="outline" size="sm" className="gap-2">
+                      <FileText className="h-4 w-4" />
+                      Offers
+                    </Button>
+                  </Link>
+                  <Link href="/todo">
+                    <Button variant="outline" size="sm" className="gap-2">
+                      <List className="h-4 w-4" />
+                      To-Do List
+                    </Button>
+                  </Link>
+                </div>
+              </CardContent>
+            </Card>
           )}
         </div>
 

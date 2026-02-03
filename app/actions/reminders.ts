@@ -288,6 +288,7 @@ export async function markReminderDone(id: string, clientId: string | null) {
           metadata: {
             was_overdue: true,
             due_at: reminder.due_at,
+            is_completion: true,
           },
         })
       } catch (error) {

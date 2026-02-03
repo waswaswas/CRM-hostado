@@ -35,7 +35,7 @@ export type TodoTask = {
   created_by: string
   title: string
   description: string | null
-  status: 'to_do' | 'in_progress' | 'blocked' | 'done'
+  status: 'to_do' | 'in_progress' | 'blocked' | 'done' | 'info_needed'
   priority: 'low' | 'medium' | 'high' | 'critical'
   due_date: string | null
   assignee_id: string | null
@@ -219,6 +219,27 @@ export async function updateTodoProject(
   const { error } = await supabase
     .from('todo_projects')
     .update(payload)
+    .eq('id', projectId)
+
+  if (error) {
+    throw new Error(error.message)
+  }
+  revalidatePath('/todo')
+}
+
+export async function deleteTodoProject(projectId: string): Promise<void> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    throw new Error('Unauthorized')
+  }
+
+  const { error } = await supabase
+    .from('todo_projects')
+    .delete()
     .eq('id', projectId)
 
   if (error) {
@@ -616,6 +637,31 @@ export async function updateTodoTask(taskId: string, updates: TodoTaskUpdate): P
     data: { user },
   } = await supabase.auth.getUser()
   if (!user) throw new Error('Unauthorized')
+
+  const newAssigneeId = updates.assignee_id ?? updates.assigneeId
+  if (newAssigneeId !== undefined) {
+    const { data: current } = await supabase
+      .from('todo_tasks')
+      .select('assignee_id, list_id, title')
+      .eq('id', taskId)
+      .single()
+    if (current && current.assignee_id !== newAssigneeId && newAssigneeId) {
+      try {
+        const { createNotification } = await import('./notifications')
+        await createNotification({
+          type: 'task_assigned',
+          title: 'Task assigned to you',
+          message: `You were assigned to "${current.title || 'a task'}"`,
+          related_id: taskId,
+          related_type: 'todo_task',
+          metadata: { list_id: current.list_id },
+          owner_id: newAssigneeId,
+        })
+      } catch {
+        // Don't fail task update if notification fails (e.g. RLS)
+      }
+    }
+  }
 
   const updatePayload: Record<string, any> = {
     updated_at: new Date().toISOString(),
@@ -1073,6 +1119,19 @@ export async function getTotalSeconds(taskId: string): Promise<number> {
     total += effectiveByOriginalId.get(e.id) ?? effectiveEntrySeconds(e)
   }
   return total
+}
+
+export async function notifyTaskMention(taskId: string, mentionedUserId: string, taskTitle: string, listId: string): Promise<void> {
+  const { createNotification } = await import('./notifications')
+  await createNotification({
+    type: 'task_mention',
+    title: 'You were mentioned in a task',
+    message: `You were tagged in "${taskTitle || 'a task'}"`,
+    related_id: taskId,
+    related_type: 'todo_task',
+    metadata: { list_id: listId },
+    owner_id: mentionedUserId,
+  })
 }
 
 export async function deleteTimeEntry(entryId: string): Promise<void> {
