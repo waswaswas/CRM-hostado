@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { ArrowRight, Bell } from 'lucide-react'
+import { NotificationPreferencesButton } from './notification-preferences-dialog'
 import { getNotifications, getUnreadNotificationCount, type Notification } from '@/app/actions/notifications'
 import { useRouter } from 'next/navigation'
 import { format } from 'date-fns'
@@ -68,6 +69,10 @@ export function NotificationBadge() {
     }
     if (notification.related_type === 'client' && notification.related_id) {
       return `/clients/${notification.related_id}`
+    }
+    if (notification.related_type === 'todo_task' && notification.related_id) {
+      const listId = notification.metadata?.list_id
+      return listId ? `/todo?list=${listId}&task=${notification.related_id}` : '/todo'
     }
     return null
   }
@@ -145,9 +150,14 @@ export function NotificationBadge() {
           })
         )}
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={() => router.push('/notifications')} className="rounded-lg min-h-[44px] font-medium mx-1 mb-1">
-          View all notifications
-        </DropdownMenuItem>
+        <div className="px-2 py-1 flex flex-col gap-0.5">
+          <div className="flex items-center gap-2">
+            <NotificationPreferencesButton />
+          </div>
+          <DropdownMenuItem onClick={() => router.push('/notifications')} className="rounded-lg min-h-[40px] font-medium">
+            View all notifications
+          </DropdownMenuItem>
+        </div>
       </DropdownMenuContent>
     </DropdownMenu>
   )

@@ -9,7 +9,7 @@ ALTER TABLE public.notifications ADD COLUMN IF NOT EXISTS organization_id uuid R
 -- Drop the restrictive insert policy
 DROP POLICY IF EXISTS "Users can insert their own notifications" ON public.notifications;
 
--- Allow: (1) inserting for yourself, OR (2) inserting for another user when you're in the same org
+-- Allow: (1) inserting for yourself, OR (2) inserting for another user when both share an org
 -- In WITH CHECK for INSERT, column names refer to the new row being inserted
 CREATE POLICY "Users can insert their own notifications"
   ON public.notifications FOR INSERT
@@ -19,12 +19,14 @@ CREATE POLICY "Users can insert their own notifications"
     AND (
       owner_id = auth.uid()
       OR (
-        organization_id IS NOT NULL
-        AND EXISTS (
-          SELECT 1 FROM public.organization_members om
-          WHERE om.organization_id = notifications.organization_id
-            AND om.user_id = auth.uid()
-            AND om.is_active = true
+        -- Inserter and owner must share at least one org (for task_mention, task_assigned)
+        EXISTS (
+          SELECT 1 FROM public.organization_members om1
+          JOIN public.organization_members om2 ON om1.organization_id = om2.organization_id
+          WHERE om1.user_id = auth.uid()
+            AND om2.user_id = notifications.owner_id
+            AND om1.is_active = true
+            AND om2.is_active = true
         )
       )
     )

@@ -648,6 +648,8 @@ export async function updateTodoTask(taskId: string, updates: TodoTaskUpdate): P
     if (current && current.assignee_id !== newAssigneeId && newAssigneeId) {
       try {
         const { createNotification } = await import('./notifications')
+        const { getCurrentOrganizationId } = await import('./organizations')
+        const orgId = (await getCurrentOrganizationId()) || (await getOrganizationIdFromListId(current.list_id))
         await createNotification({
           type: 'task_assigned',
           title: 'Task assigned to you',
@@ -656,6 +658,7 @@ export async function updateTodoTask(taskId: string, updates: TodoTaskUpdate): P
           related_type: 'todo_task',
           metadata: { list_id: current.list_id },
           owner_id: newAssigneeId,
+          organization_id: orgId,
         })
       } catch {
         // Don't fail task update if notification fails (e.g. RLS)
@@ -1121,8 +1124,20 @@ export async function getTotalSeconds(taskId: string): Promise<number> {
   return total
 }
 
+export async function getOrganizationIdFromListId(listId: string): Promise<string | null> {
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from('todo_lists')
+    .select('organization_id')
+    .eq('id', listId)
+    .single()
+  return data?.organization_id ?? null
+}
+
 export async function notifyTaskMention(taskId: string, mentionedUserId: string, taskTitle: string, listId: string): Promise<void> {
   const { createNotification } = await import('./notifications')
+  const { getCurrentOrganizationId } = await import('./organizations')
+  const orgId = (await getCurrentOrganizationId()) || (await getOrganizationIdFromListId(listId))
   await createNotification({
     type: 'task_mention',
     title: 'You were mentioned in a task',
@@ -1131,6 +1146,7 @@ export async function notifyTaskMention(taskId: string, mentionedUserId: string,
     related_type: 'todo_task',
     metadata: { list_id: listId },
     owner_id: mentionedUserId,
+    organization_id: orgId,
   })
 }
 

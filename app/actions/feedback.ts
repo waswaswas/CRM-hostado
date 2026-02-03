@@ -6,7 +6,7 @@ import { getCurrentOrganizationId } from './organizations'
 
 const FEEDBACK_ADMIN_EMAIL = 'waswaswas28@gmail.com'
 
-export type FeedbackStatus = 'pending' | 'working_on' | 'done'
+export type FeedbackStatus = 'pending' | 'working_on' | 'done' | 'info_needed'
 
 export interface Feedback {
   id: string
@@ -161,6 +161,27 @@ export interface FeedbackComment {
   content: string
   created_at: string
   user_email?: string
+}
+
+/** Returns comment counts for each feedback ID. Used to show counts without loading full comments. */
+export async function getFeedbackCommentCounts(feedbackIds: string[]): Promise<Record<string, number>> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user || feedbackIds.length === 0) return {}
+
+  const { data: rows, error } = await supabase
+    .from('feedback_comments')
+    .select('feedback_id')
+    .in('feedback_id', feedbackIds)
+
+  if (error) return {}
+
+  const counts: Record<string, number> = {}
+  for (const id of feedbackIds) counts[id] = 0
+  for (const r of rows || []) {
+    counts[r.feedback_id] = (counts[r.feedback_id] ?? 0) + 1
+  }
+  return counts
 }
 
 export async function getFeedbackComments(feedbackId: string): Promise<FeedbackComment[]> {

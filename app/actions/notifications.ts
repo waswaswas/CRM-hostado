@@ -94,6 +94,8 @@ export async function createNotification(data: {
   metadata?: Record<string, any>
   /** Override owner (e.g. for task_assigned to assignee) */
   owner_id?: string
+  /** Override organization (required for task_mention/task_assigned when owner != current user) */
+  organization_id?: string | null
 }) {
   const supabase = await createClient()
   const {
@@ -104,7 +106,7 @@ export async function createNotification(data: {
     throw new Error('Not authenticated')
   }
 
-  const organizationId = await getCurrentOrganizationId()
+  let organizationId = data.organization_id ?? (await getCurrentOrganizationId())
   const ownerId = data.owner_id ?? user.id
 
   let prefs: NotificationPreferences | null = null
@@ -124,7 +126,7 @@ export async function createNotification(data: {
     .from('notifications')
     .insert({
       owner_id: ownerId,
-      organization_id: organizationId || null,
+      organization_id: organizationId ?? null,
       type: data.type,
       title: data.title,
       message: data.message || null,

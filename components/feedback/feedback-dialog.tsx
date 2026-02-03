@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Select } from '@/components/ui/select'
-import { createFeedback, updateFeedback, deleteFeedback, getFeedback, getFeedbackViewMeta, toggleFeedbackCompleted, getFeedbackComments, createFeedbackComment, type Feedback, type FeedbackStatus, type FeedbackComment } from '@/app/actions/feedback'
+import { createFeedback, updateFeedback, deleteFeedback, getFeedback, getFeedbackViewMeta, toggleFeedbackCompleted, getFeedbackComments, getFeedbackCommentCounts, createFeedbackComment, type Feedback, type FeedbackStatus, type FeedbackComment } from '@/app/actions/feedback'
 import { useToast } from '@/components/ui/toaster'
 import { Edit, Trash2, Plus, Check } from 'lucide-react'
 import { format } from 'date-fns'
@@ -19,11 +19,13 @@ interface FeedbackDialogProps {
 export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
   const { toast } = useToast()
   const [loading, setLoading] = useState(false)
+  const [loadingFeedback, setLoadingFeedback] = useState(false)
   const [feedbackList, setFeedbackList] = useState<Feedback[]>([])
   const [viewMeta, setViewMeta] = useState<{ isFeedbackAdmin: boolean; userId: string | null }>({ isFeedbackAdmin: false, userId: null })
   const [editingId, setEditingId] = useState<string | null>(null)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [commentsByFeedback, setCommentsByFeedback] = useState<Record<string, FeedbackComment[]>>({})
+  const [commentCountByFeedback, setCommentCountByFeedback] = useState<Record<string, number>>({})
   const [newCommentByFeedback, setNewCommentByFeedback] = useState<Record<string, string>>({})
   const [formData, setFormData] = useState({
     note: '',
@@ -37,12 +39,21 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
   }, [open])
 
   async function loadFeedback() {
+    setLoadingFeedback(true)
     try {
       const [data, meta] = await Promise.all([getFeedback(), getFeedbackViewMeta()])
       setFeedbackList(data)
       setViewMeta(meta)
+      if (data.length > 0) {
+        const counts = await getFeedbackCommentCounts(data.map((f) => f.id))
+        setCommentCountByFeedback(counts)
+      } else {
+        setCommentCountByFeedback({})
+      }
     } catch (error) {
       console.error('Failed to load feedback:', error)
+    } finally {
+      setLoadingFeedback(false)
     }
   }
 
@@ -162,6 +173,7 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
   const STATUS_OPTIONS: { value: FeedbackStatus; label: string }[] = [
     { value: 'pending', label: 'Pending' },
     { value: 'working_on', label: 'Working on' },
+    { value: 'info_needed', label: 'Info needed' },
     { value: 'done', label: 'Done' },
   ]
 
@@ -169,6 +181,7 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
     try {
       const comments = await getFeedbackComments(feedbackId)
       setCommentsByFeedback((prev) => ({ ...prev, [feedbackId]: comments }))
+      setCommentCountByFeedback((prev) => ({ ...prev, [feedbackId]: comments.length }))
     } catch {
       setCommentsByFeedback((prev) => ({ ...prev, [feedbackId]: [] }))
     }
@@ -181,7 +194,9 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
     try {
       await createFeedbackComment(feedbackId, content)
       setNewCommentByFeedback((prev) => ({ ...prev, [feedbackId]: '' }))
-      await loadComments(feedbackId)
+      const comments = await getFeedbackComments(feedbackId)
+      setCommentsByFeedback((prev) => ({ ...prev, [feedbackId]: comments }))
+      setCommentCountByFeedback((prev) => ({ ...prev, [feedbackId]: comments.length }))
     } catch (error) {
       toast({
         title: 'Error',
@@ -281,7 +296,11 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
               )}
             </div>
 
-            {feedbackList.length === 0 ? (
+            {loadingFeedback ? (
+              <p className="text-sm text-muted-foreground text-center py-8">
+                Loading feedback...
+              </p>
+            ) : feedbackList.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-8">
                 No feedback yet. Add your first note above.
               </p>
@@ -320,13 +339,15 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
                                 ))}
                               </Select>
                             ) : (
-                              (feedback.status || (feedback.completed ? 'done' : 'pending')) && (
+                                (feedback.status || (feedback.completed ? 'done' : 'pending')) && (
                                 <span
                                   className={`text-xs px-2 py-0.5 rounded ${
                                     (feedback.status || (feedback.completed ? 'done' : 'pending')) === 'done'
                                       ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-200'
                                       : (feedback.status || '') === 'working_on'
                                       ? 'bg-blue-500/20 text-blue-700 dark:text-blue-500'
+                                      : (feedback.status || '') === 'info_needed'
+                                      ? 'bg-amber-500/20 text-amber-700 dark:text-amber-400'
                                       : 'bg-gray-500/20 text-gray-700 dark:text-gray-400'
                                   }`}
                                 >
@@ -376,7 +397,8 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
                               }}
                             >
                               {expandedId === feedback.id ? 'Hide comments' : 'Comments'}
-                              {commentsByFeedback[feedback.id]?.length ? ` (${commentsByFeedback[feedback.id].length})` : ''}
+                              {(commentCountByFeedback[feedback.id] ?? commentsByFeedback[feedback.id]?.length ?? 0) > 0 &&
+                                ` (${commentCountByFeedback[feedback.id] ?? commentsByFeedback[feedback.id]?.length ?? 0})`}
                             </Button>
                             {expandedId === feedback.id && (
                               <div className="mt-2 space-y-2">
