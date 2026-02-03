@@ -1,10 +1,27 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { headers } from 'next/headers'
 import { revalidatePath } from 'next/cache'
 import type { Offer, OfferMetadata, OfferStatus, PaymentProvider } from '@/types/database'
 import { randomBytes } from 'crypto'
 import { getCurrentOrganizationId } from './organizations'
+
+/** Get the app base URL for links. Uses request origin when available; localhost locally, gms.hostado.net in production. */
+async function getAppBaseUrl(): Promise<string> {
+  if (process.env.NEXT_PUBLIC_APP_URL) {
+    return process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, '')
+  }
+  try {
+    const h = await headers()
+    const host = h.get('x-forwarded-host') || h.get('host')
+    const proto = h.get('x-forwarded-proto') || (host?.includes('localhost') ? 'http' : 'https')
+    if (host) return `${proto}://${host}`
+  } catch {
+    // headers() may be unavailable in some contexts
+  }
+  return process.env.NODE_ENV === 'production' ? 'https://gms.hostado.net' : 'http://localhost:3000'
+}
 
 /** Flatten metadata onto offer for app use. Handles missing metadata column. */
 function normalizeOffer(row: Record<string, unknown> | null | undefined): Offer {
@@ -618,7 +635,8 @@ export async function generatePaymentLink(offerId: string) {
 
   // Generate payment link if token exists
   if (offer.payment_token) {
-    const paymentLink = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/offers/${offerId}/pay?token=${offer.payment_token}`
+    const baseUrl = await getAppBaseUrl()
+    const paymentLink = `${baseUrl}/offers/${offerId}/pay?token=${offer.payment_token}`
     
     const { error: updateError } = await supabase
       .from('offers')

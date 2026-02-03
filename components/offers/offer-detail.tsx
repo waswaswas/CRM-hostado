@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Offer } from '@/types/database'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -10,6 +10,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Select } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { updateOffer, deleteOffer, generatePaymentLink, markOfferAsPaid, duplicateOffer, toggleOfferPublished, archiveOffer, restoreOffer } from '@/app/actions/offers'
 import { getPaymentHistory } from '@/app/actions/payments'
 import { useToast } from '@/components/ui/toaster'
@@ -19,6 +20,7 @@ import Link from 'next/link'
 import type { Payment } from '@/types/database'
 import { getClient } from '@/app/actions/clients'
 import type { Client } from '@/types/database'
+import { copyToClipboard } from '@/lib/utils'
 
 interface OfferDetailProps {
   initialOffer: Offer
@@ -32,6 +34,9 @@ export function OfferDetail({ initialOffer }: OfferDetailProps) {
   const [payments, setPayments] = useState<Payment[]>([])
   const [editing, setEditing] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [copyingLink, setCopyingLink] = useState(false)
+  const [copyFailedLink, setCopyFailedLink] = useState<string | null>(null)
+  const copyFailedInputRef = useRef<HTMLInputElement>(null)
   const [editValues, setEditValues] = useState({
     title: offer.title,
     description: offer.description || '',
@@ -59,6 +64,13 @@ export function OfferDetail({ initialOffer }: OfferDetailProps) {
     }
     loadData()
   }, [offer.id, offer.client_id])
+
+  useEffect(() => {
+    if (copyFailedLink && copyFailedInputRef.current) {
+      copyFailedInputRef.current.focus()
+      copyFailedInputRef.current.select()
+    }
+  }, [copyFailedLink])
 
   async function handleSave() {
     setLoading(true)
@@ -115,6 +127,7 @@ export function OfferDetail({ initialOffer }: OfferDetailProps) {
   async function handleCopyPaymentLink() {
     try {
       const link = await generatePaymentLink(offer.id)
+      setOffer((prev) => (prev ? { ...prev, payment_link: link } : prev))
       // Redirect user to the public payment page instead of using the clipboard API
       if (typeof window !== 'undefined') {
         window.open(link, '_blank')
@@ -133,20 +146,20 @@ export function OfferDetail({ initialOffer }: OfferDetailProps) {
   }
 
   async function handleCopyPaymentLinkToClipboard() {
+    setCopyingLink(true)
     try {
       const link = offer.payment_link || (await generatePaymentLink(offer.id))
-      if (typeof navigator !== 'undefined' && navigator.clipboard && link) {
-        await navigator.clipboard.writeText(link)
+      if (!offer.payment_link && link) {
+        setOffer((prev) => (prev ? { ...prev, payment_link: link } : prev))
+      }
+      const { ok } = await copyToClipboard(link)
+      if (ok) {
         toast({
           title: 'Success',
           description: 'Payment link copied to clipboard',
         })
       } else {
-        toast({
-          title: 'Error',
-          description: 'Clipboard is not available in this browser',
-          variant: 'destructive',
-        })
+        setCopyFailedLink(link)
       }
     } catch (error) {
       toast({
@@ -154,6 +167,8 @@ export function OfferDetail({ initialOffer }: OfferDetailProps) {
         description: error instanceof Error ? error.message : 'Failed to copy payment link',
         variant: 'destructive',
       })
+    } finally {
+      setCopyingLink(false)
     }
   }
 
@@ -343,9 +358,20 @@ export function OfferDetail({ initialOffer }: OfferDetailProps) {
                 </Button>
               )}
               {offer.payment_enabled && offer.payment_token && (
-                <Button variant="outline" onClick={handleCopyPaymentLink}>
-                  <Copy className="h-4 w-4 mr-2" />
-                  Copy Payment Link
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={copyingLink}
+                  onClick={() => void handleCopyPaymentLinkToClipboard()}
+                >
+                  {copyingLink ? (
+                    <>Loading…</>
+                  ) : (
+                    <>
+                      <Copy className="h-4 w-4 mr-2" />
+                      Copy Payment Link
+                    </>
+                  )}
                 </Button>
               )}
               {offer.status !== 'paid' && (
@@ -740,6 +766,44 @@ export function OfferDetail({ initialOffer }: OfferDetailProps) {
           </Card>
         </div>
       </div>
+
+      <Dialog open={copyFailedLink !== null} onOpenChange={(open) => !open && setCopyFailedLink(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Copy payment link</DialogTitle>
+            <DialogDescription>
+              The link could not be copied automatically (browsers block clipboard access after loading data). Click the Copy button below — it uses your click as permission to copy.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <Input
+              ref={copyFailedInputRef}
+              readOnly
+              value={copyFailedLink ?? ''}
+              className="font-mono text-sm"
+              onFocus={(e) => e.target.select()}
+            />
+            <div className="flex gap-2">
+              <Button
+                onClick={async () => {
+                  if (!copyFailedLink) return
+                  const { ok } = await copyToClipboard(copyFailedLink)
+                  if (ok) {
+                    toast({ title: 'Copied!', description: 'Payment link copied to clipboard' })
+                    setCopyFailedLink(null)
+                  } else {
+                    toast({ title: 'Copy failed', description: 'Select the link above and press Cmd+C (or Ctrl+C)', variant: 'destructive' })
+                  }
+                }}
+              >
+                <Copy className="h-4 w-4 mr-2" />
+                Copy
+              </Button>
+              <Button variant="outline" onClick={() => setCopyFailedLink(null)}>Close</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

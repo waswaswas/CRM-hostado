@@ -14,6 +14,7 @@ import { deleteOffer, duplicateOffer, generatePaymentLink, markOfferAsPaid, getO
 import { useToast } from '@/components/ui/toaster'
 import { getClients } from '@/app/actions/clients'
 import type { Client } from '@/types/database'
+import { copyToClipboard } from '@/lib/utils'
 
 interface OffersListProps {
   initialOffers: Offer[]
@@ -141,21 +142,26 @@ export function OffersList({ initialOffers }: OffersListProps) {
     }
   }
 
-  async function handleGeneratePaymentLink(offerId: string) {
+  async function handleCopyPaymentLink(offerId: string) {
     try {
       const link = await generatePaymentLink(offerId)
-      // Redirect user to the public payment page instead of copying to clipboard
-      if (typeof window !== 'undefined') {
-        window.open(link, '_blank')
+      const { ok } = await copyToClipboard(link)
+      if (ok) {
+        toast({
+          title: 'Success',
+          description: 'Payment link copied to clipboard',
+        })
+      } else {
+        toast({
+          title: 'Copy failed',
+          description: 'Open the offer and copy the link from the Payment Link field',
+          variant: 'destructive',
+        })
       }
-      toast({
-        title: 'Success',
-        description: 'Redirecting to payment page...',
-      })
     } catch (error) {
       toast({
         title: 'Error',
-        description: error instanceof Error ? error.message : 'Failed to generate payment link',
+        description: error instanceof Error ? error.message : 'Failed to copy payment link',
         variant: 'destructive',
       })
     }
@@ -359,7 +365,7 @@ export function OffersList({ initialOffers }: OffersListProps) {
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => handleGeneratePaymentLink(offer.id)}
+                        onClick={() => handleCopyPaymentLink(offer.id)}
                         title="Copy Payment Link"
                       >
                         <Copy className="h-4 w-4" />
