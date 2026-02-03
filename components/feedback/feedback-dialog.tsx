@@ -6,9 +6,9 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Select } from '@/components/ui/select'
-import { createFeedback, updateFeedback, deleteFeedback, getFeedback, getFeedbackViewMeta, toggleFeedbackCompleted, getFeedbackComments, getFeedbackCommentCounts, createFeedbackComment, type Feedback, type FeedbackStatus, type FeedbackComment } from '@/app/actions/feedback'
+import { createFeedback, updateFeedback, deleteFeedback, getFeedback, getFeedbackViewMeta, toggleFeedbackCompleted, getFeedbackComments, getFeedbackCommentCounts, createFeedbackComment, updateFeedbackComment, deleteFeedbackComment, type Feedback, type FeedbackStatus, type FeedbackComment } from '@/app/actions/feedback'
 import { useToast } from '@/components/ui/toaster'
-import { Edit, Trash2, Plus, Check } from 'lucide-react'
+import { Edit, Trash2, Plus, Check, Pencil } from 'lucide-react'
 import { format } from 'date-fns'
 
 interface FeedbackDialogProps {
@@ -26,6 +26,8 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [commentsByFeedback, setCommentsByFeedback] = useState<Record<string, FeedbackComment[]>>({})
   const [commentCountByFeedback, setCommentCountByFeedback] = useState<Record<string, number>>({})
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null)
+  const [editingCommentContent, setEditingCommentContent] = useState('')
   const [newCommentByFeedback, setNewCommentByFeedback] = useState<Record<string, string>>({})
   const [formData, setFormData] = useState({
     note: '',
@@ -201,6 +203,59 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
       toast({
         title: 'Error',
         description: error instanceof Error ? error.message : 'Failed to add comment',
+        variant: 'destructive',
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  function startEditComment(comment: FeedbackComment) {
+    setEditingCommentId(comment.id)
+    setEditingCommentContent(comment.content)
+  }
+
+  function cancelEditComment() {
+    setEditingCommentId(null)
+    setEditingCommentContent('')
+  }
+
+  async function handleSaveComment(commentId: string, feedbackId: string) {
+    const content = editingCommentContent.trim()
+    if (!content) return
+    setLoading(true)
+    try {
+      await updateFeedbackComment(commentId, content)
+      const comments = await getFeedbackComments(feedbackId)
+      setCommentsByFeedback((prev) => ({ ...prev, [feedbackId]: comments }))
+      setEditingCommentId(null)
+      setEditingCommentContent('')
+      toast({ title: 'Saved', description: 'Comment updated' })
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to update comment',
+        variant: 'destructive',
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleDeleteComment(commentId: string, feedbackId: string) {
+    if (!confirm('Delete this comment?')) return
+    setLoading(true)
+    try {
+      await deleteFeedbackComment(commentId)
+      const comments = await getFeedbackComments(feedbackId)
+      setCommentsByFeedback((prev) => ({ ...prev, [feedbackId]: comments }))
+      setCommentCountByFeedback((prev) => ({ ...prev, [feedbackId]: comments.length }))
+      if (editingCommentId === commentId) cancelEditComment()
+      toast({ title: 'Deleted', description: 'Comment removed' })
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to delete comment',
         variant: 'destructive',
       })
     } finally {
@@ -404,9 +459,57 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
                               <div className="mt-2 space-y-2">
                                 {(commentsByFeedback[feedback.id] || []).map((c) => (
                                   <div key={c.id} className="text-xs bg-muted/50 rounded p-2">
-                                    <span className="font-medium text-muted-foreground">{c.user_email ?? 'Unknown'}</span>
-                                    <span className="text-muted-foreground ml-1">{format(new Date(c.created_at), 'MMM d, HH:mm')}</span>
-                                    <p className="mt-1 whitespace-pre-wrap">{c.content}</p>
+                                    <div className="flex items-start justify-between gap-2">
+                                      <div className="flex-1 min-w-0">
+                                        <span className="font-medium text-muted-foreground">{c.user_email ?? 'Unknown'}</span>
+                                        <span className="text-muted-foreground ml-1">{format(new Date(c.created_at), 'MMM d, HH:mm')}</span>
+                                        {editingCommentId === c.id ? (
+                                          <div className="mt-2 space-y-2">
+                                            <Textarea
+                                              value={editingCommentContent}
+                                              onChange={(e) => setEditingCommentContent(e.target.value)}
+                                              rows={2}
+                                              className="text-sm"
+                                              autoFocus
+                                            />
+                                            <div className="flex gap-1">
+                                              <Button size="sm" variant="outline" onClick={cancelEditComment} disabled={loading}>
+                                                Cancel
+                                              </Button>
+                                              <Button size="sm" onClick={() => handleSaveComment(c.id, feedback.id)} disabled={loading || !editingCommentContent.trim()}>
+                                                Save
+                                              </Button>
+                                            </div>
+                                          </div>
+                                        ) : (
+                                          <p className="mt-1 whitespace-pre-wrap">{c.content}</p>
+                                        )}
+                                      </div>
+                                      {(viewMeta.isFeedbackAdmin || viewMeta.userId === c.user_id) && editingCommentId !== c.id && (
+                                        <div className="flex items-center gap-0.5 shrink-0">
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-6 w-6 p-0"
+                                            onClick={() => startEditComment(c)}
+                                            disabled={loading}
+                                            title="Edit"
+                                          >
+                                            <Pencil className="h-3 w-3" />
+                                          </Button>
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-6 w-6 p-0 text-destructive hover:text-destructive"
+                                            onClick={() => handleDeleteComment(c.id, feedback.id)}
+                                            disabled={loading}
+                                            title="Delete"
+                                          >
+                                            <Trash2 className="h-3 w-3" />
+                                          </Button>
+                                        </div>
+                                      )}
+                                    </div>
                                   </div>
                                 ))}
                                 <div className="flex gap-2">

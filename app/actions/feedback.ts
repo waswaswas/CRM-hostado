@@ -224,6 +224,46 @@ export async function createFeedbackComment(feedbackId: string, content: string)
   return { ...comment, user_email: user.email } as FeedbackComment
 }
 
+export async function updateFeedbackComment(commentId: string, content: string): Promise<FeedbackComment> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Not authenticated')
+
+  const isFeedbackAdmin = user.email === FEEDBACK_ADMIN_EMAIL
+  const query = supabase
+    .from('feedback_comments')
+    .update({ content: content.trim() })
+    .eq('id', commentId)
+
+  if (!isFeedbackAdmin) {
+    query.eq('user_id', user.id)
+  }
+
+  const { data: comment, error } = await query.select().single()
+
+  if (error) throw new Error(error.message)
+  revalidatePath('/dashboard')
+  return { ...comment, user_email: user.email } as FeedbackComment
+}
+
+export async function deleteFeedbackComment(commentId: string): Promise<void> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Not authenticated')
+
+  const isFeedbackAdmin = user.email === FEEDBACK_ADMIN_EMAIL
+  const query = supabase.from('feedback_comments').delete().eq('id', commentId)
+
+  if (!isFeedbackAdmin) {
+    query.eq('user_id', user.id)
+  }
+
+  const { error } = await query
+
+  if (error) throw new Error(error.message)
+  revalidatePath('/dashboard')
+}
+
 export async function deleteFeedback(id: string): Promise<void> {
   const supabase = await createClient()
   const {
