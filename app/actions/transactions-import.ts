@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAccount } from './accounts'
 import { createTransaction } from './transactions'
 import { revalidatePath } from 'next/cache'
+import { getCurrentOrganizationId } from './organizations'
 
 // Note: This requires the 'xlsx' package to be installed
 // Run: npm install xlsx
@@ -37,9 +38,21 @@ export async function importTransactionsFromExcel(formData: FormData): Promise<{
     throw new Error('Unauthorized')
   }
 
-  const file = formData.get('file') as File
-  if (!file) {
+  // Support both single file and multiple files (up to 8)
+  let files: File[] = []
+  const allFiles = formData.getAll('file')
+  if (allFiles.length > 0) {
+    files = allFiles.filter((f): f is File => f instanceof File)
+  } else {
+    const single = formData.get('file') as File | null
+    if (single) files = [single]
+  }
+
+  if (files.length === 0) {
     throw new Error('No file provided')
+  }
+  if (files.length > 8) {
+    throw new Error('Maximum 8 files allowed')
   }
 
   // Dynamically import xlsx library
@@ -56,58 +69,260 @@ export async function importTransactionsFromExcel(formData: FormData): Promise<{
   let accountsCreated = 0
   let transactionsCreated = 0
 
-  try {
-    // Read the Excel file with options to preserve dates and handle formatting
-    const arrayBuffer = await file.arrayBuffer()
-    const workbook = XLSX.read(arrayBuffer, { 
-      type: 'array', 
-      cellDates: true,  // Parse dates as Date objects
-      cellNF: false,    // Don't parse number formats
-      cellText: false,  // Use raw values
-      dateNF: 'yyyy-mm-dd' // Date format hint
-    })
-    const sheetName = workbook.SheetNames[0]
-    const worksheet = workbook.Sheets[sheetName]
-    
-    // First, try reading with header row and formatted values
-    let rawData = XLSX.utils.sheet_to_json(worksheet, { 
-      raw: false,  // Get formatted values for dates (strings)
-      defval: null, // Default value for empty cells
-      blankrows: false // Skip blank rows
-    }) as any[]
-    
-    // If that doesn't work well, try with raw values to get Date objects
-    if (rawData.length === 0 || !rawData[0] || Object.keys(rawData[0]).length === 0) {
-      rawData = XLSX.utils.sheet_to_json(worksheet, { 
-        raw: true,  // Get raw values (Date objects for dates)
-        defval: null,
-        blankrows: false
-      }) as any[]
-    }
-    
-    if (rawData.length === 0) {
-      throw new Error('Excel file is empty or has no data')
-    }
+  const organizationId = await getCurrentOrganizationId()
 
-    // Log first few rows to debug (always log for import issues)
-    if (rawData.length > 0) {
-      console.log('[IMPORT] Excel columns found:', Object.keys(rawData[0] || {}))
-      console.log('[IMPORT] First row sample:', JSON.stringify(rawData[0], null, 2))
-      if (rawData.length > 1) {
-        console.log('[IMPORT] Second row sample:', JSON.stringify(rawData[1], null, 2))
+  // Fetch existing accounts and clients once (shared across all files)
+  let accountsQuery = supabase.from('accounts').select('id, name').eq('owner_id', user.id)
+  if (organizationId) {
+    accountsQuery = accountsQuery.eq('organization_id', organizationId)
+  }
+  const { data: existingAccounts } = await accountsQuery
+
+  const accountsMap = new Map<string, string>()
+  existingAccounts?.forEach((acc: { id: string; name: string }) => {
+    accountsMap.set(acc.name.toLowerCase().trim(), acc.id)
+  })
+
+  const { data: existingClients } = await supabase
+    .from('clients')
+    .select('id, name, email')
+    .eq('owner_id', user.id)
+
+  const clientsMap = new Map<string, string>()
+  existingClients?.forEach((client: { id: string; name?: string | null; email?: string | null }) => {
+    const key = client.name?.toLowerCase().trim() || ''
+    if (key) clientsMap.set(key, client.id)
+    if (client.email) {
+      clientsMap.set(client.email.toLowerCase().trim(), client.id)
+    }
+  })
+
+  const errPrefix = (fileName: string, rowNum: number) =>
+    `${fileName}: Row ${rowNum}`
+
+  // Helper: normalize amount for transfer matching (handles "300", 300, "300.00")
+  const normalizeAmountForKey = (val: unknown): string => {
+    if (val == null || val === '') return ''
+    if (typeof val === 'number') return String(Math.abs(val))
+    const s = String(val).replace(/[^\d.,\-]/g, '').replace(',', '.')
+    const n = parseFloat(s)
+    return isNaN(n) ? '' : String(Math.abs(n))
+  }
+
+  // Helper: parse any date value to YYYY-MM-DD (for transfer pairing consistency)
+  const parseDateToStr = (val: unknown): string => {
+    if (!val || val === '') return ''
+    if (val instanceof Date) return val.toISOString().split('T')[0]
+    if (typeof val === 'number' && val > 40000) {
+      const excelEpoch = new Date(1899, 11, 30)
+      return new Date(excelEpoch.getTime() + val * 86400000).toISOString().split('T')[0]
+    }
+    if (typeof val === 'string') {
+      const s = val.trim()
+      if (s.match(/\d{4}-\d{2}-\d{2}/)) return s.substring(0, 10)
+      const isoMatch = s.match(/(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})/)
+      if (isoMatch) {
+        const d = new Date(parseInt(isoMatch[1]), parseInt(isoMatch[2]) - 1, parseInt(isoMatch[3]))
+        return d.toISOString().split('T')[0]
+      }
+      const dateMatch = s.match(/(\d{1,2})\s+(\w+)\s+(\d{4})/)
+      if (dateMatch) {
+        const months: Record<string, number> = {
+          'jan': 0, 'feb': 1, 'mar': 2, 'apr': 3, 'may': 4, 'jun': 5,
+          'jul': 6, 'aug': 7, 'sep': 8, 'oct': 9, 'nov': 10, 'dec': 11,
+        }
+        const month = months[dateMatch[2].toLowerCase().slice(0, 3)]
+        if (month !== undefined) {
+          const d = new Date(parseInt(dateMatch[3]), month, parseInt(dateMatch[1]))
+          return d.toISOString().split('T')[0]
+        }
+      }
+      const parsed = new Date(s)
+      if (!isNaN(parsed.getTime())) return parsed.toISOString().split('T')[0]
+    }
+    return ''
+  }
+
+  // Build transfer destination map from Transfers files (from_account -> to_account by date+amount)
+  const transfersFromToMap = new Map<string, string>()
+  const transfersToFromMap = new Map<string, string>()
+  const isTransfersFile = (name: string) =>
+    name.toLowerCase().includes('transfer') && !name.toLowerCase().includes('transaction')
+
+  try {
+    // First pass: process Transfers files to build the lookup map
+    for (const file of files) {
+      if (!isTransfersFile(file.name)) continue
+
+      const arrayBuffer = await file.arrayBuffer()
+      const workbook = XLSX.read(arrayBuffer, { type: 'array', cellDates: true })
+      const worksheet = workbook.Sheets[workbook.SheetNames[0]]
+      const rows = XLSX.utils.sheet_to_json(worksheet, { raw: false, defval: null }) as any[]
+
+      for (const row of rows) {
+        const fromAccount = (row.from_account_name || row.fromAccountName || '').toString().trim()
+        const toAccount = (row.to_account_name || row.toAccountName || '').toString().trim()
+        if (!fromAccount || !toAccount) continue
+
+        const dateVal = row.transferred_at || row.transferredAt || row.date
+        let dateStr = ''
+        if (dateVal instanceof Date) {
+          dateStr = dateVal.toISOString().split('T')[0]
+        } else if (typeof dateVal === 'string' && dateVal.match(/\d{4}-\d{2}-\d{2}/)) {
+          dateStr = dateVal.substring(0, 10)
+        } else if (typeof dateVal === 'number' && dateVal > 40000) {
+          const excelEpoch = new Date(1899, 11, 30)
+          dateStr = new Date(excelEpoch.getTime() + dateVal * 86400000).toISOString().split('T')[0]
+        }
+        if (!dateStr) continue
+
+        const amountKey = normalizeAmountForKey(row.amount)
+        if (!amountKey) continue
+
+        const key = `${dateStr}|${amountKey}|${fromAccount.toLowerCase().trim()}`
+        transfersFromToMap.set(key, toAccount)
+        transfersToFromMap.set(`${dateStr}|${amountKey}|${toAccount.toLowerCase().trim()}`, fromAccount)
       }
     }
 
-    // Normalize column names - handle case-insensitive matching and common variations
-    const normalizeKey = (key: string): string => {
-      return key.toLowerCase().trim().replace(/\s+/g, '_').replace(/[^\w]/g, '')
-    }
+    const hasTransactionsFiles = files.some((f) => !isTransfersFile(f.name))
 
-    // Build column mapping from first row
-    const columnMap: Record<string, string> = {}
-    const firstRow = rawData[0] as any
-    if (firstRow) {
-      Object.keys(firstRow).forEach((key) => {
+    // Second pass: process all files
+    for (const file of files) {
+      if (isTransfersFile(file.name)) {
+        // Import from Transfers file only when it's the ONLY file type (no Transactions files)
+        // Otherwise we use it only as lookup map for Transactions transfer pairing
+        if (!hasTransactionsFiles) {
+          // Import transfers directly from Transfers file
+          const arrayBuffer = await file.arrayBuffer()
+          const workbook = XLSX.read(arrayBuffer, { type: 'array', cellDates: true })
+          const worksheet = workbook.Sheets[workbook.SheetNames[0]]
+          const rows = XLSX.utils.sheet_to_json(worksheet, { raw: false, defval: null }) as any[]
+
+          for (let idx = 0; idx < rows.length; idx++) {
+            const row = rows[idx]
+            const fromAccountName = (row.from_account_name || row.fromAccountName || '').toString().trim()
+            const toAccountName = (row.to_account_name || row.toAccountName || '').toString().trim()
+            if (!fromAccountName || !toAccountName) continue
+
+            const dateStr = parseDateToStr(row.transferred_at || row.transferredAt || row.date)
+            if (!dateStr) {
+              errors.push(`${errPrefix(file.name, idx + 2)}: Missing or invalid date`)
+              continue
+            }
+
+            const amount = parseFloat(normalizeAmountForKey(row.amount)) || 0
+            if (amount <= 0) {
+              errors.push(`${errPrefix(file.name, idx + 2)}: Invalid amount`)
+              continue
+            }
+
+            let fromAccountId = accountsMap.get(fromAccountName.toLowerCase())
+            if (!fromAccountId) {
+              try {
+                const newAcc = await createAccount({ name: fromAccountName, type: 'bank', currency: 'BGN', opening_balance: 0 })
+                fromAccountId = newAcc.id
+                accountsMap.set(fromAccountName.toLowerCase(), newAcc.id)
+                accountsCreated++
+              } catch (e) {
+                errors.push(`${errPrefix(file.name, idx + 2)}: Failed to create account "${fromAccountName}"`)
+                continue
+              }
+            }
+
+            let toAccountId = accountsMap.get(toAccountName.toLowerCase())
+            if (!toAccountId) {
+              try {
+                const newAcc = await createAccount({ name: toAccountName, type: 'bank', currency: 'BGN', opening_balance: 0 })
+                toAccountId = newAcc.id
+                accountsMap.set(toAccountName.toLowerCase(), newAcc.id)
+                accountsCreated++
+              } catch (e) {
+                errors.push(`${errPrefix(file.name, idx + 2)}: Failed to create account "${toAccountName}"`)
+                continue
+              }
+            }
+
+            if (fromAccountId === toAccountId) {
+              errors.push(`${errPrefix(file.name, idx + 2)}: Transfer source and destination must be different`)
+              continue
+            }
+
+            try {
+              await createTransaction({
+                account_id: fromAccountId,
+                type: 'transfer',
+                transfer_to_account_id: toAccountId,
+                date: dateStr,
+                amount,
+                currency: (row.from_currency_code || row.to_currency_code || 'BGN').toString().trim() || 'BGN',
+                category: 'Transfer',
+                payment_method: 'bank_transfer',
+                description: (row.description || 'Transfer').toString().trim() || undefined,
+                reference: (row.reference || '').toString().trim() || undefined,
+              })
+              transactionsCreated++
+            } catch (e) {
+              const msg = e instanceof Error ? e.message : 'Unknown error'
+              if (msg.includes('unique') || msg.includes('duplicate')) {
+                errors.push(`${errPrefix(file.name, idx + 2)}: Transfer already exists, skipping`)
+              } else {
+                errors.push(`${errPrefix(file.name, idx + 2)}: ${msg}`)
+              }
+            }
+          }
+        }
+        continue
+      }
+
+      // Read the Excel file with options to preserve dates and handle formatting
+      const arrayBuffer = await file.arrayBuffer()
+      const workbook = XLSX.read(arrayBuffer, { 
+        type: 'array', 
+        cellDates: true,  // Parse dates as Date objects
+        cellNF: false,    // Don't parse number formats
+        cellText: false,  // Use raw values
+        dateNF: 'yyyy-mm-dd' // Date format hint
+      })
+      const sheetName = workbook.SheetNames[0]
+      const worksheet = workbook.Sheets[sheetName]
+      
+      // First, try reading with header row and formatted values
+      let rawData = XLSX.utils.sheet_to_json(worksheet, { 
+        raw: false,  // Get formatted values for dates (strings)
+        defval: null, // Default value for empty cells
+        blankrows: false // Skip blank rows
+      }) as any[]
+      
+      // If that doesn't work well, try with raw values to get Date objects
+      if (rawData.length === 0 || !rawData[0] || Object.keys(rawData[0]).length === 0) {
+        rawData = XLSX.utils.sheet_to_json(worksheet, { 
+          raw: true,  // Get raw values (Date objects for dates)
+          defval: null,
+          blankrows: false
+        }) as any[]
+      }
+      
+      if (rawData.length === 0) {
+        errors.push(`${file.name}: Excel file is empty or has no data`)
+        continue
+      }
+
+      // Log first few rows to debug (always log for import issues)
+      if (rawData.length > 0) {
+        console.log(`[IMPORT] ${file.name} - Excel columns found:`, Object.keys(rawData[0] || {}))
+      }
+
+      // Normalize column names - handle case-insensitive matching and common variations
+      const normalizeKey = (key: string): string => {
+        return key.toLowerCase().trim().replace(/\s+/g, '_').replace(/[^\w]/g, '')
+      }
+
+      // Build column mapping from first row
+      const columnMap: Record<string, string> = {}
+      const firstRow = rawData[0] as any
+      if (firstRow) {
+        Object.keys(firstRow).forEach((key) => {
         const normalized = normalizeKey(key)
         // Date columns - check for paid_at, date, created_at, etc.
         if (normalized.includes('paid_at') || normalized.includes('paidat') || 
@@ -154,71 +369,45 @@ export async function importTransactionsFromExcel(formData: FormData): Promise<{
           columnMap[key] = 'Amount'
         }
       })
-    }
-    
-    // Handle duplicate column names (e.g., "Type" and "type") - prefer capitalized version
-    const duplicateKeys = Object.keys(columnMap).filter(k => {
-      const normalized = normalizeKey(k)
-      return Object.keys(columnMap).some(other => other !== k && normalizeKey(other) === normalized)
-    })
-    
-    // If we have duplicates, prefer the one that matches our expected format better
-    duplicateKeys.forEach(key => {
-      const normalized = normalizeKey(key)
-      const betterMatch = Object.keys(columnMap).find(k => 
-        k !== key && normalizeKey(k) === normalized && 
-        (k === 'Date' || k === 'Number' || k === 'Type' || k === 'Category' || 
-         k === 'Account' || k === 'Contact' || k === 'Document' || k === 'Amount')
-      )
-      if (betterMatch && betterMatch !== key) {
-        delete columnMap[key]
       }
-    })
-
-    // Transform data to use normalized column names
-    const data: ExcelTransactionRow[] = rawData.map((row: any) => {
-      const transformed: any = {}
-      Object.keys(row).forEach((key) => {
-        const mappedKey = columnMap[key]
-        if (mappedKey) {
-          transformed[mappedKey] = row[key]
-        }
-        // Also keep original key for fallback
-        transformed[key] = row[key]
+      
+      // Handle duplicate column names (e.g., "Type" and "type") - prefer capitalized version
+      const duplicateKeys = Object.keys(columnMap).filter(k => {
+        const normalized = normalizeKey(k)
+        return Object.keys(columnMap).some(other => other !== k && normalizeKey(other) === normalized)
       })
-      return transformed
-    })
+      
+      // If we have duplicates, prefer the one that matches our expected format better
+      duplicateKeys.forEach(key => {
+        const normalized = normalizeKey(key)
+        const betterMatch = Object.keys(columnMap).find(k => 
+          k !== key && normalizeKey(k) === normalized && 
+          (k === 'Date' || k === 'Number' || k === 'Type' || k === 'Category' || 
+           k === 'Account' || k === 'Contact' || k === 'Document' || k === 'Amount')
+        )
+        if (betterMatch && betterMatch !== key) {
+          delete columnMap[key]
+        }
+      })
 
-    // Get existing accounts to avoid duplicates
-    const { data: existingAccounts } = await supabase
-      .from('accounts')
-      .select('id, name')
-      .eq('owner_id', user.id)
+      // Transform data to use normalized column names
+      const data: ExcelTransactionRow[] = rawData.map((row: any) => {
+        const transformed: any = {}
+        Object.keys(row).forEach((key) => {
+          const mappedKey = columnMap[key]
+          if (mappedKey) {
+            transformed[mappedKey] = row[key]
+          }
+          // Also keep original key for fallback
+          transformed[key] = row[key]
+        })
+        return transformed
+      })
 
-    const accountsMap = new Map<string, string>()
-    existingAccounts?.forEach((acc: { id: string; name: string }) => {
-      accountsMap.set(acc.name.toLowerCase().trim(), acc.id)
-    })
-
-    // Get existing clients for contact matching
-    const { data: existingClients } = await supabase
-      .from('clients')
-      .select('id, name, email')
-      .eq('owner_id', user.id)
-
-    const clientsMap = new Map<string, string>()
-    existingClients?.forEach((client: { id: string; name?: string | null; email?: string | null }) => {
-      const key = client.name?.toLowerCase().trim() || ''
-      if (key) clientsMap.set(key, client.id)
-      if (client.email) {
-        clientsMap.set(client.email.toLowerCase().trim(), client.id)
-      }
-    })
-
-    // Process each row
-    for (let i = 0; i < data.length; i++) {
-      const row = data[i]
-      try {
+      // Process each row
+      for (let i = 0; i < data.length; i++) {
+        const row = data[i]
+        try {
         // Parse date - try multiple approaches
         let dateStr: string | null = null
         
@@ -360,19 +549,19 @@ export async function importTransactionsFromExcel(formData: FormData): Promise<{
           } else {
             // Log the actual row data for debugging
             console.log(`[IMPORT] Row ${i + 2} date parse failed. Value:`, dateValue, 'Type:', typeof dateValue, 'Row:', JSON.stringify(row))
-            errors.push(`Row ${i + 2}: Invalid date format: "${dateValue}". Available columns: ${Object.keys(row).slice(0, 5).join(', ')}`)
+            errors.push(`${errPrefix(file.name, i + 2)}: Invalid date format: "${dateValue}". Available columns: ${Object.keys(row).slice(0, 5).join(', ')}`)
             continue
           }
         } else {
           // Date is missing or null - provide helpful error with available columns
           console.log(`[IMPORT] Row ${i + 2} missing date. Full row:`, JSON.stringify(row))
-          errors.push(`Row ${i + 2}: Missing date. Available columns: ${Object.keys(row).join(', ')}. First few values: ${JSON.stringify(Object.fromEntries(Object.entries(row).slice(0, 3)))}`)
+          errors.push(`${errPrefix(file.name, i + 2)}: Missing date. Available columns: ${Object.keys(row).join(', ')}. First few values: ${JSON.stringify(Object.fromEntries(Object.entries(row).slice(0, 3)))}`)
           continue
         }
         
         if (!dateStr) {
           console.log(`[IMPORT] Row ${i + 2} dateStr is null after parsing. dateValue:`, dateValue)
-          errors.push(`Row ${i + 2}: Could not parse date from value: ${JSON.stringify(dateValue)}`)
+          errors.push(`${errPrefix(file.name, i + 2)}: Could not parse date from value: ${JSON.stringify(dateValue)}`)
           continue
         }
 
@@ -404,15 +593,15 @@ export async function importTransactionsFromExcel(formData: FormData): Promise<{
           
           amount = Math.abs(parseFloat(cleaned) || 0)
         } else if (amountValue === null || amountValue === undefined || amountValue === '') {
-          errors.push(`Row ${i + 2}: Missing amount. Available columns: ${Object.keys(row).filter(k => k.toLowerCase().includes('amount') || k.toLowerCase().includes('sum')).join(', ')}`)
+          errors.push(`${errPrefix(file.name, i + 2)}: Missing amount. Available columns: ${Object.keys(row).filter(k => k.toLowerCase().includes('amount') || k.toLowerCase().includes('sum')).join(', ')}`)
           continue
         } else {
-          errors.push(`Row ${i + 2}: Invalid amount format: ${JSON.stringify(amountValue)}`)
+          errors.push(`${errPrefix(file.name, i + 2)}: Invalid amount format: ${JSON.stringify(amountValue)}`)
           continue
         }
 
         if (amount === 0) {
-          errors.push(`Row ${i + 2}: Amount is zero, skipping`)
+          errors.push(`${errPrefix(file.name, i + 2)}: Amount is zero, skipping`)
           continue
         }
 
@@ -444,7 +633,7 @@ export async function importTransactionsFromExcel(formData: FormData): Promise<{
         // Get or create account - try account_name if Account is not available
         let accountName = (row.Account || row.account_name || '').toString().trim()
         if (!accountName || accountName === 'N/A') {
-          errors.push(`Row ${i + 2}: Missing account name. Available: ${Object.keys(row).filter(k => k.toLowerCase().includes('account')).join(', ')}`)
+          errors.push(`${errPrefix(file.name, i + 2)}: Missing account name. Available: ${Object.keys(row).filter(k => k.toLowerCase().includes('account')).join(', ')}`)
           continue
         }
 
@@ -472,7 +661,103 @@ export async function importTransactionsFromExcel(formData: FormData): Promise<{
             accountsMap.set(accountName.toLowerCase(), accountId)
             accountsCreated++
           } catch (error) {
-            errors.push(`Row ${i + 2}: Failed to create account "${accountName}": ${error instanceof Error ? error.message : 'Unknown error'}`)
+            errors.push(`${errPrefix(file.name, i + 2)}: Failed to create account "${accountName}": ${error instanceof Error ? error.message : 'Unknown error'}`)
+            continue
+          }
+        }
+
+        // For transfers: resolve destination account. Transactions come as pairs:
+        // expense-transfer (source) + income-transfer (destination), or use Transfers file.
+        let transferToAccountId: string | undefined
+        if (transactionType === 'transfer') {
+          const amountKey = normalizeAmountForKey(row.Amount ?? row.amount)
+          const isExpenseTransfer = typeStr.includes('expense-transfer') || (typeStr.includes('transfer') && !typeStr.includes('income'))
+          const isIncomeTransfer = typeStr.includes('income-transfer')
+
+          if (isExpenseTransfer) {
+            // Source = current row. Check next row for income-transfer with same date+amount
+            const nextRow = data[i + 1]
+            const nextType = (nextRow?.Type || nextRow?.type || '').toString().toLowerCase()
+            const nextDateMatch = parseDateToStr(nextRow?.Date ?? nextRow?.paid_at ?? nextRow?.paidAt)
+            const nextAmountKey = nextRow ? normalizeAmountForKey(nextRow.Amount ?? nextRow.amount) : ''
+            if (nextType.includes('income-transfer') && nextDateMatch === dateStr && nextAmountKey === amountKey) {
+              const destName = (nextRow.Account || nextRow.account_name || '').toString().trim()
+              if (destName) transferToAccountId = accountsMap.get(destName.toLowerCase())
+              if (!transferToAccountId && destName) {
+                try {
+                  const newAcc = await createAccount({ name: destName, type: 'bank', currency: 'BGN', opening_balance: 0 })
+                  transferToAccountId = newAcc.id
+                  accountsMap.set(destName.toLowerCase(), newAcc.id)
+                  accountsCreated++
+                } catch {
+                  transferToAccountId = undefined
+                }
+              }
+            }
+            if (!transferToAccountId) {
+              const fromKey = `${dateStr}|${amountKey}|${accountName.toLowerCase().trim()}`
+              const toName = transfersFromToMap.get(fromKey)
+              if (toName) {
+                transferToAccountId = accountsMap.get(toName.toLowerCase())
+                if (!transferToAccountId && toName) {
+                  try {
+                    const newAcc = await createAccount({ name: toName, type: 'bank', currency: 'BGN', opening_balance: 0 })
+                    transferToAccountId = newAcc.id
+                    accountsMap.set(toName.toLowerCase(), newAcc.id)
+                    accountsCreated++
+                  } catch {
+                    transferToAccountId = undefined
+                  }
+                }
+              }
+            }
+          } else if (isIncomeTransfer) {
+            // Destination = current row. Check if previous row was expense-transfer (already processed)
+            const prevRow = data[i - 1]
+            const prevType = (prevRow?.Type || prevRow?.type || '').toString().toLowerCase()
+            const prevDateMatch = prevRow ? parseDateToStr(prevRow.Date ?? prevRow.paid_at ?? prevRow.paidAt) : ''
+            const prevAmountKey = prevRow ? normalizeAmountForKey(prevRow.Amount ?? prevRow.amount) : ''
+            if (prevType.includes('expense-transfer') && prevDateMatch === dateStr && prevAmountKey === amountKey) {
+              continue // Already processed as pair when we handled expense-transfer
+            }
+            // Orphan income-transfer: use Transfers file to find source
+            const toKey = `${dateStr}|${amountKey}|${accountName.toLowerCase().trim()}`
+            const fromName = transfersToFromMap.get(toKey)
+            if (fromName) {
+              let sourceId = accountsMap.get(fromName.toLowerCase())
+              if (!sourceId && fromName) {
+                try {
+                  const newAcc = await createAccount({ name: fromName, type: 'bank', currency: 'BGN', opening_balance: 0 })
+                  sourceId = newAcc.id
+                  accountsMap.set(fromName.toLowerCase(), newAcc.id)
+                  accountsCreated++
+                } catch {
+                  sourceId = undefined
+                }
+              }
+              if (sourceId) {
+                accountId = sourceId
+                transferToAccountId = accountsMap.get(accountName.toLowerCase())
+                if (!transferToAccountId && accountName) {
+                  try {
+                    const newAcc = await createAccount({ name: accountName, type: 'bank', currency: 'BGN', opening_balance: 0 })
+                    transferToAccountId = newAcc.id
+                    accountsMap.set(accountName.toLowerCase(), newAcc.id)
+                    accountsCreated++
+                  } catch {
+                    transferToAccountId = undefined
+                  }
+                }
+              }
+            }
+          }
+
+          if (!transferToAccountId) {
+            errors.push(`${errPrefix(file.name, i + 2)}: Transfer destination account is required. Add the Transfers file (e.g. Transfers-*.xlsx) to the upload, or ensure transfer rows appear as consecutive pairs (expense-transfer + income-transfer).`)
+            continue
+          }
+          if (transferToAccountId === accountId) {
+            errors.push(`${errPrefix(file.name, i + 2)}: Transfer source and destination must be different accounts`)
             continue
           }
         }
@@ -553,7 +838,7 @@ export async function importTransactionsFromExcel(formData: FormData): Promise<{
               .limit(1)
 
             if (existing && existing.length > 0) {
-              errors.push(`Row ${i + 2}: Transaction ${transactionNumber} already exists, skipping`)
+              errors.push(`${errPrefix(file.name, i + 2)}: Transaction ${transactionNumber} already exists, skipping`)
               continue
             }
           }
@@ -570,21 +855,23 @@ export async function importTransactionsFromExcel(formData: FormData): Promise<{
             reference: reference,
             contact_id: contactId,
             number: transactionNumber || undefined, // Use provided number if available
+            transfer_to_account_id: transactionType === 'transfer' ? transferToAccountId : undefined,
           })
           transactionsCreated++
         } catch (error) {
           const errorMsg = error instanceof Error ? error.message : 'Unknown error'
           // Check if it's a duplicate number error
           if (errorMsg.includes('unique') || errorMsg.includes('duplicate')) {
-            errors.push(`Row ${i + 2}: Transaction number ${transactionNumber} already exists, skipping`)
+            errors.push(`${errPrefix(file.name, i + 2)}: Transaction number ${transactionNumber} already exists, skipping`)
           } else {
-            errors.push(`Row ${i + 2}: Failed to create transaction: ${errorMsg}`)
+            errors.push(`${errPrefix(file.name, i + 2)}: Failed to create transaction: ${errorMsg}`)
           }
         }
       } catch (error) {
-        errors.push(`Row ${i + 2}: Error processing row: ${error instanceof Error ? error.message : 'Unknown error'}`)
+        errors.push(`${errPrefix(file.name, i + 2)}: Error processing row: ${error instanceof Error ? error.message : 'Unknown error'}`)
       }
     }
+    } // end for (const file of files)
 
     revalidatePath('/accounting/transactions')
     revalidatePath('/accounting/accounts')

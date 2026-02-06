@@ -8,9 +8,11 @@ import { useToast } from '@/components/ui/toaster'
 import { Upload, FileSpreadsheet, AlertCircle, CheckCircle2 } from 'lucide-react'
 import { importTransactionsFromExcel } from '@/app/actions/transactions-import'
 
+const MAX_FILES = 8
+
 export function ImportTransactions() {
   const { toast } = useToast()
-  const [file, setFile] = useState<File | null>(null)
+  const [files, setFiles] = useState<File[]>([])
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<{
     success: boolean
@@ -21,26 +23,40 @@ export function ImportTransactions() {
   } | null>(null)
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = e.target.files?.[0]
-    if (selectedFile) {
-      if (selectedFile.name.endsWith('.xlsx') || selectedFile.name.endsWith('.xls')) {
-        setFile(selectedFile)
-        setResult(null)
-      } else {
+    const selectedFiles = Array.from(e.target.files ?? [])
+    if (selectedFiles.length > 0) {
+      const valid = selectedFiles.filter(
+        (f) => f.name.endsWith('.xlsx') || f.name.endsWith('.xls')
+      )
+      const invalid = selectedFiles.filter(
+        (f) => !f.name.endsWith('.xlsx') && !f.name.endsWith('.xls')
+      )
+      if (invalid.length > 0) {
         toast({
           title: 'Invalid file type',
-          description: 'Please select an Excel file (.xlsx or .xls)',
+          description: `${invalid.length} file(s) skipped. Please select Excel files (.xlsx or .xls)`,
           variant: 'destructive',
         })
       }
+      if (valid.length > MAX_FILES) {
+        toast({
+          title: 'Too many files',
+          description: `Maximum ${MAX_FILES} files allowed. Using first ${MAX_FILES}.`,
+          variant: 'destructive',
+        })
+        setFiles(valid.slice(0, MAX_FILES))
+      } else {
+        setFiles(valid)
+      }
+      setResult(null)
     }
   }
 
   const handleImport = async () => {
-    if (!file) {
+    if (files.length === 0) {
       toast({
-        title: 'No file selected',
-        description: 'Please select an Excel file to import',
+        title: 'No files selected',
+        description: 'Please select one or more Excel files to import',
         variant: 'destructive',
       })
       return
@@ -51,7 +67,7 @@ export function ImportTransactions() {
 
     try {
       const formData = new FormData()
-      formData.append('file', file)
+      files.forEach((file) => formData.append('file', file))
 
       const result = await importTransactionsFromExcel(formData)
       setResult(result)
@@ -91,9 +107,9 @@ export function ImportTransactions() {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle>Upload Excel File</CardTitle>
+          <CardTitle>Upload Excel Files</CardTitle>
           <CardDescription>
-            Upload your transactions Excel file. The file should contain columns: Date, Number, Type, Category, Account, Contact, Document, Amount
+            Upload up to {MAX_FILES} Excel files. Options: (1) All together: Transactions 1–6 + Transfers for full import. (2) Transfers only: upload just Transfers-*.xlsx to add missing transfers. Transactions need: Date, Number, Type, Category, Account, Contact, Document, Amount
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -102,13 +118,14 @@ export function ImportTransactions() {
               <Input
                 type="file"
                 accept=".xlsx,.xls"
+                multiple
                 onChange={handleFileChange}
                 disabled={loading}
               />
             </div>
             <Button
               onClick={handleImport}
-              disabled={!file || loading}
+              disabled={files.length === 0 || loading}
             >
               {loading ? (
                 'Importing...'
@@ -121,11 +138,23 @@ export function ImportTransactions() {
             </Button>
           </div>
 
-          {file && (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <FileSpreadsheet className="h-4 w-4" />
-              <span>{file.name}</span>
-              <span className="text-xs">({(file.size / 1024).toFixed(2)} KB)</span>
+          {files.length > 0 && (
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-muted-foreground">
+                {files.length} file{files.length !== 1 ? 's' : ''} selected:
+              </p>
+              <ul className="flex flex-wrap gap-2">
+                {files.map((f, i) => (
+                  <li
+                    key={i}
+                    className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/50 rounded px-2 py-1"
+                  >
+                    <FileSpreadsheet className="h-4 w-4 shrink-0" />
+                    <span>{f.name}</span>
+                    <span className="text-xs">({(f.size / 1024).toFixed(2)} KB)</span>
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
 

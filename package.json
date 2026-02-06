@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "import:transactions:hostado": "node scripts/import_transactions_hostado.js",
     "dev": "next dev",
     "build": "next build",
     "start": "node scripts/start-server.js",
