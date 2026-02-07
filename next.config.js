@@ -3,7 +3,10 @@ const nextConfig = {
   // Fix vendor-chunks resolution for lucide-react (client detail page, etc.)
   transpilePackages: ['lucide-react'],
   // Prevent Supabase from being bundled into a missing vendor-chunk (fixes MODULE_NOT_FOUND ./vendor-chunks/@supabase.js)
-  serverExternalPackages: ['@supabase/ssr', '@supabase/supabase-js'],
+  // Next.js 14 uses serverComponentsExternalPackages inside experimental
+  experimental: {
+    serverComponentsExternalPackages: ['@supabase/ssr', '@supabase/supabase-js'],
+  },
   // Output configuration for cPanel
   output: 'standalone',
   

@@ -74,7 +74,8 @@ export function AccountsList({ accounts: initialAccounts }: AccountsListProps) {
       <div className="space-y-2">
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
           {filteredAccounts.map((account) => (
-            <Card key={account.id} className="hover:shadow-md transition-shadow">
+            <Link key={account.id} href={`/accounting/accounts/${account.id}`}>
+            <Card className="hover:shadow-md transition-shadow h-full cursor-pointer">
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
@@ -117,6 +118,7 @@ export function AccountsList({ accounts: initialAccounts }: AccountsListProps) {
                 </div>
               </CardContent>
             </Card>
+            </Link>
           ))}
         </div>
 

@@ -13,6 +13,10 @@ export async function getTransactions(filters?: {
   end_date?: string
   contact_id?: string
   accounting_customer_id?: string
+  /** When true, only return transactions with category='Transfer' */
+  transfers_only?: boolean
+  /** When true, exclude transactions with category='Transfer' */
+  exclude_transfers?: boolean
 }): Promise<TransactionWithRelations[]> {
   const supabase = await createClient()
   const {
@@ -52,7 +56,9 @@ export async function getTransactions(filters?: {
       *,
       account:accounts(*),
       contact:clients(*),
-      accounting_customer:accounting_customers!left(*)
+      accounting_customer:accounting_customers!left(*),
+      transfer_to_account:accounts!transactions_transfer_to_account_id_fkey(id, name),
+      transfer_transaction:transactions!transactions_transfer_transaction_id_fkey(account_id, account:accounts(id, name))
     `)
     .eq('organization_id', organizationId)
 
@@ -64,7 +70,11 @@ export async function getTransactions(filters?: {
     query = query.eq('type', filters.type)
   }
 
-  if (filters?.category) {
+  if (filters?.transfers_only) {
+    query = query.eq('category', 'Transfer')
+  } else if (filters?.exclude_transfers) {
+    query = query.or('category.neq.Transfer,category.is.null')
+  } else if (filters?.category) {
     query = query.eq('category', filters.category)
   }
 
@@ -102,7 +112,11 @@ export async function getTransactions(filters?: {
     if (filters?.type) {
       fallbackQuery = fallbackQuery.eq('type', filters.type)
     }
-    if (filters?.category) {
+    if (filters?.transfers_only) {
+      fallbackQuery = fallbackQuery.eq('category', 'Transfer')
+    } else if (filters?.exclude_transfers) {
+      fallbackQuery = fallbackQuery.or('category.neq.Transfer,category.is.null')
+    } else if (filters?.category) {
       fallbackQuery = fallbackQuery.eq('category', filters.category)
     }
     if (filters?.start_date) {
@@ -135,6 +149,9 @@ export async function getTransactions(filters?: {
 
     // Manually fetch related accounts, clients, and accounting customers
     const accountIds = Array.from(new Set(simpleData?.map((t: any) => t.account_id).filter(Boolean) || []))
+    const transferToAccountIds = Array.from(new Set(simpleData?.map((t: any) => t.transfer_to_account_id).filter(Boolean) || []))
+    const transferTransactionIds = Array.from(new Set(simpleData?.map((t: any) => t.transfer_transaction_id).filter(Boolean) || []))
+    let allAccountIds = Array.from(new Set([...accountIds, ...transferToAccountIds]))
     const contactIds = Array.from(new Set(simpleData?.map((t: any) => t.contact_id).filter(Boolean) || []))
     const accountingCustomerIds = Array.from(new Set(simpleData?.map((t: any) => t.accounting_customer_id).filter(Boolean) || []))
 
@@ -142,14 +159,33 @@ export async function getTransactions(filters?: {
     const contactsMap = new Map()
     const accountingCustomersMap = new Map()
 
-    if (accountIds.length > 0) {
+    if (transferTransactionIds.length > 0) {
+      const { data: sourceTx } = await supabase
+        .from('transactions')
+        .select('id, account_id')
+        .in('id', transferTransactionIds)
+      if (sourceTx?.length) {
+        allAccountIds = Array.from(new Set([...allAccountIds, ...sourceTx.map((t: any) => t.account_id)]))
+      }
+    }
+
+    if (allAccountIds.length > 0) {
       const { data: accounts } = await supabase
         .from('accounts')
         .select('*')
-        .in('id', accountIds)
+        .in('id', allAccountIds)
         .eq('organization_id', organizationId)
 
       accounts?.forEach((acc: any) => accountsMap.set(acc.id, acc))
+    }
+
+    const sourceAccountByTransferTxId = new Map<string, string>()
+    if (transferTransactionIds.length > 0) {
+      const { data: sourceTx } = await supabase
+        .from('transactions')
+        .select('id, account_id')
+        .in('id', transferTransactionIds)
+      sourceTx?.forEach((t: any) => sourceAccountByTransferTxId.set(t.id, t.account_id))
     }
 
     if (contactIds.length > 0) {
@@ -173,12 +209,18 @@ export async function getTransactions(filters?: {
     }
 
     // Combine data
-    data = simpleData?.map((t: any) => ({
-      ...t,
-      account: accountsMap.get(t.account_id),
-      contact: contactsMap.get(t.contact_id),
-      accounting_customer: accountingCustomersMap.get(t.accounting_customer_id),
-    }))
+    data = simpleData?.map((t: any) => {
+      const sourceAccountId = t.transfer_transaction_id ? sourceAccountByTransferTxId.get(t.transfer_transaction_id) : null
+      const sourceAccount = sourceAccountId ? accountsMap.get(sourceAccountId) : null
+      return {
+        ...t,
+        account: accountsMap.get(t.account_id),
+        contact: contactsMap.get(t.contact_id),
+        accounting_customer: accountingCustomersMap.get(t.accounting_customer_id),
+        transfer_to_account: t.transfer_to_account_id ? { id: t.transfer_to_account_id, name: accountsMap.get(t.transfer_to_account_id)?.name } : null,
+        transfer_from_account: sourceAccount ? { id: sourceAccount.id, name: sourceAccount.name } : null,
+      }
+    })
   } else if (error) {
     console.error('Error fetching transactions:', error)
     if (error.message?.includes('relation') && error.message?.includes('does not exist')) {

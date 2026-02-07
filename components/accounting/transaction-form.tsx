@@ -19,7 +19,8 @@ interface TransactionFormProps {
   accounts: Account[]
   accountingCustomers: AccountingCustomerWithRelations[]
   initialCustomerId?: string
-  initialType?: 'income' | 'expense'
+  initialType?: 'income' | 'expense' | 'transfer'
+  initialAccountId?: string
 }
 
 export function TransactionForm({
@@ -28,6 +29,7 @@ export function TransactionForm({
   accountingCustomers,
   initialCustomerId,
   initialType,
+  initialAccountId,
 }: TransactionFormProps) {
   const { toast } = useToast()
   const router = useRouter()
@@ -38,7 +40,7 @@ export function TransactionForm({
   )
 
   const [formData, setFormData] = useState({
-    account_id: transaction?.account_id || accounts[0]?.id || '',
+    account_id: transaction?.account_id || initialAccountId || accounts[0]?.id || '',
     type: transaction?.type || initialType || 'expense',
     date: transaction?.date || format(new Date(), 'yyyy-MM-dd'),
     amount: transaction?.amount || 0,

@@ -208,6 +208,9 @@ export interface TransactionWithRelations extends Transaction {
   account?: Account
   contact?: Client
   accounting_customer?: AccountingCustomer
+  transfer_to_account?: { id: string; name: string }
+  transfer_from_account?: { id: string; name: string }
+  transfer_transaction?: { account_id: string; account?: { id: string; name: string } }
 }
 
 // Accounting Customers (separate from CRM clients)
