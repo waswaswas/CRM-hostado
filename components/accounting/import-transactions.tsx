@@ -5,9 +5,10 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { useToast } from '@/components/ui/toaster'
-import { Upload, FileSpreadsheet, AlertCircle, CheckCircle2, RefreshCw } from 'lucide-react'
+import { Upload, FileSpreadsheet, AlertCircle, CheckCircle2, RefreshCw, Trash2 } from 'lucide-react'
 import { importTransactionsFromExcel } from '@/app/actions/transactions-import'
 import { recalculateAccountBalances } from '@/app/actions/accounts'
+import { deleteAllTransactions } from '@/app/actions/transactions'
 
 const MAX_FILES = 8
 
@@ -16,6 +17,7 @@ export function ImportTransactions() {
   const [files, setFiles] = useState<File[]>([])
   const [loading, setLoading] = useState(false)
   const [recalcLoading, setRecalcLoading] = useState(false)
+  const [deleteLoading, setDeleteLoading] = useState(false)
   const [result, setResult] = useState<{
     success: boolean
     message: string
@@ -132,13 +134,38 @@ export function ImportTransactions() {
     }
   }
 
+  const handleDeleteAll = async () => {
+    if (!confirm('Delete ALL transactions and reset account balances? This cannot be undone.')) return
+    setDeleteLoading(true)
+    try {
+      const { deleted, error } = await deleteAllTransactions()
+      if (error) {
+        toast({ title: 'Delete Failed', description: error, variant: 'destructive' })
+      } else {
+        toast({
+          title: 'All Transactions Deleted',
+          description: deleted > 0 ? `Deleted ${deleted} transaction(s). Balances reset.` : 'No transactions to delete.',
+        })
+        setResult(null)
+      }
+    } catch (err) {
+      toast({
+        title: 'Delete Failed',
+        description: err instanceof Error ? err.message : 'Unknown error',
+        variant: 'destructive',
+      })
+    } finally {
+      setDeleteLoading(false)
+    }
+  }
+
   return (
     <div className="space-y-6">
       <Card>
         <CardHeader>
           <CardTitle>Upload Excel Files</CardTitle>
           <CardDescription>
-            Upload up to {MAX_FILES} Excel files. Options: (1) All together: Transactions 1–6 + Transfers for full import. (2) Transfers only: upload just Transfers-*.xlsx to add missing transfers. Transactions need: Date, Number, Type, Category, Account, Contact, Document, Amount. After import, use Recalculate Balances if totals don&apos;t match.
+            For a fresh import: 1) Delete all transactions below. 2) Select all 7 files (Transactions 1–6 + Transfers). 3) Import. 4) Recalculate Balances. Transfers file is used as lookup when Transactions files are present.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -174,6 +201,19 @@ export function ImportTransactions() {
                 <>
                   <RefreshCw className="mr-2 h-4 w-4" />
                   Recalculate Balances
+                </>
+              )}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleDeleteAll}
+              disabled={deleteLoading}
+              className="text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300"
+            >
+              {deleteLoading ? 'Deleting...' : (
+                <>
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Delete All Transactions
                 </>
               )}
             </Button>

@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
-import { Search, Plus, ArrowUpDown, Upload, UserPlus, Trash2, Eye } from 'lucide-react'
+import { Search, Plus, ArrowUpDown, Upload, Download, UserPlus, Trash2, Eye } from 'lucide-react'
 import { format } from 'date-fns'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -31,8 +31,48 @@ export function TransactionsList({ initialTransactions, accounts }: Transactions
   const [filterAccount, setFilterAccount] = useState<string>('all')
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest')
   const [deleting, setDeleting] = useState(false)
+  const [exporting, setExporting] = useState(false)
   const [editingTransaction, setEditingTransaction] = useState<TransactionWithRelations | null>(null)
   const [editDialogOpen, setEditDialogOpen] = useState(false)
+
+  const handleExport = async () => {
+    setExporting(true)
+    try {
+      const xlsxModule = await import('xlsx')
+      const XLSX = xlsxModule.default ?? xlsxModule
+      const rows = filteredAndSorted.map((t) => ({
+        type: t.type,
+        number: t.number,
+        paid_at: t.date,
+        amount: t.amount,
+        currency_code: t.currency || 'BGN',
+        account_name: t.account?.name ?? '',
+        category_name: t.category ?? '',
+        contact_email: t.contact?.email ?? t.contact?.name ?? '',
+        description: t.description ?? '',
+        reference: t.reference ?? '',
+        payment_method: t.payment_method ?? '',
+        transfer_to_account: t.transfer_to_account?.name ?? '',
+      }))
+      const ws = XLSX.utils.json_to_sheet(rows)
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, ws, 'Transactions')
+      const filename = `transactions-export-${new Date().toISOString().slice(0, 10)}.xlsx`
+      XLSX.writeFile(wb, filename)
+      toast({
+        title: 'Export complete',
+        description: `Exported ${rows.length} transaction(s) to ${filename}`,
+      })
+    } catch (err) {
+      toast({
+        title: 'Export failed',
+        description: err instanceof Error ? err.message : 'Unknown error',
+        variant: 'destructive',
+      })
+    } finally {
+      setExporting(false)
+    }
+  }
 
   const filteredAndSorted = useMemo(() => {
     let filtered = transactions.filter((transaction) => {
@@ -242,6 +282,16 @@ export function TransactionsList({ initialTransactions, accounts }: Transactions
                 <span className="hidden sm:inline">Import</span>
               </Button>
             </Link>
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full sm:w-auto whitespace-nowrap"
+              onClick={handleExport}
+              disabled={exporting || filteredAndSorted.length === 0}
+            >
+              <Download className="mr-2 h-4 w-4" />
+              <span className="hidden sm:inline">{exporting ? 'Exporting...' : 'Export'}</span>
+            </Button>
             <Link href="/accounting/transactions/new">
               <Button size="sm" className="w-full sm:w-auto whitespace-nowrap">
                 <Plus className="mr-2 h-4 w-4" />

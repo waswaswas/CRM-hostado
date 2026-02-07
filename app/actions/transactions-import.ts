@@ -196,9 +196,14 @@ export async function importTransactionsFromExcel(formData: FormData): Promise<{
       isTransfersFile(a.name) && !isTransfersFile(b.name) ? -1 : !isTransfersFile(a.name) && isTransfersFile(b.name) ? 1 : 0
     )
 
+    const hasTransactionsFiles = sortedFiles.some((f) => !isTransfersFile(f.name))
+
     for (const file of sortedFiles) {
       if (isTransfersFile(file.name)) {
-        // Always import from Transfers file when present
+        // When we have Transactions files, use Transfers ONLY as lookup map (preserve source numbers)
+        // When Transfers is the only file, import from it
+        if (hasTransactionsFiles) continue
+        // Import from Transfers file
           // Import transfers directly from Transfers file
           const arrayBuffer = await file.arrayBuffer()
           const workbook = XLSX.read(arrayBuffer, { type: 'array', cellDates: true })
@@ -678,6 +683,7 @@ export async function importTransactionsFromExcel(formData: FormData): Promise<{
         // expense-transfer (source) + income-transfer (destination), or use Transfers file.
         // Support both formats: "income-transfer"/"expense-transfer" and "income"/"expense" with category "Transfer"
         let transferToAccountId: string | undefined
+        let transferToIncomeNumber: string | undefined
         if (transactionType === 'transfer') {
           const amountKey = normalizeAmountForKey(row.Amount ?? row.amount)
           const isExpenseTransfer = typeStr.includes('expense-transfer') || (typeStr.includes('expense') && categoryStr.includes('transfer'))
@@ -691,6 +697,7 @@ export async function importTransactionsFromExcel(formData: FormData): Promise<{
             const nextDateMatch = parseDateToStr(nextRow?.Date ?? nextRow?.paid_at ?? nextRow?.paidAt)
             const nextAmountKey = nextRow ? normalizeAmountForKey(nextRow.Amount ?? nextRow.amount) : ''
             const nextIsIncomeTransfer = nextType.includes('income-transfer') || (nextType.includes('income') && nextCat.includes('transfer'))
+            let incomeRowForNumber: typeof nextRow | null = null
             if (nextIsIncomeTransfer && nextDateMatch === dateStr && nextAmountKey === amountKey) {
               const destName = (nextRow.Account || nextRow.account_name || '').toString().trim()
               if (destName) transferToAccountId = accountsMap.get(destName.toLowerCase())
@@ -702,6 +709,43 @@ export async function importTransactionsFromExcel(formData: FormData): Promise<{
                   accountsCreated++
                 } catch {
                   transferToAccountId = undefined
+                }
+              }
+              if (transferToAccountId) incomeRowForNumber = nextRow
+            }
+            if (incomeRowForNumber) {
+              const num = (incomeRowForNumber.Number ?? incomeRowForNumber.number ?? '').toString().trim()
+              if (num && (num.startsWith('TRA-') || !isNaN(parseInt(num)))) transferToIncomeNumber = num.startsWith('TRA-') ? num : `TRA-${String(parseInt(num)).padStart(5, '0')}`
+            }
+            // If next row isn't the pair, search full sheet for matching income-transfer
+            if (!transferToAccountId) {
+              const match = data.find((r, j) => {
+                if (j === i) return false
+                const t = (r.Type || r.type || '').toString().toLowerCase()
+                const c = (r.Category || r.category_name || '').toString().toLowerCase()
+                const isInc = t.includes('income-transfer') || (t.includes('income') && c.includes('transfer'))
+                if (!isInc) return false
+                const d = parseDateToStr(r.Date ?? r.paid_at ?? r.paidAt)
+                const a = normalizeAmountForKey(r.Amount ?? r.amount)
+                return d === dateStr && a === amountKey
+              })
+              if (match) {
+                const destName = (match.Account || match.account_name || '').toString().trim()
+                if (destName) transferToAccountId = accountsMap.get(destName.toLowerCase())
+                if (!transferToAccountId && destName) {
+                  try {
+                    const newAcc = await createAccount({ name: destName, type: 'bank', currency: 'BGN', opening_balance: 0 })
+                    transferToAccountId = newAcc.id
+                    accountsMap.set(destName.toLowerCase(), newAcc.id)
+                    accountsCreated++
+                  } catch {
+                    transferToAccountId = undefined
+                  }
+                }
+                if (transferToAccountId) {
+                  incomeRowForNumber = match
+                  const num = (match.Number ?? match.number ?? '').toString().trim()
+                  if (num && (num.startsWith('TRA-') || !isNaN(parseInt(num)))) transferToIncomeNumber = num.startsWith('TRA-') ? num : `TRA-${String(parseInt(num)).padStart(5, '0')}`
                 }
               }
             }
@@ -851,11 +895,25 @@ export async function importTransactionsFromExcel(formData: FormData): Promise<{
               .from('transactions')
               .select('id')
               .eq('owner_id', user.id)
+              .eq('organization_id', organizationId)
               .eq('number', transactionNumber)
               .limit(1)
 
             if (existing && existing.length > 0) {
               errors.push(`${errPrefix(file.name, i + 2)}: Transaction ${transactionNumber} already exists, skipping`)
+              continue
+            }
+          }
+          if (transactionType === 'transfer' && transferToIncomeNumber) {
+            const { data: existingTo } = await supabase
+              .from('transactions')
+              .select('id')
+              .eq('owner_id', user.id)
+              .eq('organization_id', organizationId)
+              .eq('number', transferToIncomeNumber)
+              .limit(1)
+            if (existingTo && existingTo.length > 0) {
+              errors.push(`${errPrefix(file.name, i + 2)}: Transfer income number ${transferToIncomeNumber} already exists, skipping`)
               continue
             }
           }
@@ -871,8 +929,9 @@ export async function importTransactionsFromExcel(formData: FormData): Promise<{
             description: description,
             reference: reference,
             contact_id: contactId,
-            number: transactionNumber || undefined, // Use provided number if available
+            number: transactionNumber || undefined,
             transfer_to_account_id: transactionType === 'transfer' ? transferToAccountId : undefined,
+            transfer_to_number: transactionType === 'transfer' ? transferToIncomeNumber : undefined,
           })
           transactionsCreated++
           if (transactionType === 'transfer' && transferToAccountId) {

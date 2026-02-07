@@ -320,6 +320,8 @@ export async function createTransaction(data: {
   accounting_customer_id?: string
   number?: string
   transfer_to_account_id?: string
+  /** When creating a transfer, use this number for the income side (preserves source numbers on import) */
+  transfer_to_number?: string
   attachment_url?: string
 }): Promise<Transaction> {
   const supabase = await createClient()
@@ -415,7 +417,7 @@ export async function createTransaction(data: {
     }
 
     // Create the "to" transaction (income)
-    const toNumber = await generateTransactionNumber()
+    const toNumber = data.transfer_to_number || (await generateTransactionNumber())
     const { data: toTransaction, error: toError } = await supabase
       .from('transactions')
       .insert({
@@ -679,7 +681,79 @@ export async function deleteTransaction(id: string): Promise<void> {
   revalidatePath('/accounting/transactions')
 }
 
+/** Delete all transactions for the current organization and reset account balances. Use before full re-import. */
+export async function deleteAllTransactions(): Promise<{ deleted: number; error?: string }> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
 
+  if (!user) {
+    throw new Error('Unauthorized')
+  }
+
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    throw new Error('No organization selected')
+  }
+
+  // Get all transaction IDs for the org
+  const { data: txIds, error: fetchError } = await supabase
+    .from('transactions')
+    .select('id')
+    .eq('organization_id', organizationId)
+
+  if (fetchError) {
+    return { deleted: 0, error: fetchError.message }
+  }
+
+  const count = txIds?.length ?? 0
+  if (count === 0) {
+    // Reset balances anyway
+    const { data: accounts } = await supabase
+      .from('accounts')
+      .select('id, opening_balance')
+      .eq('organization_id', organizationId)
+    for (const acc of accounts || []) {
+      await supabase
+        .from('accounts')
+        .update({ current_balance: acc.opening_balance ?? 0, updated_at: new Date().toISOString() })
+        .eq('id', acc.id)
+        .eq('organization_id', organizationId)
+    }
+    revalidatePath('/accounting/transactions')
+    revalidatePath('/accounting/accounts')
+    return { deleted: 0 }
+  }
+
+  // Delete all transactions (trigger will update balances per row; we'll reset after)
+  const { error: deleteError } = await supabase
+    .from('transactions')
+    .delete()
+    .eq('organization_id', organizationId)
+
+  if (deleteError) {
+    return { deleted: 0, error: deleteError.message }
+  }
+
+  // Reset all account balances to opening_balance
+  const { data: accounts } = await supabase
+    .from('accounts')
+    .select('id, opening_balance')
+    .eq('organization_id', organizationId)
+
+  for (const acc of accounts || []) {
+    await supabase
+      .from('accounts')
+      .update({ current_balance: acc.opening_balance ?? 0, updated_at: new Date().toISOString() })
+      .eq('id', acc.id)
+      .eq('organization_id', organizationId)
+  }
+
+  revalidatePath('/accounting/transactions')
+  revalidatePath('/accounting/accounts')
+  return { deleted: count }
+}
 
 
 
