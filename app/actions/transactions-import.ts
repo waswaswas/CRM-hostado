@@ -185,14 +185,20 @@ export async function importTransactionsFromExcel(formData: FormData): Promise<{
       }
     }
 
-    const hasTransactionsFiles = files.some((f) => !isTransfersFile(f.name))
+    // Track transfers created from Transfers file to avoid duplicates when Transactions also has them
+    const transfersCreatedKey = (fromId: string, toId: string, date: string, amt: string) =>
+      `${fromId}|${toId}|${date}|${amt}`
 
-    // Second pass: process all files
-    for (const file of files) {
+    const createdTransfersSet = new Set<string>()
+
+    // Second pass: process Transfers files first (create accounts), then Transactions
+    const sortedFiles = [...files].sort((a, b) =>
+      isTransfersFile(a.name) && !isTransfersFile(b.name) ? -1 : !isTransfersFile(a.name) && isTransfersFile(b.name) ? 1 : 0
+    )
+
+    for (const file of sortedFiles) {
       if (isTransfersFile(file.name)) {
-        // Import from Transfers file only when it's the ONLY file type (no Transactions files)
-        // Otherwise we use it only as lookup map for Transactions transfer pairing
-        if (!hasTransactionsFiles) {
+        // Always import from Transfers file when present
           // Import transfers directly from Transfers file
           const arrayBuffer = await file.arrayBuffer()
           const workbook = XLSX.read(arrayBuffer, { type: 'array', cellDates: true })
@@ -248,6 +254,8 @@ export async function importTransactionsFromExcel(formData: FormData): Promise<{
               continue
             }
 
+            const key = transfersCreatedKey(fromAccountId, toAccountId, dateStr, String(amount))
+            if (createdTransfersSet.has(key)) continue
             try {
               await createTransaction({
                 account_id: fromAccountId,
@@ -261,6 +269,7 @@ export async function importTransactionsFromExcel(formData: FormData): Promise<{
                 description: (row.description || 'Transfer').toString().trim() || undefined,
                 reference: (row.reference || '').toString().trim() || undefined,
               })
+              createdTransfersSet.add(key)
               transactionsCreated++
             } catch (e) {
               const msg = e instanceof Error ? e.message : 'Unknown error'
@@ -271,7 +280,6 @@ export async function importTransactionsFromExcel(formData: FormData): Promise<{
               }
             }
           }
-        }
         continue
       }
 
@@ -668,19 +676,22 @@ export async function importTransactionsFromExcel(formData: FormData): Promise<{
 
         // For transfers: resolve destination account. Transactions come as pairs:
         // expense-transfer (source) + income-transfer (destination), or use Transfers file.
+        // Support both formats: "income-transfer"/"expense-transfer" and "income"/"expense" with category "Transfer"
         let transferToAccountId: string | undefined
         if (transactionType === 'transfer') {
           const amountKey = normalizeAmountForKey(row.Amount ?? row.amount)
-          const isExpenseTransfer = typeStr.includes('expense-transfer') || (typeStr.includes('transfer') && !typeStr.includes('income'))
-          const isIncomeTransfer = typeStr.includes('income-transfer')
+          const isExpenseTransfer = typeStr.includes('expense-transfer') || (typeStr.includes('expense') && categoryStr.includes('transfer'))
+          const isIncomeTransfer = typeStr.includes('income-transfer') || (typeStr.includes('income') && categoryStr.includes('transfer'))
 
           if (isExpenseTransfer) {
             // Source = current row. Check next row for income-transfer with same date+amount
             const nextRow = data[i + 1]
             const nextType = (nextRow?.Type || nextRow?.type || '').toString().toLowerCase()
+            const nextCat = (nextRow?.Category || nextRow?.category_name || '').toString().toLowerCase()
             const nextDateMatch = parseDateToStr(nextRow?.Date ?? nextRow?.paid_at ?? nextRow?.paidAt)
             const nextAmountKey = nextRow ? normalizeAmountForKey(nextRow.Amount ?? nextRow.amount) : ''
-            if (nextType.includes('income-transfer') && nextDateMatch === dateStr && nextAmountKey === amountKey) {
+            const nextIsIncomeTransfer = nextType.includes('income-transfer') || (nextType.includes('income') && nextCat.includes('transfer'))
+            if (nextIsIncomeTransfer && nextDateMatch === dateStr && nextAmountKey === amountKey) {
               const destName = (nextRow.Account || nextRow.account_name || '').toString().trim()
               if (destName) transferToAccountId = accountsMap.get(destName.toLowerCase())
               if (!transferToAccountId && destName) {
@@ -715,9 +726,11 @@ export async function importTransactionsFromExcel(formData: FormData): Promise<{
             // Destination = current row. Check if previous row was expense-transfer (already processed)
             const prevRow = data[i - 1]
             const prevType = (prevRow?.Type || prevRow?.type || '').toString().toLowerCase()
+            const prevCat = (prevRow?.Category || prevRow?.category_name || '').toString().toLowerCase()
             const prevDateMatch = prevRow ? parseDateToStr(prevRow.Date ?? prevRow.paid_at ?? prevRow.paidAt) : ''
             const prevAmountKey = prevRow ? normalizeAmountForKey(prevRow.Amount ?? prevRow.amount) : ''
-            if (prevType.includes('expense-transfer') && prevDateMatch === dateStr && prevAmountKey === amountKey) {
+            const prevIsExpenseTransfer = prevType.includes('expense-transfer') || (prevType.includes('expense') && prevCat.includes('transfer'))
+            if (prevIsExpenseTransfer && prevDateMatch === dateStr && prevAmountKey === amountKey) {
               continue // Already processed as pair when we handled expense-transfer
             }
             // Orphan income-transfer: use Transfers file to find source
@@ -760,6 +773,10 @@ export async function importTransactionsFromExcel(formData: FormData): Promise<{
             errors.push(`${errPrefix(file.name, i + 2)}: Transfer source and destination must be different accounts`)
             continue
           }
+          // Skip if we already imported this transfer from the Transfers file
+          const amountKeyForTransfer = normalizeAmountForKey(row.Amount ?? row.amount)
+          const transferKey = transfersCreatedKey(accountId, transferToAccountId, dateStr, amountKeyForTransfer)
+          if (createdTransfersSet.has(transferKey)) continue
         }
 
         // Get contact/client ID if provided - try contact_email or Contact
@@ -858,6 +875,9 @@ export async function importTransactionsFromExcel(formData: FormData): Promise<{
             transfer_to_account_id: transactionType === 'transfer' ? transferToAccountId : undefined,
           })
           transactionsCreated++
+          if (transactionType === 'transfer' && transferToAccountId) {
+            createdTransfersSet.add(transfersCreatedKey(accountId, transferToAccountId, dateStr, normalizeAmountForKey(row.Amount ?? row.amount)))
+          }
         } catch (error) {
           const errorMsg = error instanceof Error ? error.message : 'Unknown error'
           // Check if it's a duplicate number error

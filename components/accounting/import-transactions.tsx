@@ -5,8 +5,9 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { useToast } from '@/components/ui/toaster'
-import { Upload, FileSpreadsheet, AlertCircle, CheckCircle2 } from 'lucide-react'
+import { Upload, FileSpreadsheet, AlertCircle, CheckCircle2, RefreshCw } from 'lucide-react'
 import { importTransactionsFromExcel } from '@/app/actions/transactions-import'
+import { recalculateAccountBalances } from '@/app/actions/accounts'
 
 const MAX_FILES = 8
 
@@ -14,6 +15,7 @@ export function ImportTransactions() {
   const { toast } = useToast()
   const [files, setFiles] = useState<File[]>([])
   const [loading, setLoading] = useState(false)
+  const [recalcLoading, setRecalcLoading] = useState(false)
   const [result, setResult] = useState<{
     success: boolean
     message: string
@@ -103,13 +105,40 @@ export function ImportTransactions() {
     }
   }
 
+  const handleRecalculateBalances = async () => {
+    setRecalcLoading(true)
+    try {
+      const { updated, errors } = await recalculateAccountBalances()
+      if (errors.length > 0) {
+        toast({
+          title: 'Recalculated with Errors',
+          description: `Updated ${updated} accounts. ${errors.length} error(s).`,
+          variant: 'destructive',
+        })
+      } else {
+        toast({
+          title: 'Balances Recalculated',
+          description: `Updated ${updated} account balances from transactions.`,
+        })
+      }
+    } catch (err) {
+      toast({
+        title: 'Recalculation Failed',
+        description: err instanceof Error ? err.message : 'Unknown error',
+        variant: 'destructive',
+      })
+    } finally {
+      setRecalcLoading(false)
+    }
+  }
+
   return (
     <div className="space-y-6">
       <Card>
         <CardHeader>
           <CardTitle>Upload Excel Files</CardTitle>
           <CardDescription>
-            Upload up to {MAX_FILES} Excel files. Options: (1) All together: Transactions 1–6 + Transfers for full import. (2) Transfers only: upload just Transfers-*.xlsx to add missing transfers. Transactions need: Date, Number, Type, Category, Account, Contact, Document, Amount
+            Upload up to {MAX_FILES} Excel files. Options: (1) All together: Transactions 1–6 + Transfers for full import. (2) Transfers only: upload just Transfers-*.xlsx to add missing transfers. Transactions need: Date, Number, Type, Category, Account, Contact, Document, Amount. After import, use Recalculate Balances if totals don&apos;t match.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -133,6 +162,18 @@ export function ImportTransactions() {
                 <>
                   <Upload className="mr-2 h-4 w-4" />
                   Import
+                </>
+              )}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleRecalculateBalances}
+              disabled={recalcLoading}
+            >
+              {recalcLoading ? 'Recalculating...' : (
+                <>
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                  Recalculate Balances
                 </>
               )}
             </Button>

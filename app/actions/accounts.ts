@@ -241,6 +241,64 @@ export async function deleteAccount(id: string): Promise<void> {
   revalidatePath('/accounting/accounts')
 }
 
+/** Recalculate account balances from transactions. Use after import or when balances are wrong. */
+export async function recalculateAccountBalances(): Promise<{ updated: number; errors: string[] }> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    throw new Error('Unauthorized')
+  }
+
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    throw new Error('No organization selected')
+  }
+
+  const { data: accounts, error: accError } = await supabase
+    .from('accounts')
+    .select('id, name, opening_balance')
+    .eq('organization_id', organizationId)
+
+  if (accError || !accounts?.length) {
+    return { updated: 0, errors: accError ? [accError.message] : [] }
+  }
+
+  const errors: string[] = []
+  let updated = 0
+
+  for (const acc of accounts) {
+    const { data: txs } = await supabase
+      .from('transactions')
+      .select('type, amount')
+      .eq('account_id', acc.id)
+      .eq('organization_id', organizationId)
+
+    const net = (txs || []).reduce((sum, t) => {
+      return sum + (t.type === 'income' ? Number(t.amount) : -Number(t.amount))
+    }, 0)
+
+    const newBalance = (acc.opening_balance ?? 0) + net
+
+    const { error: updError } = await supabase
+      .from('accounts')
+      .update({ current_balance: newBalance, updated_at: new Date().toISOString() })
+      .eq('id', acc.id)
+      .eq('organization_id', organizationId)
+
+    if (updError) {
+      errors.push(`${acc.name}: ${updError.message}`)
+    } else {
+      updated++
+    }
+  }
+
+  revalidatePath('/accounting/accounts')
+  revalidatePath('/accounting/transactions')
+  return { updated, errors }
+}
 
 
 

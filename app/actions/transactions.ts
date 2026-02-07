@@ -454,49 +454,8 @@ export async function createTransaction(data: {
       .eq('id', fromTransaction.id)
       .eq('organization_id', organizationId)
 
-    const amountValue = Number(data.amount)
-    const { data: balanceRows, error: balanceError } = await supabase
-      .from('accounts')
-      .select('id, current_balance')
-      .in('id', [data.account_id, data.transfer_to_account_id])
-      .eq('owner_id', user.id)
-      .eq('organization_id', organizationId)
-
-    if (balanceError || !balanceRows || balanceRows.length < 2) {
-      throw new Error('Failed to load account balances for transfer')
-    }
-
-    const fromAccount = balanceRows.find((row: { id: string; current_balance: unknown }) => row.id === data.account_id)
-    const toAccount = balanceRows.find((row: { id: string; current_balance: unknown }) => row.id === data.transfer_to_account_id)
-
-    if (!fromAccount || !toAccount) {
-      throw new Error('Failed to resolve accounts for transfer balance update')
-    }
-
-    const fromBalance = Number(fromAccount.current_balance) - amountValue
-    const toBalance = Number(toAccount.current_balance) + amountValue
-
-    const { error: fromUpdateError } = await supabase
-      .from('accounts')
-      .update({ current_balance: fromBalance })
-      .eq('id', data.account_id)
-      .eq('owner_id', user.id)
-      .eq('organization_id', organizationId)
-
-    if (fromUpdateError) {
-      throw new Error('Failed to update sender account balance')
-    }
-
-    const { error: toUpdateError } = await supabase
-      .from('accounts')
-      .update({ current_balance: toBalance })
-      .eq('id', data.transfer_to_account_id)
-      .eq('owner_id', user.id)
-      .eq('organization_id', organizationId)
-
-    if (toUpdateError) {
-      throw new Error('Failed to update recipient account balance')
-    }
+    // Note: Account balances are updated by the DB trigger (update_account_balance) when each
+    // transaction is inserted. Do NOT manually update balances here - that would double-count.
 
     revalidatePath('/accounting/transactions')
     return fromTransaction
