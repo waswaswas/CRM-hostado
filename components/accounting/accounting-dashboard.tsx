@@ -2,10 +2,13 @@
 
 import { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { ChevronDown, ChevronRight, ExternalLink } from 'lucide-react'
+import Link from 'next/link'
 import {
   getCashFlow,
   getProfitLoss,
   getExpensesByCategory,
+  getExpenseTransactionsByCategory,
   getTopPayers,
   getAccountBalances,
   getAccountingSummary,
@@ -14,6 +17,7 @@ import type {
   CashFlowData,
   ProfitLossData,
   ExpenseByCategory,
+  ExpenseTransaction,
   TopPayer,
 } from '@/app/actions/accounting-stats'
 import { useCurrencyDisplay } from '@/lib/currency-display-context'
@@ -34,6 +38,9 @@ export function AccountingDashboard({ startDate: initialStartDate, endDate: init
   const [topPayers, setTopPayers] = useState<TopPayer[]>([])
   const [accountBalances, setAccountBalances] = useState<Array<{ id: string; name: string; balance: number }>>([])
   const [summary, setSummary] = useState({ totalIncome: 0, totalExpense: 0, profit: 0 })
+  const [expandedCategory, setExpandedCategory] = useState<string | null>(null)
+  const [categoryTransactions, setCategoryTransactions] = useState<Record<string, ExpenseTransaction[]>>({})
+  const [loadingCategory, setLoadingCategory] = useState<string | null>(null)
   const { mode } = useCurrencyDisplay()
 
   useEffect(() => {
@@ -67,6 +74,26 @@ export function AccountingDashboard({ startDate: initialStartDate, endDate: init
 
   const formatAmount = (amount: number, currency: string = 'BGN') => {
     return formatForDisplay(amount, currency, mode)
+  }
+
+  const handleCategoryClick = async (category: string) => {
+    if (expandedCategory === category) {
+      setExpandedCategory(null)
+      return
+    }
+    setExpandedCategory(category)
+    if (!categoryTransactions[category]) {
+      setLoadingCategory(category)
+      try {
+        const txns = await getExpenseTransactionsByCategory(category, startDate, endDate)
+        setCategoryTransactions((prev) => ({ ...prev, [category]: txns }))
+      } catch (error) {
+        console.error('Error loading category transactions:', error)
+        setCategoryTransactions((prev) => ({ ...prev, [category]: [] }))
+      } finally {
+        setLoadingCategory(null)
+      }
+    }
   }
 
   if (loading) {
@@ -178,17 +205,59 @@ export function AccountingDashboard({ startDate: initialStartDate, endDate: init
         <Card>
           <CardHeader>
             <CardTitle>Expenses By Category</CardTitle>
-            <p className="text-sm text-muted-foreground">Top expenses across various categories</p>
+            <p className="text-sm text-muted-foreground">All categories — click to view related transactions</p>
           </CardHeader>
           <CardContent>
-            <div className="space-y-2">
-              {expensesByCategory.slice(0, 10).map((item, index) => (
-                <div key={index} className="flex items-center justify-between text-sm">
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full bg-green-500"></div>
-                    <span>{item.category}</span>
-                  </div>
-                  <span className="font-medium">{formatAmount(item.amount)}</span>
+            <div className="space-y-1">
+              {expensesByCategory.map((item, index) => (
+                <div key={index} className="rounded-md border border-transparent hover:border-border">
+                  <button
+                    type="button"
+                    onClick={() => handleCategoryClick(item.category)}
+                    className="flex w-full items-center justify-between gap-2 px-2 py-2 text-left text-sm hover:bg-accent rounded-md transition-colors"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      {expandedCategory === item.category ? (
+                        <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      ) : (
+                        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      )}
+                      <div className="w-3 h-3 rounded-full bg-green-500 shrink-0"></div>
+                      <span className="truncate">{item.category}</span>
+                    </div>
+                    <span className="font-medium shrink-0">{formatAmount(item.amount)}</span>
+                  </button>
+                  {expandedCategory === item.category && (
+                    <div className="px-4 pb-3 pt-1 border-t mt-1">
+                      {loadingCategory === item.category ? (
+                        <p className="text-sm text-muted-foreground py-2">Loading transactions...</p>
+                      ) : (categoryTransactions[item.category]?.length ?? 0) > 0 ? (
+                        <div className="space-y-2 max-h-48 overflow-y-auto">
+                          {categoryTransactions[item.category].map((txn) => (
+                            <Link
+                              key={txn.id}
+                              href={`/accounting/transactions/${txn.id}`}
+                              className="flex items-center justify-between gap-2 py-1.5 px-2 rounded hover:bg-accent text-sm"
+                            >
+                              <div className="min-w-0 flex-1">
+                                <span className="text-muted-foreground">{txn.date}</span>
+                                {txn.description && (
+                                  <span className="ml-2 truncate block">{txn.description}</span>
+                                )}
+                                {txn.account_name && (
+                                  <span className="text-xs text-muted-foreground ml-2">{txn.account_name}</span>
+                                )}
+                              </div>
+                              <span className="font-medium shrink-0">{formatAmount(txn.amount, txn.currency)}</span>
+                              <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground" />
+                            </Link>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-muted-foreground py-2">No transactions in this category</p>
+                      )}
+                    </div>
+                  )}
                 </div>
               ))}
               {expensesByCategory.length === 0 && (

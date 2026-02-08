@@ -169,18 +169,18 @@ export async function getExpensesByCategory(
     .eq('type', 'expense')
     .gte('date', startDate)
     .lte('date', endDate)
-    .not('category', 'is', null)
 
   if (error) {
     console.error('Error fetching expenses by category:', error)
     throw new Error('Failed to fetch expenses by category')
   }
 
-  // Group by category
+  // Group by category (null/empty = "Other")
   const grouped = new Map<string, number>()
 
   data?.forEach((transaction: { category: string | null; amount: number }) => {
-    const category = transaction.category || 'Other'
+    const cat = (transaction.category || '').trim()
+    const category = cat || 'Other'
     grouped.set(category, (grouped.get(category) || 0) + Number(transaction.amount))
   })
 
@@ -193,6 +193,111 @@ export async function getExpensesByCategory(
     .sort((a, b) => b.amount - a.amount)
 
   return result
+}
+
+export async function getDistinctExpenseCategories(): Promise<string[]> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return []
+  }
+
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    return []
+  }
+
+  const { data, error } = await supabase
+    .from('transactions')
+    .select('category')
+    .eq('organization_id', organizationId)
+    .in('type', ['income', 'expense'])
+    .not('category', 'is', null)
+    .neq('category', '')
+
+  if (error) {
+    console.error('Error fetching categories:', error)
+    return []
+  }
+
+  const allCats = (data || []).map((t: { category: string }) => t.category.trim()).filter((c: string) => c.length > 0)
+  const categories: string[] = Array.from(new Set(allCats))
+  return categories.sort()
+}
+
+export interface ExpenseTransaction {
+  id: string
+  date: string
+  amount: number
+  currency: string
+  description: string | null
+  account_name?: string
+}
+
+export async function getExpenseTransactionsByCategory(
+  category: string,
+  startDate: string,
+  endDate: string
+): Promise<ExpenseTransaction[]> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return []
+  }
+
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    return []
+  }
+
+  let query = supabase
+    .from('transactions')
+    .select('id, date, amount, currency, description, account_id')
+    .eq('organization_id', organizationId)
+    .eq('type', 'expense')
+    .gte('date', startDate)
+    .lte('date', endDate)
+    .order('date', { ascending: false })
+
+  if (category === 'Other') {
+    query = query.or('category.is.null,category.eq.')
+  } else {
+    query = query.eq('category', category)
+  }
+
+  const { data, error } = await query
+
+  if (error) {
+    console.error('Error fetching transactions by category:', error)
+    return []
+  }
+
+  const accountIds = [...new Set((data || []).map((t: any) => t.account_id).filter(Boolean))]
+  const accountNames: Record<string, string> = {}
+  if (accountIds.length > 0) {
+    const { data: accounts } = await supabase
+      .from('accounts')
+      .select('id, name')
+      .in('id', accountIds)
+    accounts?.forEach((a: { id: string; name: string }) => {
+      accountNames[a.id] = a.name
+    })
+  }
+
+  return (data || []).map((t: any) => ({
+    id: t.id,
+    date: t.date,
+    amount: t.amount,
+    currency: t.currency || 'BGN',
+    description: t.description,
+    account_name: accountNames[t.account_id],
+  }))
 }
 
 export async function getTopPayers(

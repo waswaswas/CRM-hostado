@@ -18,6 +18,7 @@ interface TransactionFormProps {
   transaction?: any
   accounts: Account[]
   accountingCustomers: AccountingCustomerWithRelations[]
+  categories?: string[]
   initialCustomerId?: string
   initialType?: 'income' | 'expense' | 'transfer'
   initialAccountId?: string
@@ -27,6 +28,7 @@ export function TransactionForm({
   transaction,
   accounts,
   accountingCustomers,
+  categories = [],
   initialCustomerId,
   initialType,
   initialAccountId,
@@ -45,6 +47,7 @@ export function TransactionForm({
     date: transaction?.date || format(new Date(), 'yyyy-MM-dd'),
     amount: transaction?.amount || 0,
     currency: transaction?.currency || 'EUR',
+    category: transaction?.category || '',
     description: transaction?.description || '',
     accounting_customer_id: transaction?.accounting_customer_id || initialCustomerId || '',
     attachment_url: transaction?.attachment_url || '',
@@ -140,7 +143,16 @@ export function TransactionForm({
 
     try {
       if (transaction) {
-        await updateTransaction(transaction.id, formData)
+        await updateTransaction(transaction.id, {
+          account_id: formData.account_id,
+          type: formData.type as 'income' | 'expense' | 'transfer',
+          date: formData.date,
+          amount: formData.amount,
+          currency: formData.currency,
+          category: formData.category?.trim() || undefined,
+          description: formData.description || undefined,
+          accounting_customer_id: formData.accounting_customer_id || undefined,
+        })
         toast({
           title: 'Success',
           description: 'Transaction updated successfully',
@@ -152,6 +164,7 @@ export function TransactionForm({
           date: formData.date,
           amount: formData.amount,
           currency: formData.currency,
+          category: formData.category?.trim() || undefined,
           description: formData.description || undefined,
           accounting_customer_id: formData.accounting_customer_id || undefined,
         }
@@ -330,8 +343,26 @@ export function TransactionForm({
         </div>
 
         {transactionType !== 'transfer' && (
-          <div>
-            <label className="text-sm font-medium">Customer</label>
+          <>
+            <div>
+              <label className="text-sm font-medium">Category</label>
+              <Input
+                value={formData.category}
+                onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                placeholder="e.g. Ads, Dani payouts, Other"
+                list="category-suggestions"
+                className="mt-1"
+              />
+              {categories.length > 0 && (
+                <datalist id="category-suggestions">
+                  {categories.map((cat) => (
+                    <option key={cat} value={cat} />
+                  ))}
+                </datalist>
+              )}
+            </div>
+            <div>
+              <label className="text-sm font-medium">Customer</label>
             <div className="flex gap-2">
               <Select
                 value={formData.accounting_customer_id}
@@ -353,6 +384,7 @@ export function TransactionForm({
               </Link>
             </div>
           </div>
+          </>
         )}
 
         <div>

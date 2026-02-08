@@ -531,6 +531,7 @@ export async function updateTransaction(
     description?: string
     reference?: string
     contact_id?: string
+    accounting_customer_id?: string
   }
 ): Promise<Transaction> {
   const supabase = await createClient()
@@ -561,6 +562,7 @@ export async function updateTransaction(
   if (data.description !== undefined) updateData.description = data.description
   if (data.reference !== undefined) updateData.reference = data.reference
   if (data.contact_id !== undefined) updateData.contact_id = data.contact_id
+  if (data.accounting_customer_id !== undefined) updateData.accounting_customer_id = data.accounting_customer_id
 
   const { data: transaction, error } = await supabase
     .from('transactions')

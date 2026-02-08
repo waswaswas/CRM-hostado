@@ -1,6 +1,7 @@
 import { getTransaction } from '@/app/actions/transactions'
 import { getAccounts } from '@/app/actions/accounts'
 import { getAccountingCustomers } from '@/app/actions/accounting-customers'
+import { getDistinctExpenseCategories } from '@/app/actions/accounting-stats'
 import { TransactionForm } from '@/components/accounting/transaction-form'
 import { AppLayout } from '@/components/layout/app-layout'
 import { createClient } from '@/lib/supabase/server'
@@ -27,8 +28,11 @@ export default async function EditTransactionPage({
     notFound()
   }
 
-  const accounts = await getAccounts()
-  const accountingCustomers = await getAccountingCustomers().catch(() => [])
+  const [accounts, accountingCustomers, categories] = await Promise.all([
+    getAccounts(),
+    getAccountingCustomers().catch(() => []),
+    getDistinctExpenseCategories(),
+  ])
 
   return (
     <AppLayout>
@@ -44,6 +48,7 @@ export default async function EditTransactionPage({
             transaction={transaction}
             accounts={accounts}
             accountingCustomers={accountingCustomers}
+            categories={categories}
           />
         </div>
       </div>
