@@ -184,8 +184,18 @@ export function AccountDetail({
         <div className="flex-1 min-w-0">
           <Tabs defaultValue="transactions" className="space-y-4">
             <TabsList>
-              <TabsTrigger value="transactions">Transactions</TabsTrigger>
-              <TabsTrigger value="transfers">Transfers</TabsTrigger>
+              <TabsTrigger value="transactions" className="gap-2">
+                Transactions
+                <span className="ml-1 rounded-full bg-muted px-2 py-0.5 text-xs font-medium">
+                  {regularTransactions.length}
+                </span>
+              </TabsTrigger>
+              <TabsTrigger value="transfers" className="gap-2">
+                Transfers
+                <span className="ml-1 rounded-full bg-muted px-2 py-0.5 text-xs font-medium">
+                  {transferTransactions.length}
+                </span>
+              </TabsTrigger>
             </TabsList>
 
             <TabsContent value="transactions" className="space-y-2">

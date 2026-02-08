@@ -276,7 +276,7 @@ export async function recalculateAccountBalances(): Promise<{ updated: number; e
       .eq('account_id', acc.id)
       .eq('organization_id', organizationId)
 
-    const net = (txs || []).reduce((sum, t) => {
+    const net = (txs || []).reduce((sum: number, t: { type: string; amount: number }) => {
       return sum + (t.type === 'income' ? Number(t.amount) : -Number(t.amount))
     }, 0)
 
