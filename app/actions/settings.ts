@@ -12,7 +12,11 @@ export async function getSettings() {
   } = await supabase.auth.getUser()
 
   if (!user) {
-    throw new Error('Not authenticated')
+    return {
+      new_tag_days: 14,
+      custom_statuses: [],
+      timezone: 'Europe/Sofia',
+    }
   }
 
   const organizationId = await getCurrentOrganizationId()

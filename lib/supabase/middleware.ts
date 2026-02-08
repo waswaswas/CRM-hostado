@@ -83,7 +83,14 @@ export async function updateSession(request: NextRequest) {
   const isPublicPath = publicPaths.some(p => request.nextUrl.pathname === p || request.nextUrl.pathname.startsWith(p + '/'))
   if (!user && !isPublicPath && !request.nextUrl.pathname.startsWith('/_next')) {
     const url = request.nextUrl.clone()
-    url.pathname = '/site'
+    url.pathname = '/login'
+    return NextResponse.redirect(url)
+  }
+
+  // Redirect root (/) to dashboard or login - avoids page running and Response.clone issues
+  if (request.nextUrl.pathname === '/') {
+    const url = request.nextUrl.clone()
+    url.pathname = user ? '/dashboard' : '/login'
     return NextResponse.redirect(url)
   }
 

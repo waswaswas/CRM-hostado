@@ -12,6 +12,8 @@ import { deleteTransaction } from '@/app/actions/transactions'
 import { useToast } from '@/components/ui/toaster'
 import { getSignedUrl } from '@/app/actions/storage'
 import { useState } from 'react'
+import { useCurrencyDisplay } from '@/lib/currency-display-context'
+import { formatForDisplay } from '@/lib/currency-display'
 
 interface TransactionDetailProps {
   transaction: TransactionWithRelations
@@ -20,14 +22,11 @@ interface TransactionDetailProps {
 export function TransactionDetail({ transaction }: TransactionDetailProps) {
   const router = useRouter()
   const { toast } = useToast()
+  const { mode } = useCurrencyDisplay()
   const [downloading, setDownloading] = useState(false)
 
   const formatAmount = (amount: number, currency: string = 'BGN') => {
-    return new Intl.NumberFormat('bg-BG', {
-      style: 'currency',
-      currency: currency,
-      minimumFractionDigits: 2,
-    }).format(amount)
+    return formatForDisplay(amount, currency, mode)
   }
 
   const handleDelete = async () => {

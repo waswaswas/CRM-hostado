@@ -9,6 +9,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Edit, Plus, Star, Eye, MoreVertical } from 'lucide-react'
 import { format } from 'date-fns'
 import Link from 'next/link'
+import { useCurrencyDisplay } from '@/lib/currency-display-context'
+import { formatForDisplay } from '@/lib/currency-display'
 
 interface AccountDetailProps {
   account: Account
@@ -27,14 +29,10 @@ export function AccountDetail({
 }: AccountDetailProps) {
   const [showNewMenu, setShowNewMenu] = useState(false)
   const [showMoreMenu, setShowMoreMenu] = useState(false)
+  const { mode } = useCurrencyDisplay()
 
   const formatAmount = (amount: number, currency: string = 'BGN') => {
-    return new Intl.NumberFormat('bg-BG', {
-      style: 'currency',
-      currency: currency,
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(amount)
+    return formatForDisplay(amount, currency, mode)
   }
 
   const getTransferLabel = (transaction: TransactionWithRelations) => {

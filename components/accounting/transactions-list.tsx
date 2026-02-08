@@ -15,6 +15,8 @@ import { AssignCustomerDialog } from './assign-customer-dialog'
 import { EditTransactionDialog } from './edit-transaction-dialog'
 import { deleteTransaction } from '@/app/actions/transactions'
 import { useToast } from '@/components/ui/toaster'
+import { useCurrencyDisplay } from '@/lib/currency-display-context'
+import { formatForDisplay } from '@/lib/currency-display'
 
 interface TransactionsListProps {
   initialTransactions: TransactionWithRelations[]
@@ -24,6 +26,7 @@ interface TransactionsListProps {
 export function TransactionsList({ initialTransactions, accounts }: TransactionsListProps) {
   const router = useRouter()
   const { toast } = useToast()
+  const { mode } = useCurrencyDisplay()
   const [transactions, setTransactions] = useState(initialTransactions)
   const [selectedTransactions, setSelectedTransactions] = useState<Set<string>>(new Set())
   const [searchQuery, setSearchQuery] = useState('')
@@ -99,11 +102,7 @@ export function TransactionsList({ initialTransactions, accounts }: Transactions
   }, [transactions, searchQuery, filterType, filterAccount, sortOrder])
 
   const formatAmount = (amount: number, currency: string = 'BGN') => {
-    return new Intl.NumberFormat('bg-BG', {
-      style: 'currency',
-      currency: currency,
-      minimumFractionDigits: 2,
-    }).format(amount)
+    return formatForDisplay(amount, currency, mode)
   }
 
   const getTypeColor = (type: string) => {

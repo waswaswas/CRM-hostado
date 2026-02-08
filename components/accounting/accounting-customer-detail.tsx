@@ -25,6 +25,8 @@ import { useRouter } from 'next/navigation'
 import { format } from 'date-fns'
 import Link from 'next/link'
 import { useToast } from '@/components/ui/toaster'
+import { useCurrencyDisplay } from '@/lib/currency-display-context'
+import { formatForDisplay } from '@/lib/currency-display'
 
 interface AccountingCustomerDetailProps {
   customer: AccountingCustomerWithRelations
@@ -41,6 +43,7 @@ export function AccountingCustomerDetail({
 }: AccountingCustomerDetailProps) {
   const router = useRouter()
   const { toast } = useToast()
+  const { mode } = useCurrencyDisplay()
   const [activeTab, setActiveTab] = useState<'invoices' | 'transactions'>('transactions')
   const [showNewMenu, setShowNewMenu] = useState(false)
   const [showMoreMenu, setShowMoreMenu] = useState(false)
@@ -93,11 +96,7 @@ export function AccountingCustomerDetail({
   const totalPaid = paid + paidFromTransactions
 
   const formatAmount = (amount: number, currency: string = 'BGN') => {
-    return new Intl.NumberFormat('bg-BG', {
-      style: 'currency',
-      currency: currency,
-      minimumFractionDigits: 2,
-    }).format(amount)
+    return formatForDisplay(amount, currency, mode)
   }
 
   const getTypeColor = (type: string) => {

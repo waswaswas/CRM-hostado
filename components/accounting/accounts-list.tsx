@@ -8,8 +8,9 @@ import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { AccountForm } from './account-form'
 import { Plus, Search, Lock } from 'lucide-react'
-import { format } from 'date-fns'
 import Link from 'next/link'
+import { useCurrencyDisplay } from '@/lib/currency-display-context'
+import { formatForDisplay } from '@/lib/currency-display'
 
 interface AccountsListProps {
   accounts: Account[]
@@ -19,6 +20,7 @@ export function AccountsList({ accounts: initialAccounts }: AccountsListProps) {
   const [accounts, setAccounts] = useState(initialAccounts)
   const [searchQuery, setSearchQuery] = useState('')
   const [showNewAccountDialog, setShowNewAccountDialog] = useState(false)
+  const { mode } = useCurrencyDisplay()
 
   const filteredAccounts = accounts.filter(
     (account) =>
@@ -27,12 +29,8 @@ export function AccountsList({ accounts: initialAccounts }: AccountsListProps) {
       account.bank_name?.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
-  const formatBalance = (balance: number) => {
-    return new Intl.NumberFormat('bg-BG', {
-      style: 'currency',
-      currency: 'BGN',
-      minimumFractionDigits: 2,
-    }).format(balance)
+  const formatBalance = (balance: number, currency: string = 'BGN') => {
+    return formatForDisplay(balance, currency, mode)
   }
 
   return (
@@ -112,7 +110,7 @@ export function AccountsList({ accounts: initialAccounts }: AccountsListProps) {
                         account.current_balance < 0 ? 'text-red-600' : 'text-green-600'
                       }`}
                     >
-                      {formatBalance(account.current_balance)}
+                      {formatBalance(account.current_balance, account.currency)}
                     </div>
                   </div>
                 </div>

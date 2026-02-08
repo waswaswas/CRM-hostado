@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
 import {
   getCashFlow,
   getProfitLoss,
@@ -17,7 +16,8 @@ import type {
   ExpenseByCategory,
   TopPayer,
 } from '@/app/actions/accounting-stats'
-import { format } from 'date-fns'
+import { useCurrencyDisplay } from '@/lib/currency-display-context'
+import { formatForDisplay } from '@/lib/currency-display'
 
 interface AccountingDashboardProps {
   startDate: string
@@ -34,6 +34,7 @@ export function AccountingDashboard({ startDate: initialStartDate, endDate: init
   const [topPayers, setTopPayers] = useState<TopPayer[]>([])
   const [accountBalances, setAccountBalances] = useState<Array<{ id: string; name: string; balance: number }>>([])
   const [summary, setSummary] = useState({ totalIncome: 0, totalExpense: 0, profit: 0 })
+  const { mode } = useCurrencyDisplay()
 
   useEffect(() => {
     loadData()
@@ -64,13 +65,8 @@ export function AccountingDashboard({ startDate: initialStartDate, endDate: init
     }
   }
 
-  const formatAmount = (amount: number) => {
-    return new Intl.NumberFormat('bg-BG', {
-      style: 'currency',
-      currency: 'BGN',
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(amount)
+  const formatAmount = (amount: number, currency: string = 'BGN') => {
+    return formatForDisplay(amount, currency, mode)
   }
 
   if (loading) {

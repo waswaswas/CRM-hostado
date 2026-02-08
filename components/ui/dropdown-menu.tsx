@@ -1,21 +1,24 @@
 'use client'
 
 import * as React from 'react'
+import { createPortal } from 'react-dom'
 import { cn } from '@/lib/utils'
 
 interface DropdownMenuContextValue {
   open: boolean
   setOpen: (open: boolean) => void
+  triggerRef: React.RefObject<HTMLDivElement | null>
 }
 
 const DropdownMenuContext = React.createContext<DropdownMenuContextValue | undefined>(undefined)
 
 export function DropdownMenu({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = React.useState(false)
+  const triggerRef = React.useRef<HTMLDivElement | null>(null)
 
   return (
-    <DropdownMenuContext.Provider value={{ open, setOpen }}>
-      <div className="relative">{children}</div>
+    <DropdownMenuContext.Provider value={{ open, setOpen, triggerRef }}>
+      <div ref={triggerRef} className="relative">{children}</div>
     </DropdownMenuContext.Provider>
   )
 }
@@ -53,14 +56,17 @@ export function DropdownMenuTrigger({
 export function DropdownMenuContent({
   children,
   align = 'start',
+  side = 'bottom',
   className,
 }: {
   children: React.ReactNode
   align?: 'start' | 'end'
+  side?: 'top' | 'bottom'
   className?: string
 }) {
   const context = React.useContext(DropdownMenuContext)
   if (!context) throw new Error('DropdownMenuContent must be used within DropdownMenu')
+  const [position, setPosition] = React.useState({ top: 0, left: 0, right: 0, bottom: 0 })
 
   React.useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -76,21 +82,40 @@ export function DropdownMenuContent({
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [context])
 
+  React.useLayoutEffect(() => {
+    if (!context.open || !context.triggerRef.current || typeof document === 'undefined') return
+    const rect = context.triggerRef.current.getBoundingClientRect()
+    const GAP = 4
+    setPosition({
+      top: rect.bottom + GAP,
+      bottom: window.innerHeight - rect.top + GAP,
+      left: rect.left,
+      right: window.innerWidth - rect.right,
+    })
+  }, [context.open, align, side])
+
   if (!context.open) return null
 
-  return (
+  const content = (
     <div
       data-dropdown-menu
       className={cn(
-        'absolute z-50 min-w-[8rem] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md',
-        align === 'end' ? 'right-0' : 'left-0',
-        'mt-2',
+        'fixed z-[9999] min-w-[8rem] overflow-visible rounded-md border bg-popover p-1 text-popover-foreground shadow-md',
         className
       )}
+      style={{
+        ...(side === 'bottom' ? { top: position.top } : { bottom: position.bottom }),
+        ...(align === 'start' ? { left: position.left } : { right: position.right }),
+      } as React.CSSProperties}
     >
       {children}
     </div>
   )
+
+  if (typeof document !== 'undefined') {
+    return createPortal(content, document.body)
+  }
+  return content
 }
 
 export function DropdownMenuItem({

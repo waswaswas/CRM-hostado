@@ -89,11 +89,17 @@ export function Sidebar({ userName, collapsed = false, onToggleCollapse }: Sideb
         >
           <div className={cn('flex flex-col border-b md:border-b', collapsed && showCollapseToggle && 'md:hidden')}>
             <div className="flex h-20 sm:h-24 items-center justify-center px-4">
-              <img
-                src="/hostado-logo.png"
-                alt="Hostado"
-                className="h-14 w-full max-w-[180px] object-contain sm:h-16"
-              />
+              <Link
+                href="/dashboard"
+                className="flex items-center justify-center w-full focus:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-md"
+                aria-label="Hostado - Go to Dashboard"
+              >
+                <img
+                  src="/hostado-logo.png"
+                  alt="hostado®"
+                  className="h-12 w-auto max-w-[160px] object-contain object-center sm:h-14"
+                />
+              </Link>
             </div>
           </div>
           <nav className="flex-1 space-y-1 overflow-y-auto overflow-x-hidden p-3 sm:p-4">
