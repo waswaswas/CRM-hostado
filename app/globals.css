@@ -27,9 +27,10 @@
       -moz-osx-font-smoothing: grayscale;
     }
     
-    /* Prevent horizontal overflow */
-    * {
-      max-width: 100%;
+    /* Prevent horizontal overflow - constrain body and html */
+    html, body {
+      overflow-x: hidden;
+      max-width: 100vw;
     }
     
     /* Better spacing for mobile */

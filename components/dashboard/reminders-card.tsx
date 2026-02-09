@@ -322,12 +322,12 @@ export function RemindersCard({
                       </button>
                       <Link
                         href={reminder.client_id ? `/clients/${reminder.client_id}` : '#'}
-                        className="flex-1 min-w-0 transition-colors hover:text-primary"
+                        className="flex-1 min-w-0 overflow-hidden transition-colors hover:text-primary"
                         onClick={(e) => !reminder.client_id && e.preventDefault()}
                       >
                         <p className="font-medium text-foreground truncate">{reminder.title}</p>
                         <p className="text-sm text-muted-foreground truncate">{getClientName(reminder)}</p>
-                        <p className="text-xs text-destructive font-medium mt-0.5">{formatDateTime(reminder.due_at)}</p>
+                        <p className="text-xs text-destructive font-medium mt-0.5 truncate">{formatDateTime(reminder.due_at)}</p>
                       </Link>
                       <div className="flex items-center gap-2 flex-shrink-0">
                         <Button variant="ghost" size="icon" onClick={(e) => { e.preventDefault(); openQuickDialog(undefined, reminder) }} disabled={loading} className="h-10 w-10 sm:h-9 sm:w-9 rounded-lg min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0" aria-label="Edit"><Edit className="h-4 w-4 sm:h-4 sm:w-4" /></Button>
@@ -358,10 +358,10 @@ export function RemindersCard({
                       >
                         {reminder.done && <CheckCircle2 className="h-5 w-5 sm:h-4 sm:w-4" />}
                       </button>
-                      <Link href={reminder.client_id ? `/clients/${reminder.client_id}` : '#'} className="flex-1 min-w-0 hover:text-primary" onClick={(e) => !reminder.client_id && e.preventDefault()}>
+                      <Link href={reminder.client_id ? `/clients/${reminder.client_id}` : '#'} className="flex-1 min-w-0 overflow-hidden hover:text-primary" onClick={(e) => !reminder.client_id && e.preventDefault()}>
                         <p className="font-medium text-base sm:text-sm text-foreground break-words">{reminder.title}</p>
                         <p className="text-sm sm:text-xs text-muted-foreground truncate mt-1">{getClientName(reminder)}</p>
-                        <p className="text-xs text-muted-foreground mt-1">{formatDateTime(reminder.due_at)}</p>
+                        <p className="text-xs text-muted-foreground mt-1 truncate">{formatDateTime(reminder.due_at)}</p>
                       </Link>
                       <div className="flex items-center gap-2 flex-shrink-0">
                         <Button variant="ghost" size="icon" onClick={(e) => { e.preventDefault(); openQuickDialog(undefined, reminder) }} disabled={loading} className="h-10 w-10 sm:h-9 sm:w-9 rounded-lg min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0" aria-label="Edit"><Edit className="h-4 w-4 sm:h-4 sm:w-4" /></Button>
@@ -392,10 +392,10 @@ export function RemindersCard({
                       >
                         {reminder.done && <CheckCircle2 className="h-5 w-5 sm:h-4 sm:w-4" />}
                       </button>
-                      <Link href={reminder.client_id ? `/clients/${reminder.client_id}` : '#'} className="flex-1 min-w-0 hover:text-primary" onClick={(e) => !reminder.client_id && e.preventDefault()}>
+                      <Link href={reminder.client_id ? `/clients/${reminder.client_id}` : '#'} className="flex-1 min-w-0 overflow-hidden hover:text-primary" onClick={(e) => !reminder.client_id && e.preventDefault()}>
                         <p className="font-medium text-base sm:text-sm text-foreground break-words">{reminder.title}</p>
                         <p className="text-sm sm:text-xs text-muted-foreground truncate mt-1">{getClientName(reminder)}</p>
-                        <p className="text-xs text-muted-foreground mt-1">{formatDateTime(reminder.due_at)}</p>
+                        <p className="text-xs text-muted-foreground mt-1 truncate">{formatDateTime(reminder.due_at)}</p>
                       </Link>
                       <div className="flex items-center gap-2 flex-shrink-0">
                         <Button variant="ghost" size="icon" onClick={(e) => { e.preventDefault(); openQuickDialog(undefined, reminder) }} disabled={loading} className="h-10 w-10 sm:h-9 sm:w-9 rounded-lg min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0" aria-label="Edit"><Edit className="h-4 w-4 sm:h-4 sm:w-4" /></Button>
@@ -433,7 +433,7 @@ export function RemindersCard({
                   >
                     {reminder.done && <CheckCircle2 className="h-5 w-5 sm:h-4 sm:w-4" />}
                   </button>
-                  <Link href={reminder.client_id ? `/clients/${reminder.client_id}` : '#'} className="flex-1 min-w-0 hover:text-primary" onClick={(e) => !reminder.client_id && e.preventDefault()}>
+                  <Link href={reminder.client_id ? `/clients/${reminder.client_id}` : '#'} className="flex-1 min-w-0 overflow-hidden hover:text-primary" onClick={(e) => !reminder.client_id && e.preventDefault()}>
                     <p className="font-medium text-base sm:text-sm line-through text-muted-foreground break-words">{reminder.title}</p>
                     <p className="text-sm sm:text-xs text-muted-foreground truncate mt-1">{getClientName(reminder)}</p>
                     <p className="text-xs text-muted-foreground mt-1">{formatDateTime(reminder.due_at)}</p>

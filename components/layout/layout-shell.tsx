@@ -51,7 +51,7 @@ export function LayoutShell({
       />
       <div className="flex flex-1 flex-col min-w-0 overflow-hidden">
         <Topbar userName={userName} sidebarCollapsed={collapsed} />
-        <main className="flex-1 overflow-y-auto overflow-x-auto bg-muted/50 p-4 sm:p-4 md:p-5 lg:p-6">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden md:overflow-x-auto bg-muted/50 p-4 sm:p-4 md:p-5 lg:p-6 min-w-0">
           {children}
         </main>
       </div>
