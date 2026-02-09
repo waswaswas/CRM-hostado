@@ -18,8 +18,18 @@ const navigation = [
 
 export function BottomNav() {
   const pathname = usePathname()
-  const { permissions } = useFeaturePermissions()
-  const filtered = navigation.filter((item) => permissions[item.feature])
+  const { permissions, loading } = useFeaturePermissions()
+  
+  // Restrictive filtering: only show features with explicit permission
+  // This prevents flash of all features while permissions are loading
+  const filtered = navigation.filter((item) => {
+    // If loading and no cached permission, don't show (restrictive default)
+    if (loading && permissions[item.feature] !== true) {
+      return false
+    }
+    // Only show if permission is explicitly true
+    return permissions[item.feature] === true
+  })
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 border-t bg-background md:hidden">

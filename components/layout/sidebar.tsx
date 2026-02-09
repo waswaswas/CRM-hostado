@@ -35,10 +35,16 @@ export function Sidebar({ userName, collapsed = false, onToggleCollapse }: Sideb
 
   const isLoading = orgLoading || permissionsLoading
 
-  // Show all nav items while loading (static buttons); filter by permissions when ready
-  const navigation = isLoading
-    ? allNavigation
-    : allNavigation.filter(item => permissions[item.feature])
+  // Restrictive filtering: only show features with explicit permission
+  // This prevents flash of all features while permissions are loading
+  const navigation = allNavigation.filter(item => {
+    // If loading and no cached permission, don't show (restrictive default)
+    if (isLoading && permissions[item.feature] !== true) {
+      return false
+    }
+    // Only show if permission is explicitly true
+    return permissions[item.feature] === true
+  })
 
   const showCollapseToggle = Boolean(onToggleCollapse)
 
