@@ -159,27 +159,27 @@ export function RecentClients({ initialClients, customStatuses }: RecentClientsP
                   key={client.id}
                   href={`/clients/${client.id}`}
                   className={cn(
-                    'flex items-center gap-3 rounded-xl border border-border bg-card p-3.5',
+                    'flex items-center gap-3 sm:gap-3 rounded-xl border border-border bg-card p-4 sm:p-3.5',
                     'hover:bg-muted/50 dark:hover:bg-muted/30 hover:border-primary/30 transition-colors'
                   )}
                 >
                   <div className="flex flex-1 min-w-0 items-center justify-between gap-3">
                     <div className="min-w-0 flex-1">
-                      <p className="font-medium text-foreground truncate">{client.name}</p>
+                      <p className="font-medium text-base sm:text-sm text-foreground break-words">{client.name}</p>
                       {client.company && (
-                        <p className="text-sm text-muted-foreground truncate mt-0.5">{client.company}</p>
+                        <p className="text-sm sm:text-xs text-muted-foreground truncate mt-1">{client.company}</p>
                       )}
                     </div>
                     <Badge
                       className={cn(
-                        'shrink-0 text-xs font-medium px-2 py-0.5 rounded-md',
+                        'shrink-0 text-xs font-medium px-2.5 py-1 sm:px-2 sm:py-0.5 rounded-md',
                         getStatusColor(client.status, client.client_type)
                       )}
                     >
                       {formatStatus(client.status, customStatuses)}
                     </Badge>
                   </div>
-                  <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+                  <ChevronRight className="h-5 w-5 sm:h-4 sm:w-4 shrink-0 text-muted-foreground" aria-hidden />
                 </Link>
               ))}
             </div>

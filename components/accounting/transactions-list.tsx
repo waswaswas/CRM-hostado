@@ -247,7 +247,7 @@ export function TransactionsList({ initialTransactions, accounts }: Transactions
           <Select
             value={filterType}
             onChange={(e) => setFilterType(e.target.value)}
-            className="w-full sm:w-auto min-w-[120px]"
+            className="w-full sm:w-auto min-w-[120px] min-h-[44px] sm:min-h-0"
           >
             <option value="all">All Types</option>
             <option value="income">Income</option>
@@ -257,7 +257,7 @@ export function TransactionsList({ initialTransactions, accounts }: Transactions
           <Select
             value={filterAccount}
             onChange={(e) => setFilterAccount(e.target.value)}
-            className="w-full sm:w-auto min-w-[140px]"
+            className="w-full sm:w-auto min-w-[140px] min-h-[44px] sm:min-h-0"
           >
             <option value="all">All Accounts</option>
             {accounts.map((account) => (
@@ -269,14 +269,14 @@ export function TransactionsList({ initialTransactions, accounts }: Transactions
           <Button
             variant="outline"
             onClick={() => setSortOrder(sortOrder === 'newest' ? 'oldest' : 'newest')}
-            className="w-full sm:w-auto whitespace-nowrap"
+            className="w-full sm:w-auto whitespace-nowrap min-h-[44px] sm:min-h-0"
           >
             <ArrowUpDown className="mr-2 h-4 w-4" />
             {sortOrder === 'newest' ? 'Newest' : 'Oldest'}
           </Button>
           <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
             <Link href="/accounting/import">
-              <Button variant="outline" size="sm" className="w-full sm:w-auto whitespace-nowrap">
+              <Button variant="outline" size="sm" className="w-full sm:w-auto whitespace-nowrap min-h-[44px] sm:min-h-0">
                 <Upload className="mr-2 h-4 w-4" />
                 <span className="hidden sm:inline">Import</span>
               </Button>
@@ -284,7 +284,7 @@ export function TransactionsList({ initialTransactions, accounts }: Transactions
             <Button
               variant="outline"
               size="sm"
-              className="w-full sm:w-auto whitespace-nowrap"
+              className="w-full sm:w-auto whitespace-nowrap min-h-[44px] sm:min-h-0"
               onClick={handleExport}
               disabled={exporting || filteredAndSorted.length === 0}
             >
@@ -292,7 +292,7 @@ export function TransactionsList({ initialTransactions, accounts }: Transactions
               <span className="hidden sm:inline">{exporting ? 'Exporting...' : 'Export'}</span>
             </Button>
             <Link href="/accounting/transactions/new">
-              <Button size="sm" className="w-full sm:w-auto whitespace-nowrap">
+              <Button size="sm" className="w-full sm:w-auto whitespace-nowrap min-h-[44px] sm:min-h-0">
                 <Plus className="mr-2 h-4 w-4" />
                 <span className="hidden sm:inline">New</span>
                 <span className="sm:hidden">+</span>

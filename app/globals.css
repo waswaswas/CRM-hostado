@@ -16,9 +16,33 @@
   
   /* Ensure minimum touch target size on mobile */
   @media (max-width: 768px) {
-    button, a[role="button"], input[type="button"], input[type="submit"] {
+    button:not(.no-touch-target), a[role="button"], input[type="button"], input[type="submit"] {
       min-height: 44px;
       min-width: 44px;
+    }
+    
+    /* Better text readability on mobile */
+    body {
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+    
+    /* Prevent horizontal overflow */
+    * {
+      max-width: 100%;
+    }
+    
+    /* Better spacing for mobile */
+    .space-y-2 > * + * {
+      margin-top: 0.75rem;
+    }
+    
+    .space-y-3 > * + * {
+      margin-top: 1rem;
+    }
+    
+    .space-y-4 > * + * {
+      margin-top: 1.25rem;
     }
   }
 }

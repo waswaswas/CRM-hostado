@@ -248,45 +248,51 @@ export function RemindersCard({
               <Calendar className="h-5 w-5" />
               Reminders
             </CardTitle>
-            <CardDescription>Upcoming and overdue reminders</CardDescription>
+            <CardDescription>
+              {viewMode === 'completed' 
+                ? 'Completed reminders' 
+                : viewMode === 'calendar'
+                ? 'Calendar view'
+                : 'Upcoming and overdue reminders'}
+            </CardDescription>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             <Button
               size="sm"
               onClick={() => openQuickDialog()}
-              className="min-h-[44px] px-3 md:h-8"
+              className="min-h-[44px] px-4 gap-2 text-sm font-medium"
             >
-              <Plus className="h-4 w-4 mr-1.5" />
+              <Plus className="h-4 w-4" />
               <span className="hidden sm:inline">Quick Add</span>
               <span className="sm:hidden">Add</span>
             </Button>
-            <div className="flex items-center gap-2 border rounded-md p-1 bg-muted">
+            <div className="flex items-center gap-1 sm:gap-2 border rounded-lg p-1 bg-muted">
             <Button
               variant={viewMode === 'list' ? 'default' : 'ghost'}
               size="sm"
               onClick={() => setViewMode('list')}
-              className="min-h-[44px] px-3 md:h-8"
+              className="min-h-[44px] px-3 sm:px-4 gap-1.5 text-sm"
             >
-              <List className="h-4 w-4 mr-1.5" />
+              <List className="h-4 w-4" />
               <span className="hidden sm:inline">List</span>
             </Button>
             <Button
               variant={viewMode === 'calendar' ? 'default' : 'ghost'}
               size="sm"
               onClick={() => setViewMode('calendar')}
-              className="min-h-[44px] px-3 md:h-8"
+              className="min-h-[44px] px-3 sm:px-4 gap-1.5 text-sm"
             >
-              <Calendar className="h-4 w-4 mr-1.5" />
+              <Calendar className="h-4 w-4" />
               <span className="hidden sm:inline">Calendar</span>
             </Button>
             <Button
               variant={viewMode === 'completed' ? 'default' : 'ghost'}
               size="sm"
               onClick={() => setViewMode('completed')}
-              className="h-8 px-3"
+              className="min-h-[44px] px-3 sm:px-4 gap-1.5 text-sm"
             >
-              <CheckCircle2 className="h-4 w-4 mr-1.5" />
-              Completed
+              <CheckCircle2 className="h-4 w-4" />
+              <span className="hidden sm:inline">Completed</span>
             </Button>
             </div>
           </div>
@@ -304,15 +310,15 @@ export function RemindersCard({
                   {overdueReminders.map((reminder: any) => (
                     <div
                       key={reminder.id}
-                      className="flex items-center gap-3 rounded-xl border-l-4 border-l-destructive/80 bg-destructive/5 dark:bg-destructive/10 p-3.5 hover:bg-destructive/10 dark:hover:bg-destructive/15 transition-colors"
+                      className="flex items-center gap-3 sm:gap-4 rounded-xl border-l-4 border-l-destructive/80 bg-destructive/5 dark:bg-destructive/10 p-4 sm:p-3.5 hover:bg-destructive/10 dark:hover:bg-destructive/15 transition-colors"
                     >
                       <button
                         type="button"
                         onClick={() => handleToggleDone(reminder)}
                         disabled={loading}
-                        className={`flex-shrink-0 h-6 w-6 rounded-full border-2 flex items-center justify-center transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 disabled:opacity-50 ${reminder.done ? 'bg-primary border-primary text-primary-foreground' : 'border-muted-foreground/40 hover:border-primary'}`}
+                        className={`flex-shrink-0 h-8 w-8 sm:h-6 sm:w-6 rounded-full border-2 flex items-center justify-center transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 disabled:opacity-50 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 ${reminder.done ? 'bg-primary border-primary text-primary-foreground' : 'border-muted-foreground/40 hover:border-primary'}`}
                       >
-                        {reminder.done && <CheckCircle2 className="h-4 w-4" />}
+                        {reminder.done && <CheckCircle2 className="h-5 w-5 sm:h-4 sm:w-4" />}
                       </button>
                       <Link
                         href={reminder.client_id ? `/clients/${reminder.client_id}` : '#'}
@@ -323,9 +329,9 @@ export function RemindersCard({
                         <p className="text-sm text-muted-foreground truncate">{getClientName(reminder)}</p>
                         <p className="text-xs text-destructive font-medium mt-0.5">{formatDateTime(reminder.due_at)}</p>
                       </Link>
-                      <div className="flex items-center gap-1 flex-shrink-0">
-                        <Button variant="ghost" size="icon" onClick={(e) => { e.preventDefault(); openQuickDialog(undefined, reminder) }} disabled={loading} className="h-9 w-9 rounded-lg" aria-label="Edit"><Edit className="h-4 w-4" /></Button>
-                        <Button variant="ghost" size="icon" onClick={(e) => { e.preventDefault(); handleDelete(reminder) }} disabled={loading} className="h-9 w-9 rounded-lg text-destructive hover:text-destructive hover:bg-destructive/10" aria-label="Delete"><Trash2 className="h-4 w-4" /></Button>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <Button variant="ghost" size="icon" onClick={(e) => { e.preventDefault(); openQuickDialog(undefined, reminder) }} disabled={loading} className="h-10 w-10 sm:h-9 sm:w-9 rounded-lg min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0" aria-label="Edit"><Edit className="h-4 w-4 sm:h-4 sm:w-4" /></Button>
+                        <Button variant="ghost" size="icon" onClick={(e) => { e.preventDefault(); handleDelete(reminder) }} disabled={loading} className="h-10 w-10 sm:h-9 sm:w-9 rounded-lg text-destructive hover:text-destructive hover:bg-destructive/10 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0" aria-label="Delete"><Trash2 className="h-4 w-4 sm:h-4 sm:w-4" /></Button>
                       </div>
                     </div>
                   ))}
@@ -342,24 +348,24 @@ export function RemindersCard({
                   {todayReminders.map((reminder: any) => (
                     <div
                       key={reminder.id}
-                      className="flex items-center gap-3 rounded-xl border border-border bg-card hover:bg-muted/40 dark:hover:bg-muted/30 transition-colors p-3.5 border-l-4 border-l-primary/60"
+                      className="flex items-center gap-3 sm:gap-4 rounded-xl border border-border bg-card hover:bg-muted/40 dark:hover:bg-muted/30 transition-colors p-4 sm:p-3.5 border-l-4 border-l-primary/60"
                     >
                       <button
                         type="button"
                         onClick={() => handleToggleDone(reminder)}
                         disabled={loading}
-                        className={`flex-shrink-0 h-6 w-6 rounded-full border-2 flex items-center justify-center transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 disabled:opacity-50 ${reminder.done ? 'bg-primary border-primary text-primary-foreground' : 'border-muted-foreground/40 hover:border-primary'}`}
+                        className={`flex-shrink-0 h-8 w-8 sm:h-6 sm:w-6 rounded-full border-2 flex items-center justify-center transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 disabled:opacity-50 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 ${reminder.done ? 'bg-primary border-primary text-primary-foreground' : 'border-muted-foreground/40 hover:border-primary'}`}
                       >
-                        {reminder.done && <CheckCircle2 className="h-4 w-4" />}
+                        {reminder.done && <CheckCircle2 className="h-5 w-5 sm:h-4 sm:w-4" />}
                       </button>
                       <Link href={reminder.client_id ? `/clients/${reminder.client_id}` : '#'} className="flex-1 min-w-0 hover:text-primary" onClick={(e) => !reminder.client_id && e.preventDefault()}>
-                        <p className="font-medium text-foreground truncate">{reminder.title}</p>
-                        <p className="text-sm text-muted-foreground truncate">{getClientName(reminder)}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">{formatDateTime(reminder.due_at)}</p>
+                        <p className="font-medium text-base sm:text-sm text-foreground break-words">{reminder.title}</p>
+                        <p className="text-sm sm:text-xs text-muted-foreground truncate mt-1">{getClientName(reminder)}</p>
+                        <p className="text-xs text-muted-foreground mt-1">{formatDateTime(reminder.due_at)}</p>
                       </Link>
-                      <div className="flex items-center gap-1 flex-shrink-0">
-                        <Button variant="ghost" size="icon" onClick={(e) => { e.preventDefault(); openQuickDialog(undefined, reminder) }} disabled={loading} className="h-9 w-9 rounded-lg" aria-label="Edit"><Edit className="h-4 w-4" /></Button>
-                        <Button variant="ghost" size="icon" onClick={(e) => { e.preventDefault(); handleDelete(reminder) }} disabled={loading} className="h-9 w-9 rounded-lg text-destructive hover:text-destructive hover:bg-destructive/10" aria-label="Delete"><Trash2 className="h-4 w-4" /></Button>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <Button variant="ghost" size="icon" onClick={(e) => { e.preventDefault(); openQuickDialog(undefined, reminder) }} disabled={loading} className="h-10 w-10 sm:h-9 sm:w-9 rounded-lg min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0" aria-label="Edit"><Edit className="h-4 w-4 sm:h-4 sm:w-4" /></Button>
+                        <Button variant="ghost" size="icon" onClick={(e) => { e.preventDefault(); handleDelete(reminder) }} disabled={loading} className="h-10 w-10 sm:h-9 sm:w-9 rounded-lg text-destructive hover:text-destructive hover:bg-destructive/10 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0" aria-label="Delete"><Trash2 className="h-4 w-4 sm:h-4 sm:w-4" /></Button>
                       </div>
                     </div>
                   ))}
@@ -382,18 +388,18 @@ export function RemindersCard({
                         type="button"
                         onClick={() => handleToggleDone(reminder)}
                         disabled={loading}
-                        className={`flex-shrink-0 h-6 w-6 rounded-full border-2 flex items-center justify-center transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 disabled:opacity-50 ${reminder.done ? 'bg-primary border-primary text-primary-foreground' : 'border-muted-foreground/40 hover:border-primary'}`}
+                        className={`flex-shrink-0 h-8 w-8 sm:h-6 sm:w-6 rounded-full border-2 flex items-center justify-center transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 disabled:opacity-50 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 ${reminder.done ? 'bg-primary border-primary text-primary-foreground' : 'border-muted-foreground/40 hover:border-primary'}`}
                       >
-                        {reminder.done && <CheckCircle2 className="h-4 w-4" />}
+                        {reminder.done && <CheckCircle2 className="h-5 w-5 sm:h-4 sm:w-4" />}
                       </button>
                       <Link href={reminder.client_id ? `/clients/${reminder.client_id}` : '#'} className="flex-1 min-w-0 hover:text-primary" onClick={(e) => !reminder.client_id && e.preventDefault()}>
-                        <p className="font-medium text-foreground truncate">{reminder.title}</p>
-                        <p className="text-sm text-muted-foreground truncate">{getClientName(reminder)}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">{formatDateTime(reminder.due_at)}</p>
+                        <p className="font-medium text-base sm:text-sm text-foreground break-words">{reminder.title}</p>
+                        <p className="text-sm sm:text-xs text-muted-foreground truncate mt-1">{getClientName(reminder)}</p>
+                        <p className="text-xs text-muted-foreground mt-1">{formatDateTime(reminder.due_at)}</p>
                       </Link>
-                      <div className="flex items-center gap-1 flex-shrink-0">
-                        <Button variant="ghost" size="icon" onClick={(e) => { e.preventDefault(); openQuickDialog(undefined, reminder) }} disabled={loading} className="h-9 w-9 rounded-lg" aria-label="Edit"><Edit className="h-4 w-4" /></Button>
-                        <Button variant="ghost" size="icon" onClick={(e) => { e.preventDefault(); handleDelete(reminder) }} disabled={loading} className="h-9 w-9 rounded-lg text-destructive hover:text-destructive hover:bg-destructive/10" aria-label="Delete"><Trash2 className="h-4 w-4" /></Button>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <Button variant="ghost" size="icon" onClick={(e) => { e.preventDefault(); openQuickDialog(undefined, reminder) }} disabled={loading} className="h-10 w-10 sm:h-9 sm:w-9 rounded-lg min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0" aria-label="Edit"><Edit className="h-4 w-4 sm:h-4 sm:w-4" /></Button>
+                        <Button variant="ghost" size="icon" onClick={(e) => { e.preventDefault(); handleDelete(reminder) }} disabled={loading} className="h-10 w-10 sm:h-9 sm:w-9 rounded-lg text-destructive hover:text-destructive hover:bg-destructive/10 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0" aria-label="Delete"><Trash2 className="h-4 w-4 sm:h-4 sm:w-4" /></Button>
                       </div>
                     </div>
                   ))}
@@ -417,31 +423,32 @@ export function RemindersCard({
               completedReminders.map((reminder: any) => (
                 <div
                   key={reminder.id}
-                  className="flex items-center gap-3 rounded-xl border border-border bg-muted/30 dark:bg-muted/20 p-3.5"
+                  className="flex items-start sm:items-center gap-3 sm:gap-4 rounded-xl border border-border bg-muted/30 dark:bg-muted/20 p-4 sm:p-3.5"
                 >
                   <button
                     type="button"
                     onClick={() => handleToggleDone(reminder)}
                     disabled={loading}
-                    className={`flex-shrink-0 h-6 w-6 rounded-full border-2 flex items-center justify-center transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 disabled:opacity-50 ${reminder.done ? 'bg-primary border-primary text-primary-foreground' : 'border-muted-foreground/40 hover:border-primary'}`}
+                    className={`flex-shrink-0 h-8 w-8 sm:h-6 sm:w-6 rounded-full border-2 flex items-center justify-center transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 disabled:opacity-50 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 ${reminder.done ? 'bg-primary border-primary text-primary-foreground' : 'border-muted-foreground/40 hover:border-primary'}`}
                   >
-                    {reminder.done && <CheckCircle2 className="h-4 w-4" />}
+                    {reminder.done && <CheckCircle2 className="h-5 w-5 sm:h-4 sm:w-4" />}
                   </button>
                   <Link href={reminder.client_id ? `/clients/${reminder.client_id}` : '#'} className="flex-1 min-w-0 hover:text-primary" onClick={(e) => !reminder.client_id && e.preventDefault()}>
-                    <p className="font-medium line-through text-muted-foreground truncate">{reminder.title}</p>
-                    <p className="text-sm text-muted-foreground truncate">{getClientName(reminder)}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">{formatDateTime(reminder.due_at)}</p>
+                    <p className="font-medium text-base sm:text-sm line-through text-muted-foreground break-words">{reminder.title}</p>
+                    <p className="text-sm sm:text-xs text-muted-foreground truncate mt-1">{getClientName(reminder)}</p>
+                    <p className="text-xs text-muted-foreground mt-1">{formatDateTime(reminder.due_at)}</p>
                   </Link>
-                  <div className="flex items-center gap-1 flex-shrink-0">
-                    <Button variant="ghost" size="icon" onClick={(e) => { e.preventDefault(); openQuickDialog(undefined, reminder) }} disabled={loading} className="h-9 w-9 rounded-lg" aria-label="Edit"><Edit className="h-4 w-4" /></Button>
-                    <Button variant="ghost" size="icon" onClick={(e) => { e.preventDefault(); handleDelete(reminder) }} disabled={loading} className="h-9 w-9 rounded-lg text-destructive hover:text-destructive hover:bg-destructive/10" aria-label="Delete"><Trash2 className="h-4 w-4" /></Button>
+                  <div className="flex items-center gap-2 sm:gap-1 flex-shrink-0">
+                    <Button variant="ghost" size="icon" onClick={(e) => { e.preventDefault(); openQuickDialog(undefined, reminder) }} disabled={loading} className="h-10 w-10 sm:h-9 sm:w-9 rounded-lg min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0" aria-label="Edit"><Edit className="h-5 w-5 sm:h-4 sm:w-4" /></Button>
+                    <Button variant="ghost" size="icon" onClick={(e) => { e.preventDefault(); handleDelete(reminder) }} disabled={loading} className="h-10 w-10 sm:h-9 sm:w-9 rounded-lg text-destructive hover:text-destructive hover:bg-destructive/10 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0" aria-label="Delete"><Trash2 className="h-5 w-5 sm:h-4 sm:w-4" /></Button>
                   </div>
                 </div>
               ))
             ) : (
-              <div className="py-10 text-center">
-                <CheckCircle2 className="mx-auto h-10 w-10 text-muted-foreground/50 mb-2" />
-                <p className="text-sm text-muted-foreground">No completed reminders</p>
+              <div className="py-12 sm:py-10 text-center">
+                <CheckCircle2 className="mx-auto h-12 w-12 sm:h-10 sm:w-10 text-muted-foreground/50 mb-3 sm:mb-2" />
+                <p className="text-base sm:text-sm font-medium text-muted-foreground mb-1">No completed reminders</p>
+                <p className="text-sm sm:text-xs text-muted-foreground/80">Completed reminders will appear here</p>
               </div>
             )}
           </div>

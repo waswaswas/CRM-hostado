@@ -39,21 +39,21 @@ export function Topbar({ userName, sidebarCollapsed }: { userName?: string; side
         </div>
 
         {/* Right: actions — grouped and spaced for clarity */}
-        <div className="flex flex-shrink-0 items-center gap-1 sm:gap-2">
+        <div className="flex flex-shrink-0 items-center gap-2 sm:gap-3">
           <ThemeToggle />
-          <div className="min-h-[40px] min-w-[40px] flex items-center justify-center">
+          <div className="min-h-[44px] min-w-[44px] flex items-center justify-center">
             <NotificationBadge />
           </div>
           <div className="md:hidden">
             <FloatingActionButton currentPath={pathname} />
           </div>
-          <div className="hidden md:flex items-center gap-1 lg:gap-2">
+          <div className="hidden md:flex items-center gap-2 lg:gap-3">
             <div className="h-6 w-px bg-border hidden lg:block" aria-hidden />
             <Button
               variant="ghost"
               size="sm"
               onClick={() => setFeedbackOpen(true)}
-              className="h-9 min-h-[40px] px-3 gap-1.5 rounded-lg text-muted-foreground hover:text-foreground"
+              className="h-10 min-h-[44px] px-4 gap-2 rounded-lg text-muted-foreground hover:text-foreground"
               title="Feedback & Improvements"
             >
               <MessageSquare className="h-4 w-4 shrink-0" />
@@ -66,7 +66,7 @@ export function Topbar({ userName, sidebarCollapsed }: { userName?: string; side
                 type="submit"
                 variant="ghost"
                 size="sm"
-                className="h-9 min-h-[40px] px-3 gap-1.5 rounded-lg text-muted-foreground hover:text-foreground"
+                className="h-10 min-h-[44px] px-4 gap-2 rounded-lg text-muted-foreground hover:text-foreground"
               >
                 <LogOut className="h-4 w-4 shrink-0" />
                 <span className="text-sm">Logout</span>
@@ -75,7 +75,7 @@ export function Topbar({ userName, sidebarCollapsed }: { userName?: string; side
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-10 w-10 md:hidden rounded-lg" aria-label="More options">
+              <Button variant="ghost" size="icon" className="h-11 w-11 md:hidden rounded-lg min-h-[44px] min-w-[44px]" aria-label="More options">
                 <MoreVertical className="h-5 w-5" />
               </Button>
             </DropdownMenuTrigger>
