@@ -707,22 +707,22 @@ export function TodoPageClient({
               {visibleLists.map((list) => (
                 <div
                   key={list.id}
-                  className="flex items-center justify-between rounded-lg border px-4 py-3"
+                  className="flex flex-nowrap items-center justify-between gap-2 rounded-lg border px-4 py-3 min-w-0"
                 >
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
                     <span
-                      className="h-3 w-3 rounded-full"
+                      className="h-3 w-3 rounded-full shrink-0"
                       style={{ backgroundColor: list.color }}
                     />
-                    <div>
-                      <p className="font-medium">{list.name}</p>
-                      <p className="text-xs text-muted-foreground">
+                    <div className="min-w-0">
+                      <p className="font-medium truncate">{list.name}</p>
+                      <p className="text-xs text-muted-foreground whitespace-nowrap">
                         Created {new Date(list.createdAt).toLocaleDateString()}
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <Badge variant="secondary">
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Badge variant="secondary" className="whitespace-nowrap text-xs">
                       {list.members.length} members
                     </Badge>
                     <Button variant="outline" size="sm" onClick={() => setActiveListId(list.id)}>
@@ -849,18 +849,19 @@ export function TodoPageClient({
           <Button variant="outline" size="sm" onClick={() => setActiveListId(null)}>
             Back to lists
           </Button>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex items-center gap-3 min-w-0">
               <span className="h-3 w-3 rounded-full shrink-0" style={{ backgroundColor: activeList?.color }} />
               <div className="min-w-0">
                 <h1 className="text-2xl font-semibold truncate">{activeList?.name}</h1>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-muted-foreground whitespace-nowrap">
                   {activeList?.members.length} members • Created {activeList ? new Date(activeList.createdAt).toLocaleDateString() : ''}
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <label className="flex items-center gap-2 text-sm cursor-pointer">
+            {/* Mobile: dropdown so Show subtasks + List settings don't overflow. Desktop: inline. */}
+            <div className="flex items-center gap-2 shrink-0 lg:flex">
+              <label className="hidden lg:flex items-center gap-2 text-sm cursor-pointer">
                 <input
                   type="checkbox"
                   checked={showSubtasks}
@@ -877,10 +878,43 @@ export function TodoPageClient({
                 />
                 <span>Show subtasks</span>
               </label>
-              <Button variant="outline" onClick={() => setShowSettingsDialog(true)}>
+              <Button variant="outline" onClick={() => setShowSettingsDialog(true)} className="hidden lg:flex">
                 <Settings className="h-4 w-4 mr-2" />
                 List settings
               </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="lg:hidden min-h-[44px]">
+                    <Settings className="h-4 w-4 mr-2" />
+                    Options
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuItem asChild>
+                    <label className="flex cursor-pointer items-center gap-2 px-2 py-1.5 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={showSubtasks}
+                        onChange={(e) => {
+                          const v = e.target.checked
+                          setShowSubtasks(v)
+                          try {
+                            localStorage.setItem('hostado-todo-show-subtasks', String(v))
+                          } catch {
+                            // ignore
+                          }
+                        }}
+                        className="h-4 w-4 rounded border-gray-300"
+                      />
+                      Show subtasks
+                    </label>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setShowSettingsDialog(true)}>
+                    <Settings className="h-4 w-4 mr-2" />
+                    List settings
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
         </div>
@@ -996,13 +1030,14 @@ export function TodoPageClient({
                         return next
                       })
                     }}
-                    className="h-4 w-4 rounded border-gray-300"
+                    className="h-4 w-4 rounded border-gray-300 shrink-0"
                   />
                   <input
                     type="checkbox"
                     checked={task.completed}
                     onChange={() => handleUpdateTask(task.id, { completed: !task.completed })}
-                    className="h-5 w-5 sm:h-4 sm:w-4 rounded border-gray-300 shrink-0 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center"
+                    className="h-5 w-5 rounded border-gray-300 shrink-0 sm:h-4 sm:w-4"
+                    aria-label={task.completed ? 'Mark incomplete' : 'Mark complete'}
                   />
                   <div className="flex-1 min-w-0">
                     {editingTaskId === task.id ? (
@@ -1102,8 +1137,8 @@ export function TodoPageClient({
       </div>
 
       {activeTask && (
-      <div className="lg:w-[380px] w-full shrink-0 min-w-0 flex flex-col">
-          <Card className="sticky top-6 flex flex-col min-h-0 max-h-[calc(100vh-6rem)] overflow-hidden">
+      <div className="fixed inset-0 z-50 flex flex-col bg-background lg:static lg:inset-auto lg:z-auto lg:w-[380px] lg:bg-transparent w-full shrink-0 min-w-0">
+          <Card className="sticky top-0 lg:top-6 flex flex-col min-h-0 max-h-[100dvh] lg:max-h-[calc(100vh-6rem)] overflow-hidden">
             <CardHeader className="shrink-0 flex flex-row items-center justify-between space-y-0">
               <CardTitle>Task Details</CardTitle>
               <Button

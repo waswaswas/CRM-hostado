@@ -266,32 +266,33 @@ export function RemindersCard({
               <span className="hidden sm:inline">Quick Add</span>
               <span className="sm:hidden">Add</span>
             </Button>
-            <div className="flex items-center gap-1 sm:gap-2 border rounded-lg p-1 bg-muted">
+            {/* Mobile: single row, equal-width segments. Desktop: unchanged. */}
+            <div className="flex flex-nowrap items-center gap-0 sm:gap-2 w-full sm:w-auto border rounded-lg p-1 bg-muted min-w-0">
             <Button
               variant={viewMode === 'list' ? 'default' : 'ghost'}
               size="sm"
               onClick={() => setViewMode('list')}
-              className="min-h-[44px] px-3 sm:px-4 gap-1.5 text-sm"
+              className="flex-1 sm:flex-initial min-w-0 justify-center min-h-[44px] px-2 sm:px-4 gap-1.5 text-sm rounded-md"
             >
-              <List className="h-4 w-4" />
+              <List className="h-4 w-4 shrink-0" />
               <span className="hidden sm:inline">List</span>
             </Button>
             <Button
               variant={viewMode === 'calendar' ? 'default' : 'ghost'}
               size="sm"
               onClick={() => setViewMode('calendar')}
-              className="min-h-[44px] px-3 sm:px-4 gap-1.5 text-sm"
+              className="flex-1 sm:flex-initial min-w-0 justify-center min-h-[44px] px-2 sm:px-4 gap-1.5 text-sm rounded-md"
             >
-              <Calendar className="h-4 w-4" />
+              <Calendar className="h-4 w-4 shrink-0" />
               <span className="hidden sm:inline">Calendar</span>
             </Button>
             <Button
               variant={viewMode === 'completed' ? 'default' : 'ghost'}
               size="sm"
               onClick={() => setViewMode('completed')}
-              className="min-h-[44px] px-3 sm:px-4 gap-1.5 text-sm"
+              className="flex-1 sm:flex-initial min-w-0 justify-center min-h-[44px] px-2 sm:px-4 gap-1.5 text-sm rounded-md"
             >
-              <CheckCircle2 className="h-4 w-4" />
+              <CheckCircle2 className="h-4 w-4 shrink-0" />
               <span className="hidden sm:inline">Completed</span>
             </Button>
             </div>
