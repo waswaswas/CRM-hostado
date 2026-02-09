@@ -6,9 +6,10 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Select } from '@/components/ui/select'
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { createFeedback, updateFeedback, deleteFeedback, getFeedback, getFeedbackViewMeta, toggleFeedbackCompleted, getFeedbackComments, getFeedbackCommentCounts, createFeedbackComment, updateFeedbackComment, deleteFeedbackComment, type Feedback, type FeedbackStatus, type FeedbackComment } from '@/app/actions/feedback'
 import { useToast } from '@/components/ui/toaster'
-import { Edit, Trash2, Plus, Check, Pencil } from 'lucide-react'
+import { ChevronDown, Edit, Trash2, Plus, Check, Pencil } from 'lucide-react'
 import { format } from 'date-fns'
 
 interface FeedbackDialogProps {
@@ -149,7 +150,13 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
   async function handleToggleCompleted(id: string, completed: boolean) {
     try {
       await toggleFeedbackCompleted(id, completed)
-      loadFeedback()
+      setFeedbackList((prev) =>
+        prev.map((f) =>
+          f.id === id
+            ? { ...f, completed, status: completed ? ('done' as FeedbackStatus) : (f.status === 'done' ? 'pending' : f.status) }
+            : f
+        )
+      )
     } catch (error) {
       toast({
         title: 'Error',
@@ -162,7 +169,9 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
   async function handleStatusChange(id: string, status: FeedbackStatus) {
     try {
       await updateFeedback(id, { status, completed: status === 'done' })
-      loadFeedback()
+      setFeedbackList((prev) =>
+        prev.map((f) => (f.id === id ? { ...f, status, completed: status === 'done' } : f))
+      )
     } catch (error) {
       toast({
         title: 'Error',
@@ -274,7 +283,7 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
         </DialogHeader>
         <DialogClose onClose={() => onOpenChange(false)} />
 
-        <div className="space-y-6">
+        <div className="space-y-6 pb-12">
           {/* Form */}
           <div className="space-y-4 border-b pb-4">
             <h3 className="font-semibold">
@@ -384,15 +393,28 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-2 flex-wrap">
                             {(viewMeta.isFeedbackAdmin || (viewMeta.userId && feedback.owner_id === viewMeta.userId)) ? (
-                              <Select
-                                value={feedback.status || (feedback.completed ? 'done' : 'pending')}
-                                onChange={(e) => handleStatusChange(feedback.id, e.target.value as FeedbackStatus)}
-                                className="w-auto h-7 text-xs"
-                              >
-                                {STATUS_OPTIONS.map((opt) => (
-                                  <option key={opt.value} value={opt.value}>{opt.label}</option>
-                                ))}
-                              </Select>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-7 text-xs px-2 gap-1 min-w-[7rem] justify-between"
+                                  >
+                                    {STATUS_OPTIONS.find((o) => o.value === (feedback.status || (feedback.completed ? 'done' : 'pending')))?.label || 'Pending'}
+                                    <ChevronDown className="h-3 w-3 opacity-50" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="start" className="min-w-[10rem]">
+                                  {STATUS_OPTIONS.map((opt) => (
+                                    <DropdownMenuItem
+                                      key={opt.value}
+                                      onClick={() => handleStatusChange(feedback.id, opt.value)}
+                                    >
+                                      {opt.label}
+                                    </DropdownMenuItem>
+                                  ))}
+                                </DropdownMenuContent>
+                              </DropdownMenu>
                             ) : (
                                 (feedback.status || (feedback.completed ? 'done' : 'pending')) && (
                                 <span
