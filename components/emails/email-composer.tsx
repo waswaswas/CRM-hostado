@@ -885,7 +885,7 @@ export function EmailComposer({ clientId, initialSubject, initialBody, initialTo
               </TabsContent>
               <TabsContent value="preview">
                 <div
-                  className="mt-1 p-4 border rounded-lg bg-white dark:bg-gray-900 email-body-preview min-h-[300px]"
+                  className="mt-1 p-4 border rounded-lg bg-white dark:bg-transparent email-body-preview min-h-[300px]"
                   dangerouslySetInnerHTML={{ __html: previewHtml || '<p class="text-muted-foreground">No content to preview</p>' }}
                 />
                 {selectedSignature && (

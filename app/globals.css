@@ -205,5 +205,30 @@
   margin-bottom: 0;
 }
 
+/* Dark mode: make email body content readable (white text) */
+.dark .email-body-preview,
+.dark .email-body-preview p,
+.dark .email-body-preview span,
+.dark .email-body-preview div,
+.dark .email-body-preview li,
+.dark .email-body-preview td,
+.dark .email-body-preview th,
+.dark .email-body-preview h1,
+.dark .email-body-preview h2,
+.dark .email-body-preview h3 {
+  color: hsl(var(--foreground)) !important;
+}
+
+.dark .email-body-preview a {
+  color: #60a5fa !important;
+}
+
+/* Dark mode: remove all backgrounds from email HTML so content is visible */
+.dark .email-body-preview,
+.dark .email-body-preview * {
+  background-color: transparent !important;
+  background: transparent !important;
+}
+
 
 

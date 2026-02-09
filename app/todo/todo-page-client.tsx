@@ -8,6 +8,8 @@ import {
   addManualTimeEntry,
   correctTimeEntry,
   createTodoAttachment,
+  updateTodoAttachment,
+  deleteTodoAttachment,
   deleteTimeEntry,
   createTodoComment,
   createTodoList,
@@ -249,6 +251,8 @@ export function TodoPageClient({
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('')
   const [newComment, setNewComment] = useState('')
   const [newAttachmentUrl, setNewAttachmentUrl] = useState('')
+  const [editingAttachmentId, setEditingAttachmentId] = useState<string | null>(null)
+  const [editAttachmentUrl, setEditAttachmentUrl] = useState('')
   const [loadingLists, setLoadingLists] = useState(() => (initialLists?.length ?? 0) === 0)
   const hadInitialLists = useRef((initialLists?.length ?? 0) > 0)
   const [loadingTasks, setLoadingTasks] = useState(false)
@@ -1408,8 +1412,82 @@ export function TodoPageClient({
               <div className="space-y-2">
                 <label className="text-sm font-medium">Attachments</label>
                 {(activeTask.attachments || []).map((attachment) => (
-                  <div key={attachment.id} className="text-sm text-muted-foreground">
-                    {attachment.name}
+                  <div key={attachment.id} className="flex items-center gap-2 rounded border border-transparent hover:border-border px-2 py-1.5 group">
+                    {editingAttachmentId === attachment.id ? (
+                      <>
+                        <Input
+                          placeholder="Attachment URL"
+                          value={editAttachmentUrl}
+                          onChange={(e) => setEditAttachmentUrl(e.target.value)}
+                          className="flex-1 min-w-0 text-sm"
+                        />
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={async () => {
+                            if (!editAttachmentUrl.trim()) return
+                            await updateTodoAttachment(attachment.id, {
+                              file_name: editAttachmentUrl.trim(),
+                              file_url: editAttachmentUrl.trim(),
+                            })
+                            setEditingAttachmentId(null)
+                            setEditAttachmentUrl('')
+                            await refreshTasks(activeTask.listId, activeProjectId)
+                          }}
+                        >
+                          Save
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setEditingAttachmentId(null)
+                            setEditAttachmentUrl('')
+                          }}
+                        >
+                          Cancel
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        <a
+                          href={attachment.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex-1 min-w-0 truncate text-sm text-muted-foreground hover:text-foreground hover:underline"
+                          title={attachment.url}
+                        >
+                          {attachment.name}
+                        </a>
+                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0"
+                            onClick={() => {
+                              setEditingAttachmentId(attachment.id)
+                              setEditAttachmentUrl(attachment.url)
+                            }}
+                            aria-label="Edit attachment"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                            onClick={async () => {
+                              if (!confirm('Delete this attachment?')) return
+                              await deleteTodoAttachment(attachment.id)
+                              await refreshTasks(activeTask.listId, activeProjectId)
+                            }}
+                            aria-label="Delete attachment"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </>
+                    )}
                   </div>
                 ))}
                 <div className="flex gap-2">

@@ -809,6 +809,41 @@ export async function createTodoAttachment(taskId: string, fileName: string, fil
   revalidatePath('/todo')
 }
 
+export async function updateTodoAttachment(
+  attachmentId: string,
+  updates: { file_name?: string; file_url?: string }
+): Promise<void> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) throw new Error('Unauthorized')
+
+  const { error } = await supabase
+    .from('todo_task_attachments')
+    .update(updates)
+    .eq('id', attachmentId)
+
+  if (error) throw new Error(error.message)
+  revalidatePath('/todo')
+}
+
+export async function deleteTodoAttachment(attachmentId: string): Promise<void> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) throw new Error('Unauthorized')
+
+  const { error } = await supabase
+    .from('todo_task_attachments')
+    .delete()
+    .eq('id', attachmentId)
+
+  if (error) throw new Error(error.message)
+  revalidatePath('/todo')
+}
+
 // ---- Time tracking ----
 
 export type TodoTimeEntry = {

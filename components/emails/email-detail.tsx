@@ -248,7 +248,7 @@ export function EmailDetail({ initialEmail }: EmailDetailProps) {
           <div>
             <label className="text-sm font-medium text-muted-foreground">Body</label>
             <div
-              className="mt-1 p-3 sm:p-4 border rounded-lg bg-white dark:bg-gray-900 email-body-preview max-h-[600px] overflow-y-auto"
+              className="mt-1 p-3 sm:p-4 border rounded-lg bg-white dark:bg-transparent email-body-preview max-h-[600px] overflow-y-auto"
               dangerouslySetInnerHTML={{ __html: email.body_html }}
             />
           </div>
