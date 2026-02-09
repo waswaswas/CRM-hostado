@@ -638,31 +638,113 @@ export async function updateTodoTask(taskId: string, updates: TodoTaskUpdate): P
   } = await supabase.auth.getUser()
   if (!user) throw new Error('Unauthorized')
 
+  const newDescription = updates.description
   const newAssigneeId = updates.assignee_id ?? updates.assigneeId
-  if (newAssigneeId !== undefined) {
-    const { data: current } = await supabase
-      .from('todo_tasks')
-      .select('assignee_id, list_id, title')
-      .eq('id', taskId)
-      .single()
-    if (current && current.assignee_id !== newAssigneeId && newAssigneeId) {
+
+  const { data: currentTask } = await supabase
+    .from('todo_tasks')
+    .select('description, list_id, title, assignee_id')
+    .eq('id', taskId)
+    .single()
+
+  if (newAssigneeId !== undefined && currentTask) {
+    if (currentTask.assignee_id !== newAssigneeId && newAssigneeId) {
       try {
         const { createNotification } = await import('./notifications')
         const { getCurrentOrganizationId } = await import('./organizations')
-        const orgId = (await getCurrentOrganizationId()) || (await getOrganizationIdFromListId(current.list_id))
+        const orgId = (await getCurrentOrganizationId()) || (await getOrganizationIdFromListId(currentTask.list_id))
         await createNotification({
           type: 'task_assigned',
           title: 'Task assigned to you',
-          message: `You were assigned to "${current.title || 'a task'}"`,
+          message: `You were assigned to "${currentTask.title || 'a task'}"`,
           related_id: taskId,
           related_type: 'todo_task',
-          metadata: { list_id: current.list_id },
+          metadata: { list_id: currentTask.list_id },
           owner_id: newAssigneeId,
           organization_id: orgId,
         })
       } catch {
         // Don't fail task update if notification fails (e.g. RLS)
       }
+    }
+  }
+
+  if (newDescription !== undefined && currentTask) {
+    try {
+      const extractMentionedEmails = (text: string): Set<string> => {
+        const emails = new Set<string>()
+        const regex = /@([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.\w+)/g
+        let m: RegExpExecArray | null
+        while ((m = regex.exec(text)) !== null) {
+          emails.add(m[1].toLowerCase())
+        }
+        return emails
+      }
+      const oldEmails = extractMentionedEmails(currentTask.description || '')
+      const newEmails = extractMentionedEmails(newDescription)
+      const newlyMentioned = [...newEmails].filter((e) => !oldEmails.has(e))
+      if (newlyMentioned.length > 0) {
+        const orgId = (await getCurrentOrganizationId()) || (await getOrganizationIdFromListId(currentTask.list_id))
+        if (orgId) {
+        const { data: orgMembers } = await supabase
+          .from('organization_members')
+          .select('user_id')
+          .eq('organization_id', orgId)
+          .eq('is_active', true)
+        const orgUserIds = (orgMembers || []).map((r: { user_id: string }) => r.user_id)
+
+        const emailToUserId = new Map<string, string>()
+        if (orgUserIds.length > 0) {
+          const { data: profiles } = await supabase
+            .from('user_profiles')
+            .select('id, email')
+            .in('id', orgUserIds)
+          for (const p of profiles || []) {
+            const email = (p as { id: string; email: string }).email
+            if (email) emailToUserId.set(email.toLowerCase().trim(), (p as { id: string; email: string }).id)
+          }
+        }
+        if (emailToUserId.size === 0 && newlyMentioned.length > 0) {
+          for (const email of newlyMentioned) {
+            const { data: profile } = await supabase
+              .from('user_profiles')
+              .select('id')
+              .ilike('email', email)
+              .limit(1)
+              .maybeSingle()
+            if (profile && orgUserIds.includes((profile as { id: string }).id)) {
+              emailToUserId.set(email, (profile as { id: string }).id)
+            }
+          }
+        }
+
+        const mentionedUserIds = newlyMentioned
+          .map((email) => emailToUserId.get(email))
+          .filter((id): id is string => !!id && id !== user.id)
+
+        if (mentionedUserIds.length > 0) {
+          const { createNotification } = await import('./notifications')
+          for (const mentionedUserId of mentionedUserIds) {
+            try {
+              await createNotification({
+                type: 'task_mention',
+                title: 'You were mentioned in a task',
+                message: `You were tagged in "${currentTask.title || 'a task'}"`,
+                related_id: taskId,
+                related_type: 'todo_task',
+                metadata: { list_id: currentTask.list_id },
+                owner_id: mentionedUserId,
+                organization_id: orgId,
+              })
+            } catch (err) {
+              console.error('Failed to create task_mention notification:', err)
+            }
+          }
+        }
+        }
+      }
+    } catch (err) {
+      console.error('Task mention notification error:', err)
     }
   }
 

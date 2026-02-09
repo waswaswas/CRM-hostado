@@ -1132,8 +1132,8 @@ export function TodoPageClient({
                   onMention={async (userId) => {
                     try {
                       await notifyTaskMention(activeTask.id, userId, activeTask.title, activeListId!)
-                    } catch {
-                      // Notification may fail (e.g. RLS); don't block the UI
+                    } catch (err) {
+                      console.error('onMention notifyTaskMention failed:', err)
                     }
                   }}
                   options={listMemberDetails.map((m) => ({ user_id: m.user_id, email: m.email }))}

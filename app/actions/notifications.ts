@@ -122,11 +122,31 @@ export async function createNotification(data: {
     if ((data.type === 'task_assigned' || data.type === 'task_mention') && !prefs.tasks_enabled) return null as any
   }
 
+  const isTaskNotificationForOther = (data.type === 'task_assigned' || data.type === 'task_mention') && ownerId !== user.id
+  const orgId = organizationId ?? null
+
+  if (isTaskNotificationForOther && orgId) {
+    const { data: rpcData, error: rpcError } = await supabase.rpc('insert_task_notification_for_user', {
+      p_owner_id: ownerId,
+      p_organization_id: orgId,
+      p_type: data.type,
+      p_title: data.title,
+      p_message: data.message || null,
+      p_related_id: data.related_id || null,
+      p_related_type: data.related_type || null,
+      p_metadata: data.metadata || {},
+    })
+    if (rpcError) throw new Error(rpcError.message)
+    revalidatePath('/notifications')
+    revalidatePath('/dashboard')
+    return rpcData as Notification
+  }
+
   const { data: notification, error } = await supabase
     .from('notifications')
     .insert({
       owner_id: ownerId,
-      organization_id: organizationId ?? null,
+      organization_id: orgId,
       type: data.type,
       title: data.title,
       message: data.message || null,
