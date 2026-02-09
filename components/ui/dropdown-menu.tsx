@@ -53,20 +53,26 @@ export function DropdownMenuTrigger({
   )
 }
 
+const MOBILE_BREAKPOINT = 640
+
 export function DropdownMenuContent({
   children,
   align = 'start',
   side = 'bottom',
   className,
+  mobileInset: mobileInsetProp = false,
 }: {
   children: React.ReactNode
   align?: 'start' | 'end'
   side?: 'top' | 'bottom'
   className?: string
+  /** When true, on viewport &lt; 640px the panel is inset (left/right 1rem) so it never overflows. Use for notification panel etc. */
+  mobileInset?: boolean
 }) {
   const context = React.useContext(DropdownMenuContext)
   if (!context) throw new Error('DropdownMenuContent must be used within DropdownMenu')
   const [position, setPosition] = React.useState({ top: 0, left: 0, right: 0, bottom: 0 })
+  const [isNarrow, setIsNarrow] = React.useState(false)
 
   React.useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -83,6 +89,12 @@ export function DropdownMenuContent({
   }, [context])
 
   React.useLayoutEffect(() => {
+    if (mobileInsetProp && typeof window !== 'undefined') {
+      setIsNarrow(window.innerWidth < MOBILE_BREAKPOINT)
+    }
+  }, [context.open, mobileInsetProp])
+
+  React.useLayoutEffect(() => {
     if (!context.open || !context.triggerRef.current || typeof document === 'undefined') return
     const rect = context.triggerRef.current.getBoundingClientRect()
     const GAP = 4
@@ -94,19 +106,38 @@ export function DropdownMenuContent({
     })
   }, [context.open, align, side])
 
+  React.useEffect(() => {
+    if (!mobileInsetProp || typeof window === 'undefined') return
+    const onResize = () => setIsNarrow(window.innerWidth < MOBILE_BREAKPOINT)
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [mobileInsetProp])
+
   if (!context.open) return null
+
+  const useInset = mobileInsetProp && isNarrow
 
   const content = (
     <div
       data-dropdown-menu
       className={cn(
         'fixed z-[9999] min-w-[8rem] overflow-visible rounded-md border bg-popover p-1 text-popover-foreground shadow-md',
+        useInset && '!left-4 !right-4 !w-[calc(100vw-2rem)]',
         className
       )}
-      style={{
-        ...(side === 'bottom' ? { top: position.top } : { bottom: position.bottom }),
-        ...(align === 'start' ? { left: position.left } : { right: position.right }),
-      } as React.CSSProperties}
+      style={
+        useInset
+          ? {
+              ...(side === 'bottom' ? { top: position.top } : { bottom: position.bottom }),
+              left: '1rem',
+              right: '1rem',
+              width: 'calc(100vw - 2rem)',
+            }
+          : {
+              ...(side === 'bottom' ? { top: position.top } : { bottom: position.bottom }),
+              ...(align === 'start' ? { left: position.left } : { right: position.right }),
+            }
+      }
     >
       {children}
     </div>

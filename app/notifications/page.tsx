@@ -8,9 +8,9 @@ export default async function NotificationsPage() {
 
   return (
     <AppLayout>
-      <div className="mx-auto max-w-4xl space-y-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold">Notifications</h1>
+      <div className="mx-auto max-w-4xl space-y-6 px-4 md:px-0">
+        <div className="flex items-center justify-between gap-3 min-w-0">
+          <h1 className="text-xl font-bold truncate min-w-0 sm:text-2xl md:text-3xl">Notifications</h1>
           <NotificationPreferencesButton />
         </div>
         <NotificationsList initialNotifications={notifications} />

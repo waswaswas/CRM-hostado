@@ -98,8 +98,8 @@ export function NotificationBadge() {
           )}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-80 rounded-xl border-border/80 shadow-lg">
-        <div className="px-3 py-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+      <DropdownMenuContent align="end" mobileInset className="w-80 max-w-[min(20rem,calc(100vw-2rem))] rounded-xl border-border/80 shadow-lg">
+        <div className="px-3 py-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground truncate">
           Notifications
         </div>
         <DropdownMenuSeparator />

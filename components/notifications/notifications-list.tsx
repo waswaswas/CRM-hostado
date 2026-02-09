@@ -255,92 +255,88 @@ export function NotificationsList({ initialNotifications }: NotificationsListPro
             return (
               <Card
                 key={notification.id}
-                className={`transition-colors ${
+                className={`transition-colors overflow-hidden ${
                   !notification.is_read
                     ? 'border-primary/50 bg-primary/5'
                     : 'bg-muted/30'
                 }`}
               >
-                <CardContent className="p-4 sm:p-4">
-                  <div className="flex items-start gap-3 sm:gap-4">
-                    {/* Icon */}
-                    <div className={`p-2.5 sm:p-2 rounded-lg shrink-0 ${getNotificationColor(notification.type)}`}>
-                      <Icon className="h-5 w-5 sm:h-5 sm:w-5" />
+                <CardContent className="p-4">
+                  {/* Mobile: stacked layout so content and actions don't overflow. Desktop: unchanged row. */}
+                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:gap-4">
+                    <div className="flex items-start gap-3 min-w-0 flex-1">
+                      <div className={`p-2.5 rounded-lg shrink-0 md:p-2 ${getNotificationColor(notification.type)}`}>
+                        <Icon className="h-5 w-5" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2 mb-1">
+                          <h3 className={`font-semibold text-base break-words line-clamp-2 md:line-clamp-none ${!notification.is_read ? 'text-foreground' : 'text-muted-foreground'}`}>
+                            {notification.title}
+                          </h3>
+                          {!notification.is_read && (
+                            <Badge variant="secondary" className="text-xs shrink-0">
+                              New
+                            </Badge>
+                          )}
+                        </div>
+                        {notification.message && (
+                          <p className="text-sm text-muted-foreground mb-1 break-words line-clamp-2 md:line-clamp-none">
+                            {notification.message}
+                          </p>
+                        )}
+                        <p className="text-xs text-muted-foreground">
+                          {format(new Date(notification.created_at), 'MMM d, yyyy HH:mm')}
+                        </p>
+                      </div>
                     </div>
 
-                    {/* Content */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-3">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex flex-wrap items-center gap-2 mb-1.5">
-                            <h3 className={`font-semibold text-base sm:text-sm break-words ${!notification.is_read ? 'text-foreground' : 'text-muted-foreground'}`}>
-                              {notification.title}
-                            </h3>
-                            {!notification.is_read && (
-                              <Badge variant="secondary" className="text-xs shrink-0">
-                                New
-                              </Badge>
-                            )}
-                          </div>
-                          {notification.message && (
-                            <p className="text-sm sm:text-sm text-muted-foreground mb-2 break-words">
-                              {notification.message}
-                            </p>
-                          )}
-                          <p className="text-xs text-muted-foreground">
-                            {format(new Date(notification.created_at), 'MMM d, yyyy HH:mm')}
-                          </p>
-                        </div>
-
-                        {/* Actions */}
-                        <div className="flex items-center gap-2 sm:gap-1 shrink-0">
-                          {notification.is_read ? (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleMarkAsUnread(notification.id)}
-                              disabled={loading}
-                              className="h-10 w-10 sm:h-8 sm:w-8 p-0 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0"
-                              title="Mark as unread"
-                            >
-                              <Circle className="h-5 w-5 sm:h-4 sm:w-4" />
-                            </Button>
-                          ) : (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleMarkAsRead(notification.id)}
-                              disabled={loading}
-                              className="h-10 w-10 sm:h-8 sm:w-8 p-0 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0"
-                              title="Mark as read"
-                            >
-                              <CheckCircle2 className="h-5 w-5 sm:h-4 sm:w-4" />
-                            </Button>
-                          )}
+                    {/* Actions: mobile = full-width row so nothing is cut off; desktop = inline */}
+                    <div className="flex items-center justify-end gap-1 flex-shrink-0 md:justify-start">
+                      {notification.is_read ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleMarkAsUnread(notification.id)}
+                          disabled={loading}
+                          className="h-11 w-11 min-h-[44px] min-w-[44px] p-0 md:h-8 md:w-8 md:min-h-0 md:min-w-0"
+                          title="Mark as unread"
+                        >
+                          <Circle className="h-5 w-5 md:h-4 md:w-4" />
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleMarkAsRead(notification.id)}
+                          disabled={loading}
+                          className="h-11 w-11 min-h-[44px] min-w-[44px] p-0 md:h-8 md:w-8 md:min-h-0 md:min-w-0"
+                          title="Mark as read"
+                        >
+                          <CheckCircle2 className="h-5 w-5 md:h-4 md:w-4" />
+                        </Button>
+                      )}
+                      {link && (
+                        <Link href={link}>
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => handleDelete(notification.id)}
-                            disabled={loading}
-                            className="h-10 w-10 sm:h-8 sm:w-8 p-0 text-destructive hover:text-destructive min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0"
-                            title="Delete"
+                            className="h-11 w-11 min-h-[44px] min-w-[44px] p-0 md:h-8 md:w-8 md:min-h-0 md:min-w-0"
+                            title="View"
                           >
-                            <Trash2 className="h-5 w-5 sm:h-4 sm:w-4" />
+                            <ArrowRight className="h-5 w-5 md:h-4 md:w-4" />
                           </Button>
-                          {link && (
-                            <Link href={link}>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-10 w-10 sm:h-8 sm:w-8 p-0 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0"
-                                title="View"
-                              >
-                                <ArrowRight className="h-5 w-5 sm:h-4 sm:w-4" />
-                              </Button>
-                            </Link>
-                          )}
-                        </div>
-                      </div>
+                        </Link>
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleDelete(notification.id)}
+                        disabled={loading}
+                        className="h-11 w-11 min-h-[44px] min-w-[44px] p-0 text-destructive hover:text-destructive md:h-8 md:w-8 md:min-h-0 md:min-w-0"
+                        title="Delete"
+                      >
+                        <Trash2 className="h-5 w-5 md:h-4 md:w-4" />
+                      </Button>
                     </div>
                   </div>
                 </CardContent>
