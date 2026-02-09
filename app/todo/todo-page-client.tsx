@@ -48,7 +48,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { useToast } from '@/components/ui/toaster'
-import { Archive, Calendar, Check, ChevronDown, Clock, Copy, FolderOpen, Pencil, Plus, Search, Settings, Square, Trash2, UserMinus, Users } from 'lucide-react'
+import { Archive, Calendar, Check, ChevronDown, Clock, Copy, FolderOpen, Pencil, Plus, Search, Settings, Square, Trash2, UserMinus, Users, X } from 'lucide-react'
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { MentionTextarea } from '@/components/todo/mention-textarea'
 
@@ -253,6 +253,15 @@ export function TodoPageClient({
   const [newAttachmentUrl, setNewAttachmentUrl] = useState('')
   const [editingAttachmentId, setEditingAttachmentId] = useState<string | null>(null)
   const [editAttachmentUrl, setEditAttachmentUrl] = useState('')
+  const [showSubtasks, setShowSubtasks] = useState(() => {
+    if (typeof window === 'undefined') return true
+    try {
+      const stored = localStorage.getItem('hostado-todo-show-subtasks')
+      return stored !== 'false'
+    } catch {
+      return true
+    }
+  })
   const [loadingLists, setLoadingLists] = useState(() => (initialLists?.length ?? 0) === 0)
   const hadInitialLists = useRef((initialLists?.length ?? 0) > 0)
   const [loadingTasks, setLoadingTasks] = useState(false)
@@ -850,10 +859,29 @@ export function TodoPageClient({
                 </p>
               </div>
             </div>
-            <Button variant="outline" onClick={() => setShowSettingsDialog(true)} className="shrink-0">
-              <Settings className="h-4 w-4 mr-2" />
-              List settings
-            </Button>
+            <div className="flex items-center gap-2 shrink-0">
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={showSubtasks}
+                  onChange={(e) => {
+                    const v = e.target.checked
+                    setShowSubtasks(v)
+                    try {
+                      localStorage.setItem('hostado-todo-show-subtasks', String(v))
+                    } catch {
+                      // ignore
+                    }
+                  }}
+                  className="h-4 w-4 rounded border-gray-300"
+                />
+                <span>Show subtasks</span>
+              </label>
+              <Button variant="outline" onClick={() => setShowSettingsDialog(true)}>
+                <Settings className="h-4 w-4 mr-2" />
+                List settings
+              </Button>
+            </div>
           </div>
         </div>
 
@@ -948,98 +976,125 @@ export function TodoPageClient({
             </Card>
           ) : (
             filteredTasks.map((task) => (
-              <div
-                key={task.id}
-                className={`border rounded-lg px-4 py-3 sm:px-3 sm:py-2 flex items-start sm:items-center gap-3 ${
-                  activeTaskId === task.id ? 'border-primary/50 bg-muted/30' : 'hover:bg-muted/30'
-                }`}
-              >
-                <input
-                  type="checkbox"
-                  checked={selectedTaskIds.has(task.id)}
-                  onChange={() => {
-                    setSelectedTaskIds((prev) => {
-                      const next = new Set(prev)
-                      if (next.has(task.id)) {
-                        next.delete(task.id)
-                      } else {
-                        next.add(task.id)
-                      }
-                      return next
-                    })
-                  }}
-                  className="h-4 w-4 rounded border-gray-300"
-                />
-                <input
-                  type="checkbox"
-                  checked={task.completed}
-                  onChange={() => handleUpdateTask(task.id, { completed: !task.completed })}
-                  className="h-5 w-5 sm:h-4 sm:w-4 rounded border-gray-300 shrink-0 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center"
-                />
-                <div className="flex-1 min-w-0">
-                  {editingTaskId === task.id ? (
-                    <Input
-                      value={task.title}
-                      onChange={(event) => handleUpdateTask(task.id, { title: event.target.value })}
-                      onBlur={() => setEditingTaskId(null)}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter') {
-                          event.preventDefault()
-                          setEditingTaskId(null)
+              <div key={task.id} className="space-y-1">
+                <div
+                  className={`border rounded-lg px-4 py-3 sm:px-3 sm:py-2 flex items-start sm:items-center gap-3 ${
+                    activeTaskId === task.id ? 'border-primary/50 bg-muted/30' : 'hover:bg-muted/30'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={selectedTaskIds.has(task.id)}
+                    onChange={() => {
+                      setSelectedTaskIds((prev) => {
+                        const next = new Set(prev)
+                        if (next.has(task.id)) {
+                          next.delete(task.id)
+                        } else {
+                          next.add(task.id)
                         }
-                      }}
-                      autoFocus
-                      className="min-h-[44px] sm:min-h-0"
-                    />
-                  ) : (
-                    <button className="text-left w-full" onClick={() => setActiveTaskId(task.id)}>
-                      <p className={`font-medium text-base sm:text-sm break-words ${task.completed ? 'line-through text-muted-foreground' : ''}`}>
-                        {task.title}
-                      </p>
-                    </button>
-                  )}
-                  <div className="text-xs sm:text-xs text-muted-foreground flex flex-wrap items-center gap-2 mt-2 sm:mt-1">
-                    <Badge variant="secondary" className="text-xs px-2 py-0.5">{PRIORITY_LABELS[task.priority]}</Badge>
-                    <span className="text-xs">{STATUS_LABELS[task.status]}</span>
-                    {task.dueDate && (
-                      <span className={`flex items-center gap-1 text-xs ${new Date(task.dueDate) < new Date() ? 'text-red-500' : ''}`}>
-                        <Calendar className="h-3 w-3" />
-                        {new Date(task.dueDate).toLocaleDateString()}
-                      </span>
+                        return next
+                      })
+                    }}
+                    className="h-4 w-4 rounded border-gray-300"
+                  />
+                  <input
+                    type="checkbox"
+                    checked={task.completed}
+                    onChange={() => handleUpdateTask(task.id, { completed: !task.completed })}
+                    className="h-5 w-5 sm:h-4 sm:w-4 rounded border-gray-300 shrink-0 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center"
+                  />
+                  <div className="flex-1 min-w-0">
+                    {editingTaskId === task.id ? (
+                      <Input
+                        value={task.title}
+                        onChange={(event) => handleUpdateTask(task.id, { title: event.target.value })}
+                        onBlur={() => setEditingTaskId(null)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter') {
+                            event.preventDefault()
+                            setEditingTaskId(null)
+                          }
+                        }}
+                        autoFocus
+                        className="min-h-[44px] sm:min-h-0"
+                      />
+                    ) : (
+                      <button className="text-left w-full" onClick={() => setActiveTaskId(task.id)}>
+                        <p className={`font-medium text-base sm:text-sm break-words ${task.completed ? 'line-through text-muted-foreground' : ''}`}>
+                          {task.title}
+                        </p>
+                      </button>
                     )}
-                    {task.tags.slice(0, 2).map((tag) => (
-                      <Badge key={tag} variant="outline" className="text-xs px-2 py-0.5">{tag}</Badge>
-                    ))}
-                    <Badge variant="outline" className="text-xs px-2 py-0.5 sm:hidden">
-                      {task.assigneeId
-                        ? task.assigneeId === userId
-                          ? 'ME'
-                          : 'Member'
-                        : 'Unassigned'}
-                    </Badge>
+                    <div className="text-xs sm:text-xs text-muted-foreground flex flex-wrap items-center gap-2 mt-2 sm:mt-1">
+                      <Badge variant="secondary" className="text-xs px-2 py-0.5">{PRIORITY_LABELS[task.priority]}</Badge>
+                      <span className="text-xs">{STATUS_LABELS[task.status]}</span>
+                      {task.dueDate && (
+                        <span className={`flex items-center gap-1 text-xs ${new Date(task.dueDate) < new Date() ? 'text-red-500' : ''}`}>
+                          <Calendar className="h-3 w-3" />
+                          {new Date(task.dueDate).toLocaleDateString()}
+                        </span>
+                      )}
+                      {task.tags.slice(0, 2).map((tag) => (
+                        <Badge key={tag} variant="outline" className="text-xs px-2 py-0.5">{tag}</Badge>
+                      ))}
+                      <Badge variant="outline" className="text-xs px-2 py-0.5 sm:hidden">
+                        {task.assigneeId
+                          ? task.assigneeId === userId
+                            ? 'ME'
+                            : 'Member'
+                          : 'Unassigned'}
+                      </Badge>
+                    </div>
+                  </div>
+                  <Badge variant="outline" className="hidden sm:inline-flex shrink-0">
+                    {task.assigneeId
+                      ? task.assigneeId === userId
+                        ? 'ME'
+                        : 'Member'
+                      : 'Unassigned'}
+                  </Badge>
+                  <div className="flex items-center gap-2 sm:gap-1 shrink-0">
+                    <Button variant="ghost" size="sm" onClick={() => setEditingTaskId(task.id)} className="h-10 w-10 sm:h-8 sm:w-8 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 p-0">
+                      <Pencil className="h-5 w-5 sm:h-4 sm:w-4" />
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => handleDuplicateTask(task)} className="h-10 w-10 sm:h-8 sm:w-8 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 p-0">
+                      <Copy className="h-5 w-5 sm:h-4 sm:w-4" />
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => handleArchiveTask(task.id)} className="h-10 w-10 sm:h-8 sm:w-8 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 p-0">
+                      <Archive className="h-5 w-5 sm:h-4 sm:w-4" />
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => handleDeleteTask(task.id)} className="h-10 w-10 sm:h-8 sm:w-8 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 p-0 text-destructive">
+                      <Trash2 className="h-5 w-5 sm:h-4 sm:w-4" />
+                    </Button>
                   </div>
                 </div>
-                <Badge variant="outline" className="hidden sm:inline-flex shrink-0">
-                  {task.assigneeId
-                    ? task.assigneeId === userId
-                      ? 'ME'
-                      : 'Member'
-                    : 'Unassigned'}
-                </Badge>
-                <div className="flex items-center gap-2 sm:gap-1 shrink-0">
-                  <Button variant="ghost" size="sm" onClick={() => setEditingTaskId(task.id)} className="h-10 w-10 sm:h-8 sm:w-8 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 p-0">
-                    <Pencil className="h-5 w-5 sm:h-4 sm:w-4" />
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={() => handleDuplicateTask(task)} className="h-10 w-10 sm:h-8 sm:w-8 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 p-0">
-                    <Copy className="h-5 w-5 sm:h-4 sm:w-4" />
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={() => handleArchiveTask(task.id)} className="h-10 w-10 sm:h-8 sm:w-8 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 p-0">
-                    <Archive className="h-5 w-5 sm:h-4 sm:w-4" />
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={() => handleDeleteTask(task.id)} className="h-10 w-10 sm:h-8 sm:w-8 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 p-0 text-destructive">
-                    <Trash2 className="h-5 w-5 sm:h-4 sm:w-4" />
-                  </Button>
-                </div>
+                {showSubtasks && (task.subtasks?.length ?? 0) > 0 && (
+                  <div className="ml-6 pl-4 border-l-2 border-muted space-y-1.5 mt-1 bg-muted/20 rounded-r-md py-2">
+                    {(task.subtasks || []).map((subtask) => (
+                      <SubtaskRow
+                        key={subtask.id}
+                        subtask={subtask}
+                        onToggle={async (done) => {
+                          await toggleTodoSubtask(subtask.id, done)
+                          await refreshTasks(task.listId, activeProjectId)
+                        }}
+                        onRename={async (title) => {
+                          await updateTodoSubtask(subtask.id, { title })
+                          await refreshTasks(task.listId, activeProjectId)
+                        }}
+                        onDueDateChange={async (dueDate) => {
+                          await updateTodoSubtask(subtask.id, { due_date: dueDate || null })
+                          await refreshTasks(task.listId, activeProjectId)
+                        }}
+                        onDelete={async () => {
+                          await deleteTodoSubtask(subtask.id)
+                          await refreshTasks(task.listId, activeProjectId)
+                        }}
+                      />
+                    ))}
+                  </div>
+                )}
               </div>
             ))
           )}
@@ -1049,8 +1104,17 @@ export function TodoPageClient({
       {activeTask && (
       <div className="lg:w-[380px] w-full shrink-0 min-w-0 flex flex-col">
           <Card className="sticky top-6 flex flex-col min-h-0 max-h-[calc(100vh-6rem)] overflow-hidden">
-            <CardHeader className="shrink-0">
+            <CardHeader className="shrink-0 flex flex-row items-center justify-between space-y-0">
               <CardTitle>Task Details</CardTitle>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 shrink-0"
+                onClick={() => setActiveTaskId(null)}
+                aria-label="Close task details"
+              >
+                <X className="h-4 w-4" />
+              </Button>
             </CardHeader>
             <CardContent className="space-y-4 overflow-y-auto min-h-0 flex-1 pb-6">
               <div>
