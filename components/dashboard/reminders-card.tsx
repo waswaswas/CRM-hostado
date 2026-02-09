@@ -256,7 +256,7 @@ export function RemindersCard({
                 : 'Upcoming and overdue reminders'}
             </CardDescription>
           </div>
-          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-2">
             <Button
               size="sm"
               onClick={() => openQuickDialog()}

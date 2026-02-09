@@ -345,59 +345,62 @@ export function OrganizationSettingsDialog({
                           key={member.id}
                           className="border rounded-lg overflow-hidden"
                         >
-                          <div className="flex items-center justify-between p-3">
-                            <div className="flex items-center gap-3 flex-1">
-                              <Icon className={`h-5 w-5 ${colorClass}`} />
-                              <div className="flex-1">
-                                <div className="font-medium">
+                          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-2 p-4 sm:p-3">
+                            <div className="flex items-center gap-3 flex-1 min-w-0">
+                              <Icon className={`h-5 w-5 sm:h-5 sm:w-5 ${colorClass} shrink-0`} />
+                              <div className="flex-1 min-w-0">
+                                <div className="font-medium text-base sm:text-sm break-all">
                                   {member.user_email || 'Unknown User'}
                                 </div>
-                                <div className="text-sm text-muted-foreground capitalize">
+                                <div className="text-sm sm:text-xs text-muted-foreground capitalize mt-1">
                                   {member.role}
                                 </div>
                               </div>
                             </div>
-                            {canManageRoles && member.role !== 'owner' && (
-                              <Select
-                                value={member.role}
-                                onChange={(event) =>
-                                  handleRoleChange(
-                                    member.id,
-                                    member.user_id,
-                                    event.target.value as 'admin' | 'viewer'
-                                  )
-                                }
-                                className="w-32"
-                                disabled={savingRole === member.id}
-                              >
-                                <option value="viewer">Viewer</option>
-                                <option value="admin">Admin</option>
-                              </Select>
-                            )}
-                            {canManagePermissions && !isOwnerOrAdmin && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => {
-                                  if (!isExpanded) {
-                                    loadMemberPermissions(member.id, member.user_id)
+                            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-2 shrink-0">
+                              {canManageRoles && member.role !== 'owner' && (
+                                <Select
+                                  value={member.role}
+                                  onChange={(event) =>
+                                    handleRoleChange(
+                                      member.id,
+                                      member.user_id,
+                                      event.target.value as 'admin' | 'viewer'
+                                    )
                                   }
-                                  setExpandedMember(isExpanded ? null : member.id)
-                                }}
-                              >
-                                {isExpanded ? 'Hide' : 'Manage Permissions'}
-                              </Button>
-                            )}
-                            {isOwnerOrAdmin && (
-                              <span className="text-xs text-muted-foreground px-2">
-                                Full access
-                              </span>
-                            )}
+                                  className="w-full sm:w-32 min-h-[44px] sm:min-h-0"
+                                  disabled={savingRole === member.id}
+                                >
+                                  <option value="viewer">Viewer</option>
+                                  <option value="admin">Admin</option>
+                                </Select>
+                              )}
+                              {canManagePermissions && !isOwnerOrAdmin && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    if (!isExpanded) {
+                                      loadMemberPermissions(member.id, member.user_id)
+                                    }
+                                    setExpandedMember(isExpanded ? null : member.id)
+                                  }}
+                                  className="min-h-[44px] sm:min-h-0 w-full sm:w-auto"
+                                >
+                                  {isExpanded ? 'Hide' : 'Manage Permissions'}
+                                </Button>
+                              )}
+                              {isOwnerOrAdmin && (
+                                <span className="text-xs text-muted-foreground px-2 py-2 sm:py-0 text-center sm:text-left">
+                                  Full access
+                                </span>
+                              )}
+                            </div>
                           </div>
                           {isExpanded && !isOwnerOrAdmin && (
-                            <div className="border-t p-4 bg-muted/50">
-                              <p className="text-sm font-medium mb-3">Feature Permissions</p>
-                              <div className="grid grid-cols-2 gap-3">
+                            <div className="border-t p-4 sm:p-4 bg-muted/50">
+                              <p className="text-sm sm:text-sm font-medium mb-3">Feature Permissions</p>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-3">
                                 {[
                                   { key: 'dashboard', label: 'Dashboard' },
                                   { key: 'clients', label: 'Clients' },
@@ -410,7 +413,7 @@ export function OrganizationSettingsDialog({
                                 ].map(({ key, label }) => (
                                   <label
                                     key={key}
-                                    className="flex items-center gap-2 cursor-pointer"
+                                    className="flex items-center gap-3 sm:gap-2 cursor-pointer min-h-[44px] sm:min-h-0 py-1 sm:py-0"
                                   >
                                     <input
                                       type="checkbox"
@@ -422,9 +425,9 @@ export function OrganizationSettingsDialog({
                                         perms[key] || false
                                       )}
                                       disabled={savingPermissions === member.id}
-                                      className="h-4 w-4 rounded border-gray-300 accent-blue-800 dark:accent-blue-500"
+                                      className="h-5 w-5 sm:h-4 sm:w-4 rounded border-gray-300 accent-blue-800 dark:accent-blue-500 shrink-0"
                                     />
-                                    <span className="text-sm">{label}</span>
+                                    <span className="text-sm sm:text-sm">{label}</span>
                                   </label>
                                 ))}
                               </div>

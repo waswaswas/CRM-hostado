@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useLayoutEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { Plus, X, User, FileText, Mail, Bell } from 'lucide-react'
@@ -13,6 +14,8 @@ interface FloatingActionButtonProps {
 
 export function FloatingActionButton({ currentPath }: FloatingActionButtonProps) {
   const [isOpen, setIsOpen] = useState(false)
+  const [position, setPosition] = useState({ top: 0, right: 0 })
+  const fabRef = useRef<HTMLDivElement>(null)
   const pathname = usePathname()
   const currentPathToUse = currentPath || pathname
 
@@ -34,6 +37,13 @@ export function FloatingActionButton({ currentPath }: FloatingActionButtonProps)
     }
   }, [isOpen])
 
+  // Update position when menu opens (for mobile portal) - useLayoutEffect for accurate positioning before paint
+  useLayoutEffect(() => {
+    if (!isOpen || !fabRef.current) return
+    const rect = fabRef.current.getBoundingClientRect()
+    setPosition({ top: rect.bottom + 8, right: window.innerWidth - rect.right })
+  }, [isOpen])
+
   const quickActions = [
     { href: '/clients/new', icon: User, label: 'New Client' },
     { href: '/offers/new', icon: FileText, label: 'New Offer' },
@@ -42,6 +52,18 @@ export function FloatingActionButton({ currentPath }: FloatingActionButtonProps)
   ]
 
   if (shouldHide) return null
+
+  const quickActionButton = (action: (typeof quickActions)[0]) => (
+    <Link
+      key={action.href}
+      href={action.href}
+      onClick={() => setIsOpen(false)}
+      className="flex items-center gap-3 bg-primary text-primary-foreground rounded-full px-5 py-4 shadow-lg min-h-[56px] w-[180px] justify-start whitespace-nowrap"
+    >
+      <action.icon className="h-5 w-5 flex-shrink-0" />
+      <span className="text-sm font-medium">{action.label}</span>
+    </Link>
+  )
 
   return (
     <>
@@ -54,38 +76,30 @@ export function FloatingActionButton({ currentPath }: FloatingActionButtonProps)
       )}
       
       {/* Mobile FAB - Top Right */}
-      <div className="relative z-50 md:hidden" data-fab>
-        {/* Quick Action Buttons - Expand downward from top */}
-        <div
-          className={cn(
-            'absolute top-16 right-0 flex flex-col gap-3 transition-all duration-300',
-            isOpen ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-4 pointer-events-none'
-          )}
-        >
-          {quickActions.map((action) => (
-            <Link
-              key={action.href}
-              href={action.href}
-              onClick={() => setIsOpen(false)}
-              className="flex items-center gap-3 bg-primary text-primary-foreground rounded-full px-4 py-3 shadow-lg min-h-[56px] min-w-[140px]"
-            >
-              <action.icon className="h-5 w-5 flex-shrink-0" />
-              <span className="text-sm font-medium">{action.label}</span>
-            </Link>
-          ))}
-        </div>
+      <div className="relative z-50 md:hidden" data-fab ref={fabRef}>
+        {/* Quick Action Buttons - Rendered in portal to avoid clipping */}
+        {typeof document !== 'undefined' && isOpen && createPortal(
+          <div
+            className="fixed z-[9999] flex flex-col gap-3 transition-all duration-300"
+            style={{ top: position.top, right: position.right }}
+            data-fab
+          >
+            {quickActions.map(quickActionButton)}
+          </div>,
+          document.body
+        )}
 
         {/* Main FAB Button - Top Right (Mobile) */}
         <Button
           onClick={() => setIsOpen(!isOpen)}
           size="lg"
-          className="h-8 w-8 rounded-full shadow-lg p-0 min-h-[32px] min-w-[32px]"
+          className="h-11 w-11 rounded-full shadow-lg p-0 min-h-[44px] min-w-[44px]"
           aria-label={isOpen ? 'Close menu' : 'Open quick actions'}
         >
           {isOpen ? (
-            <X className="h-3.5 w-3.5" />
+            <X className="h-5 w-5" />
           ) : (
-            <Plus className="h-3.5 w-3.5" />
+            <Plus className="h-5 w-5" />
           )}
         </Button>
       </div>
@@ -104,7 +118,7 @@ export function FloatingActionButton({ currentPath }: FloatingActionButtonProps)
               key={action.href}
               href={action.href}
               onClick={() => setIsOpen(false)}
-              className="flex items-center gap-3 bg-primary text-primary-foreground rounded-full px-4 py-3 shadow-lg min-h-[56px] min-w-[140px]"
+              className="flex items-center gap-3 bg-primary text-primary-foreground rounded-full px-5 py-3 shadow-lg min-h-[56px] w-[180px] justify-start whitespace-nowrap"
             >
               <action.icon className="h-5 w-5 flex-shrink-0" />
               <span className="text-sm font-medium">{action.label}</span>

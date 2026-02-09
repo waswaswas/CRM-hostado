@@ -530,15 +530,15 @@ export function EmailList({ initialEmails = [], clientId }: EmailListProps) {
               key={email.id}
               className={`transition-colors hover:bg-accent ${!email.is_read ? 'bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800' : ''}`}
             >
-              <CardContent className="p-3 md:p-4">
-                <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
+              <CardContent className="p-4 sm:p-3 md:p-4">
+                <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3 sm:gap-3">
                   <div className="flex-1 min-w-0">
                     <div className="flex flex-col sm:flex-row sm:items-start sm:flex-wrap gap-2 mb-2">
                       <div className="flex items-center gap-2 min-w-0 flex-1">
                         {!email.is_read && (
                           <div className="w-2 h-2 bg-blue-600 rounded-full flex-shrink-0" />
                         )}
-                        <Link href={`/emails/${email.id}`} className="font-semibold hover:underline truncate text-sm md:text-base">
+                        <Link href={`/emails/${email.id}`} className="font-semibold hover:underline break-words text-base sm:text-sm md:text-base">
                           {email.subject}
                         </Link>
                       </div>
@@ -561,16 +561,16 @@ export function EmailList({ initialEmails = [], clientId }: EmailListProps) {
                         )}
                       </div>
                     </div>
-                    <div className="text-xs md:text-sm text-muted-foreground mb-2">
+                    <div className="text-xs md:text-sm text-muted-foreground mb-2 break-words">
                       {email.direction === 'inbound' ? (
                         <>
-                          <span className="font-medium">From:</span> <span className="truncate block sm:inline">{email.from_email}</span>
-                          {email.from_name && <span className="hidden sm:inline"> ({email.from_name})</span>}
+                          <span className="font-medium">From:</span> <span className="break-all">{email.from_email}</span>
+                          {email.from_name && <span className="block sm:inline sm:ml-1"> ({email.from_name})</span>}
                         </>
                       ) : (
                         <>
-                          <span className="font-medium">To:</span> <span className="truncate block sm:inline">{email.to_email}</span>
-                          {email.to_name && <span className="hidden sm:inline"> ({email.to_name})</span>}
+                          <span className="font-medium">To:</span> <span className="break-all">{email.to_email}</span>
+                          {email.to_name && <span className="block sm:inline sm:ml-1"> ({email.to_name})</span>}
                         </>
                       )}
                     </div>
@@ -594,7 +594,7 @@ export function EmailList({ initialEmails = [], clientId }: EmailListProps) {
                       </div>
                     )}
                   </div>
-                  <div className="flex items-center gap-1 md:gap-2 flex-shrink-0">
+                  <div className="flex items-center gap-2 sm:gap-1 md:gap-2 flex-shrink-0 flex-wrap sm:flex-nowrap">
                     {folderFilter !== 'trash' && (
                       <>
                         {(email.status === 'sent' || email.direction === 'inbound') && (
@@ -604,18 +604,18 @@ export function EmailList({ initialEmails = [], clientId }: EmailListProps) {
                               size="sm"
                               onClick={() => router.push(`/emails/${email.id}/reply`)}
                               title="Reply"
-                              className="min-h-[44px] min-w-[44px] md:h-8 md:w-8 p-0"
+                              className="h-10 w-10 sm:h-9 sm:w-9 md:h-8 md:w-8 p-0 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0"
                             >
-                              <Reply className="h-4 w-4" />
+                              <Reply className="h-5 w-5 sm:h-4 sm:w-4" />
                             </Button>
                             <Button
                               variant="ghost"
                               size="sm"
                               onClick={() => router.push(`/emails/${email.id}/forward`)}
                               title="Forward"
-                              className="min-h-[44px] min-w-[44px] md:h-8 md:w-8 p-0"
+                              className="h-10 w-10 sm:h-9 sm:w-9 md:h-8 md:w-8 p-0 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0"
                             >
-                              <Forward className="h-4 w-4" />
+                              <Forward className="h-5 w-5 sm:h-4 sm:w-4" />
                             </Button>
                           </>
                         )}
@@ -624,19 +624,19 @@ export function EmailList({ initialEmails = [], clientId }: EmailListProps) {
                           size="sm"
                           onClick={() => handleMarkAsRead(email.id, !email.is_read)}
                           title={email.is_read ? 'Mark as unread' : 'Mark as read'}
-                          className="min-h-[44px] min-w-[44px] md:h-8 md:w-8 p-0"
+                          className="h-10 w-10 sm:h-9 sm:w-9 md:h-8 md:w-8 p-0 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0"
                         >
                           {email.is_read ? (
-                            <MailOpen className="h-4 w-4" />
+                            <MailOpen className="h-5 w-5 sm:h-4 sm:w-4" />
                           ) : (
-                            <Mail className="h-4 w-4" />
+                            <Mail className="h-5 w-5 sm:h-4 sm:w-4" />
                           )}
                         </Button>
                       </>
                     )}
                     <Link href={`/emails/${email.id}`}>
-                      <Button variant="ghost" size="sm" title="View" className="min-h-[44px] min-w-[44px] md:h-8 md:w-8 p-0">
-                        <Eye className="h-4 w-4" />
+                      <Button variant="ghost" size="sm" title="View" className="h-10 w-10 sm:h-9 sm:w-9 md:h-8 md:w-8 p-0 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0">
+                        <Eye className="h-5 w-5 sm:h-4 sm:w-4" />
                       </Button>
                     </Link>
                     {folderFilter === 'trash' ? (
@@ -646,18 +646,18 @@ export function EmailList({ initialEmails = [], clientId }: EmailListProps) {
                           size="sm"
                           onClick={() => handleRestore(email.id)}
                           title="Restore"
-                          className="min-h-[44px] min-w-[44px] md:h-8 md:w-8 p-0"
+                          className="h-10 w-10 sm:h-9 sm:w-9 md:h-8 md:w-8 p-0 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0"
                         >
-                          <Archive className="h-4 w-4" />
+                          <Archive className="h-5 w-5 sm:h-4 sm:w-4" />
                         </Button>
                         <Button
                           variant="ghost"
                           size="sm"
                           onClick={() => handlePermanentlyDelete(email.id)}
                           title="Permanently delete"
-                          className="min-h-[44px] min-w-[44px] md:h-8 md:w-8 p-0"
+                          className="h-10 w-10 sm:h-9 sm:w-9 md:h-8 md:w-8 p-0 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0"
                         >
-                          <Trash2 className="h-4 w-4 text-red-600" />
+                          <Trash2 className="h-5 w-5 sm:h-4 sm:w-4 text-red-600" />
                         </Button>
                       </>
                     ) : (
@@ -666,9 +666,9 @@ export function EmailList({ initialEmails = [], clientId }: EmailListProps) {
                         size="sm"
                         onClick={() => handleDelete(email.id)}
                         title="Move to trash"
-                        className="min-h-[44px] min-w-[44px] md:h-8 md:w-8 p-0"
+                        className="h-10 w-10 sm:h-9 sm:w-9 md:h-8 md:w-8 p-0 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0"
                       >
-                        <Trash2 className="h-4 w-4" />
+                        <Trash2 className="h-5 w-5 sm:h-4 sm:w-4" />
                       </Button>
                     )}
                   </div>
