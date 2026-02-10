@@ -4,9 +4,7 @@ const nextConfig = {
   transpilePackages: ['lucide-react'],
   // Opt out packages that use Node.js-specific features from bundling
   // (fixes MODULE_NOT_FOUND ./vendor-chunks/nodemailer.js and similar)
-  experimental: {
-    serverComponentsExternalPackages: ['@supabase/ssr', '@supabase/supabase-js', 'nodemailer'],
-  },
+  serverExternalPackages: ['@supabase/ssr', '@supabase/supabase-js', 'nodemailer'],
   // Output configuration for cPanel
   output: 'standalone',
   

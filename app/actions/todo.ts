@@ -681,7 +681,7 @@ export async function updateTodoTask(taskId: string, updates: TodoTaskUpdate): P
         return emails
       }
       const oldEmails = extractMentionedEmails(currentTask.description || '')
-      const newEmails = extractMentionedEmails(newDescription)
+      const newEmails = extractMentionedEmails(newDescription || '')
       const newlyMentioned = [...newEmails].filter((e) => !oldEmails.has(e))
       if (newlyMentioned.length > 0) {
         const orgId = (await getCurrentOrganizationId()) || (await getOrganizationIdFromListId(currentTask.list_id))

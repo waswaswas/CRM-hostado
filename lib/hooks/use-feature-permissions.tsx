@@ -62,7 +62,7 @@ function setCachedPermissions(orgId: string, perms: Record<Feature, boolean>) {
 
 export function useFeaturePermissions() {
   const { currentOrganization } = useOrganization()
-  const prevOrgIdRef = useRef<string | undefined>()
+  const prevOrgIdRef = useRef<string | undefined>(undefined)
   
   // Initialize permissions from cache synchronously to prevent flash
   const [permissions, setPermissions] = useState<Record<Feature, boolean>>(() => {
