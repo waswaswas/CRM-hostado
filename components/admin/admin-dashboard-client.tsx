@@ -84,7 +84,7 @@ export function AdminDashboardClient() {
       const res = await adminImpersonate(userId)
       if ('url' in res) {
         window.open(res.url, '_blank')
-        toast({ title: 'Magic link opened', description: 'Sign in in the new tab to impersonate.' })
+        toast({ title: 'Impersonation started', description: 'New tab opened as that user.' })
       } else {
         toast({ title: 'Error', description: res.error, variant: 'destructive' })
       }

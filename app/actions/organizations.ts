@@ -59,7 +59,7 @@ export async function getCurrentUserOrgRole(): Promise<OrgRole | null> {
 }
 
 /** Returns permission context for the dashboard: has any permission, has dashboard, has clients, has reminders, has todo. */
-export async function getDashboardPermissionContext(): Promise<{
+export async function getDashboardPermissionContext(organizationIdOverride?: string | null): Promise<{
   hasAnyPermission: boolean
   hasDashboard: boolean
   hasClients: boolean
@@ -74,7 +74,7 @@ export async function getDashboardPermissionContext(): Promise<{
     return { hasAnyPermission: false, hasDashboard: false, hasClients: false, hasReminders: false, hasTodo: false }
   }
 
-  const orgId = await getCurrentOrganizationId()
+  const orgId = organizationIdOverride !== undefined ? organizationIdOverride : await getCurrentOrganizationId()
   if (!orgId) {
     return { hasAnyPermission: false, hasDashboard: false, hasClients: false, hasReminders: false, hasTodo: false }
   }

@@ -224,7 +224,7 @@ export async function adminListUsers(): Promise<
   }))
 }
 
-/** Impersonate: generate magic link for user and return URL. */
+/** Impersonate: generate link that opens in new tab and signs in as the user (no Supabase confirmation page). */
 export async function adminImpersonate(userId: string): Promise<{ url: string } | { error: string }> {
   await requireAdminSession()
   const admin = requireAdminClient()
@@ -234,12 +234,18 @@ export async function adminImpersonate(userId: string): Promise<{ url: string } 
   const { data: linkData, error: linkError } = await admin.auth.admin.generateLink({
     type: 'magiclink',
     email: user.user.email,
-    options: { redirectTo: `${appUrl}/dashboard` },
+    options: { redirectTo: `${appUrl}/auth/callback?next=/dashboard` },
   })
   if (linkError) return { error: linkError.message }
-  const url = (linkData as any)?.properties?.action_link ?? (linkData as any)?.action_link
-  if (!url) return { error: 'Failed to generate magic link' }
-  return { url }
+  const props = (linkData as any)?.properties
+  const hashedToken = props?.hashed_token ?? (linkData as any)?.hashed_token
+  if (hashedToken) {
+    const params = new URLSearchParams({ token_hash: hashedToken, type: 'magiclink', next: '/dashboard' })
+    return { url: `${appUrl}/auth/callback?${params.toString()}` }
+  }
+  const actionLink = props?.action_link ?? (linkData as any)?.action_link
+  if (actionLink) return { url: actionLink }
+  return { error: 'Failed to generate impersonation link' }
 }
 
 /** Update user email (admin). */

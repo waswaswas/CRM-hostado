@@ -34,6 +34,8 @@ export default async function DashboardPage() {
     data: { user },
   } = await supabase.auth.getUser()
 
+  let permContext: Awaited<ReturnType<typeof getDashboardPermissionContext>> | undefined
+
   if (user) {
     const { data: members } = await supabase
       .from('organization_members')
@@ -50,17 +52,21 @@ export default async function DashboardPage() {
     // Ensure a current organization is set - auto-select first one if none selected
     // This is critical for server-side rendering to work correctly
     const currentOrgId = await getCurrentOrganizationId()
+    let effectiveOrgId: string | null = currentOrgId
     if (!currentOrgId) {
       const organizations = await getOrganizations()
       if (organizations && organizations.length > 0) {
+        effectiveOrgId = organizations[0].id
         await setCurrentOrganizationId(organizations[0].id)
-        // Revalidate the layout to ensure organization context is updated
         revalidatePath('/', 'layout')
       }
     }
+    // Use effectiveOrgId so permission context sees the selected org on first load (same request)
+    permContext = await getDashboardPermissionContext(effectiveOrgId ?? undefined)
   }
-
-  const permContext = await getDashboardPermissionContext()
+  if (permContext === undefined) {
+    permContext = await getDashboardPermissionContext()
+  }
 
   // No permissions at all: show message and refresh button instead of dashboard
   if (!permContext.hasAnyPermission) {
