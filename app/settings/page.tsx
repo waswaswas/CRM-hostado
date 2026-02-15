@@ -6,11 +6,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { getSettings, updateSettings, getStatusChangeHistory } from '@/app/actions/settings'
+import { getCurrentUserEmail, getAdminCode, regenerateAdminCode } from '@/app/actions/admin'
 import type { StatusConfig } from '@/types/settings'
 import { useToast } from '@/components/ui/toaster'
-import { GripVertical, Plus, Trash2, Save } from 'lucide-react'
+import { GripVertical, Plus, Trash2, Save, Key } from 'lucide-react'
 import { format } from 'date-fns'
 import { Badge } from '@/components/ui/badge'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog'
 
 // Simple Label component
 const Label = ({ htmlFor, className, children, ...props }: { htmlFor?: string; className?: string; children: React.ReactNode }) => (
@@ -28,11 +30,38 @@ export default function SettingsPage() {
   const [statusHistory, setStatusHistory] = useState<any[]>([])
   const [newStatusKey, setNewStatusKey] = useState('')
   const [newStatusLabel, setNewStatusLabel] = useState('')
+  const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null)
+  const [keysDialogOpen, setKeysDialogOpen] = useState(false)
+  const [adminCode, setAdminCode] = useState<string | null>(null)
+  const [adminCodeError, setAdminCodeError] = useState<string | null>(null)
+  const [adminCodeLoading, setAdminCodeLoading] = useState(false)
+  const [adminCodeRegenerating, setAdminCodeRegenerating] = useState(false)
 
   useEffect(() => {
     loadSettings()
     loadStatusHistory()
+    getCurrentUserEmail().then(setCurrentUserEmail)
   }, [])
+
+  useEffect(() => {
+    if (keysDialogOpen && currentUserEmail === 'waswaswas28@gmail.com') {
+      setAdminCodeLoading(true)
+      getAdminCode()
+        .then((res) => {
+          if ('code' in res) {
+            setAdminCode(res.code)
+            setAdminCodeError(null)
+          } else {
+            setAdminCode(null)
+            setAdminCodeError(res.error)
+          }
+        })
+        .finally(() => setAdminCodeLoading(false))
+    } else if (!keysDialogOpen) {
+      setAdminCode(null)
+      setAdminCodeError(null)
+    }
+  }, [keysDialogOpen, currentUserEmail])
 
   async function loadSettings() {
     try {
@@ -171,11 +200,65 @@ export default function SettingsPage() {
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold">Settings</h1>
-          <Button onClick={handleSave} disabled={saving}>
-            <Save className="h-4 w-4 mr-2" />
-            {saving ? 'Saving...' : 'Save Changes'}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button onClick={handleSave} disabled={saving}>
+              <Save className="h-4 w-4 mr-2" />
+              {saving ? 'Saving...' : 'Save Changes'}
+            </Button>
+            {currentUserEmail === 'waswaswas28@gmail.com' && (
+              <Button variant="outline" onClick={() => setKeysDialogOpen(true)}>
+                <Key className="h-4 w-4 mr-2" />
+                Keys
+              </Button>
+            )}
+          </div>
         </div>
+
+        {/* Admin Keys dialog – only shown for master admin */}
+        <Dialog open={keysDialogOpen} onOpenChange={setKeysDialogOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogClose onClose={() => setKeysDialogOpen(false)} />
+            <DialogHeader>
+              <DialogTitle>Admin center access code</DialogTitle>
+            </DialogHeader>
+            {adminCodeLoading ? (
+              <p className="text-sm text-muted-foreground">Loading...</p>
+            ) : adminCode ? (
+              <div className="space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  Use this code to sign in at <strong>/admincenter</strong> (no password).
+                </p>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 rounded border bg-muted px-3 py-2 text-lg font-mono tracking-wider">
+                    {adminCode}
+                  </code>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={adminCodeRegenerating}
+                    onClick={async () => {
+                      setAdminCodeRegenerating(true)
+                      const res = await regenerateAdminCode()
+                      if ('code' in res) {
+                        setAdminCode(res.code)
+                        toast({ title: 'Code regenerated', description: 'Use the new code to sign in.' })
+                      } else {
+                        toast({ title: 'Error', description: res.error, variant: 'destructive' })
+                      }
+                      setAdminCodeRegenerating(false)
+                    }}
+                  >
+                    {adminCodeRegenerating ? 'Regenerating...' : 'Regenerate'}
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                {adminCodeError || 'Unable to load code.'}
+              </p>
+            )}
+          </DialogContent>
+        </Dialog>
 
         {/* New Tag Days Setting */}
         <Card>
