@@ -164,6 +164,7 @@ export async function getTransactions(filters?: {
         .from('transactions')
         .select('id, account_id')
         .in('id', transferTransactionIds)
+        .eq('organization_id', organizationId)
       if (sourceTx?.length) {
         allAccountIds = Array.from(new Set([...allAccountIds, ...sourceTx.map((t: any) => t.account_id)]))
       }
@@ -185,6 +186,7 @@ export async function getTransactions(filters?: {
         .from('transactions')
         .select('id, account_id')
         .in('id', transferTransactionIds)
+        .eq('organization_id', organizationId)
       sourceTx?.forEach((t: any) => sourceAccountByTransferTxId.set(t.id, t.account_id))
     }
 

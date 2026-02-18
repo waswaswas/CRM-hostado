@@ -3,7 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { sendEmail } from '@/lib/email-provider'
 import { createInteraction } from './interactions'
-import { getCurrentOrganizationId } from './organizations'
+import { getCurrentOrganizationId, getOrganizationEmailConfigForSending } from './organizations'
 import { getMagicExtractRulesForOrg } from './magic-extract'
 import { subjectMatches, extractWithRule, extractedToFormData } from '@/lib/magic-extract-engine'
 
@@ -124,9 +124,10 @@ export async function createEmail(input: CreateEmailInput): Promise<Email> {
     }
   }
 
-  // Get from email/name from environment or user
-  const fromEmail = process.env.SMTP_FROM_EMAIL || user.email || ''
-  const fromName = process.env.SMTP_FROM_NAME || 'Pre-Sales CRM'
+  // Get from email/name from org config (hostado = env, others = org settings)
+  const orgEmail = await getOrganizationEmailConfigForSending()
+  const fromEmail = orgEmail.from_email || user.email || ''
+  const fromName = orgEmail.from_name || 'Pre-Sales CRM'
 
   const status: EmailStatus = input.scheduled_at ? 'scheduled' : 'draft'
   const folder: EmailFolder = input.folder || (status === 'draft' ? 'draft' : 'sent')
@@ -511,17 +512,21 @@ export async function sendEmailNow(emailId: string): Promise<Email> {
     }
   }
 
-  // Send email
-  const result = await sendEmail({
-    to: email.to_email,
-    toName: email.to_name || undefined,
-    subject: email.subject,
-    html: email.body_html,
-    text: email.body_text || undefined,
-    cc: email.cc_emails || undefined,
-    bcc: email.bcc_emails || undefined,
-    attachments: emailAttachments.length > 0 ? emailAttachments : undefined,
-  })
+  // Send email using org-specific SMTP (hostado = env, others = org settings)
+  const orgEmailConfig = await getOrganizationEmailConfigForSending()
+  const result = await sendEmail(
+    {
+      to: email.to_email,
+      toName: email.to_name || undefined,
+      subject: email.subject,
+      html: email.body_html,
+      text: email.body_text || undefined,
+      cc: email.cc_emails || undefined,
+      bcc: email.bcc_emails || undefined,
+      attachments: emailAttachments.length > 0 ? emailAttachments : undefined,
+    },
+    orgEmailConfig.config
+  )
 
   if (result.success) {
     // Update email status

@@ -328,7 +328,7 @@ export async function getTodoTasks(listId: string, projectId?: string | null): P
   })) as TodoTask[]
 }
 
-/** Last 4 modified tasks across all lists the user has access to. */
+/** Last 4 modified tasks across all lists the user has access to in the current organization. */
 export async function getRecentTodoTasks(): Promise<TodoTask[]> {
   const supabase = await createClient()
   const {
@@ -339,9 +339,29 @@ export async function getRecentTodoTasks(): Promise<TodoTask[]> {
     return []
   }
 
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    return []
+  }
+
+  // Get tasks from lists in the current organization only
+  // First, get list IDs for this organization
+  const { data: orgLists } = await supabase
+    .from('todo_lists')
+    .select('id')
+    .eq('organization_id', organizationId)
+
+  if (!orgLists || orgLists.length === 0) {
+    return []
+  }
+
+  const listIds = orgLists.map((list: { id: string }) => list.id)
+
+  // Get recent tasks from those lists only
   const { data: tasks, error } = await supabase
     .from('todo_tasks')
     .select('*')
+    .in('list_id', listIds)
     .order('updated_at', { ascending: false })
     .limit(4)
 

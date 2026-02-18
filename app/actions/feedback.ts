@@ -64,7 +64,6 @@ export async function getFeedback(): Promise<Feedback[]> {
     return []
   }
 
-  const organizationId = await getCurrentOrganizationId()
   const isFeedbackAdmin = user.email === FEEDBACK_ADMIN_EMAIL
 
   const query = supabase
@@ -73,12 +72,10 @@ export async function getFeedback(): Promise<Feedback[]> {
     .order('created_at', { ascending: false })
 
   if (isFeedbackAdmin) {
-    // Application-wide: no org filter
+    // Application-wide: admin sees all feedback
   } else {
+    // User-scoped: show all feedback submitted by this user, regardless of organization
     query.eq('owner_id', user.id)
-    if (organizationId) {
-      query.eq('organization_id', organizationId)
-    }
   }
 
   const { data, error } = await query

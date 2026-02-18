@@ -91,6 +91,19 @@ export async function checkForNewEmails(): Promise<{
   processed: number
   errors: string[]
 }> {
+  // IMAP (crm@hostado.net) is only used for the "hostado" organization. Other orgs must configure their own in Settings.
+  const { getCurrentOrganizationId, getHostadoOrganizationId } = await import('@/app/actions/organizations')
+  const [currentOrgId, hostadoOrgId] = await Promise.all([
+    getCurrentOrganizationId(),
+    getHostadoOrganizationId(),
+  ])
+  if (currentOrgId && hostadoOrgId && currentOrgId !== hostadoOrgId) {
+    return { success: true, processed: 0, errors: [] }
+  }
+  if (!currentOrgId) {
+    return { success: true, processed: 0, errors: [] }
+  }
+
   const config = getImapConfig()
   if (!config) {
     return {
@@ -366,6 +379,13 @@ async function processEmail(email: ProcessedEmail): Promise<boolean> {
     }
 
     // Check for duplicate email before processing
+    // Note: In cron context, organizationId comes from the magic extract check above
+    // If no organizationId, we can't process (email receiver should iterate orgs)
+    if (!organizationId) {
+      console.warn(`[Email Processing] No organization context, skipping: ${email.subject}`)
+      return false
+    }
+
     const { createClient: createSupabaseClient } = await import('@/lib/supabase/server')
     const supabase = await createSupabaseClient()
     const {
@@ -376,12 +396,13 @@ async function processEmail(email: ProcessedEmail): Promise<boolean> {
       throw new Error('Unauthorized')
     }
 
-    // Check if email already exists by messageId (most reliable)
+    // Check if email already exists by messageId (most reliable) - filter by organization
     if (email.messageId) {
       const { data: existingEmail } = await supabase
         .from('emails')
         .select('id')
         .eq('owner_id', user.id)
+        .eq('organization_id', organizationId)
         .eq('provider_message_id', email.messageId)
         .maybeSingle()
 
@@ -391,12 +412,13 @@ async function processEmail(email: ProcessedEmail): Promise<boolean> {
       }
     }
 
-    // Check for duplicate by from_email, subject, and sent_at (within 10 minutes for better catch)
+    // Check for duplicate by from_email, subject, and sent_at (within 10 minutes) - filter by organization
     const emailDate = new Date(email.date)
     const { data: duplicateEmail } = await supabase
       .from('emails')
       .select('id')
       .eq('owner_id', user.id)
+      .eq('organization_id', organizationId)
       .eq('from_email', email.from.address)
       .eq('subject', email.subject)
       .eq('direction', 'inbound')

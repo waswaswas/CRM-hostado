@@ -34,6 +34,29 @@ export async function getCurrentOrganizationId(): Promise<string | null> {
   return orgId || null
 }
 
+/** Organization that owns the global SMTP/IMAP env (crm@hostado.net). Only this org uses env-based email. */
+const HOSTADO_ORG_SLUG = 'hostado'
+
+/** Returns the organization id for the "hostado" org (slug hostado), or null if not found. */
+export async function getHostadoOrganizationId(): Promise<string | null> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('organizations')
+    .select('id')
+    .eq('slug', HOSTADO_ORG_SLUG)
+    .eq('is_active', true)
+    .maybeSingle()
+  if (error || !data) return null
+  return data.id
+}
+
+/** True if the given organization id is the hostado org (uses env SMTP/IMAP). */
+export async function isHostadoOrganization(organizationId: string | null): Promise<boolean> {
+  if (!organizationId) return false
+  const hostadoId = await getHostadoOrganizationId()
+  return hostadoId === organizationId
+}
+
 export type OrgRole = 'owner' | 'admin' | 'moderator' | 'viewer'
 
 /** Returns the current user's role in the current organization, or null if none. */
@@ -1024,6 +1047,128 @@ export async function updateOrganizationEmailSettings(
   revalidatePath('/organizations')
   revalidatePath(`/organizations/${organizationId}`)
   return organization
+}
+
+/** Build SMTP config for a given org (for cron/background). Hostado uses env; others use org settings. */
+export async function getOrganizationEmailConfigForSendingById(organizationId: string): Promise<{
+  from_email: string
+  from_name: string
+  config: import('@/lib/email-provider').EmailConfig | null
+}> {
+  const hostadoId = await getHostadoOrganizationId()
+  const isHostado = organizationId === hostadoId
+
+  if (isHostado) {
+    const fromEmail = process.env.SMTP_FROM_EMAIL || ''
+    const fromName = process.env.SMTP_FROM_NAME || 'Pre-Sales CRM'
+    const host = process.env.SMTP_HOST
+    const port = process.env.SMTP_PORT
+    const user = process.env.SMTP_USER
+    const password = process.env.SMTP_PASSWORD
+    if (!host || !port || !user || !password || !fromEmail || !fromName) {
+      return { from_email: fromEmail, from_name: fromName, config: null }
+    }
+    const portNum = parseInt(port, 10)
+    return {
+      from_email: fromEmail,
+      from_name: fromName,
+      config: {
+        host: host.trim(),
+        port: portNum,
+        secure: portNum === 465,
+        auth: { user: user.trim(), password: password.trim() },
+        from: { email: fromEmail.trim(), name: fromName.trim() },
+      },
+    }
+  }
+
+  const supabase = await createClient()
+  const { data: org } = await supabase
+    .from('organizations')
+    .select('settings')
+    .eq('id', organizationId)
+    .single()
+
+  const email = (org?.settings as any)?.email
+  const fromEmail = (email?.from_email as string) || ''
+  const fromName = (email?.from_name as string) || ''
+
+  if (
+    !email?.smtp_host ||
+    !email?.smtp_port ||
+    !email?.smtp_user ||
+    !email?.smtp_password ||
+    !fromEmail ||
+    !fromName
+  ) {
+    return { from_email: fromEmail, from_name: fromName, config: null }
+  }
+
+  const portNum = parseInt(String(email.smtp_port), 10)
+  return {
+    from_email: fromEmail,
+    from_name: fromName,
+    config: {
+      host: String(email.smtp_host).trim(),
+      port: portNum,
+      secure: (email.smtp_secure as boolean) ?? portNum === 465,
+      auth: {
+        user: String(email.smtp_user).trim(),
+        password: String(email.smtp_password).trim(),
+      },
+      from: { email: fromEmail.trim(), name: fromName.trim() },
+    },
+  }
+}
+
+/** Build SMTP config for sending (current org from cookie). Hostado uses env; other orgs use organization.settings.email. */
+export async function getOrganizationEmailConfigForSending(): Promise<{
+  from_email: string
+  from_name: string
+  config: import('@/lib/email-provider').EmailConfig | null
+}> {
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) {
+    return { from_email: '', from_name: '', config: null }
+  }
+  return getOrganizationEmailConfigForSendingById(organizationId)
+}
+
+/** For the emails feature: whether current org can send/receive (hostado uses env; others need settings). */
+export async function getOrganizationEmailSetupStatus(): Promise<{
+  isHostado: boolean
+  hasEmailSettings: boolean
+  organizationName: string
+}> {
+  const organizationId = await getCurrentOrganizationId()
+  const hostadoId = await getHostadoOrganizationId()
+  const isHostado = !!organizationId && organizationId === hostadoId
+
+  if (!organizationId) {
+    return { isHostado: false, hasEmailSettings: false, organizationName: '' }
+  }
+
+  const supabase = await createClient()
+  const { data: org } = await supabase
+    .from('organizations')
+    .select('name, settings')
+    .eq('id', organizationId)
+    .single()
+
+  const email = (org?.settings as any)?.email
+  const hasEmailSettings = !!(
+    email?.smtp_host &&
+    email?.smtp_port &&
+    email?.smtp_user &&
+    email?.smtp_password &&
+    email?.from_email
+  )
+
+  return {
+    isHostado,
+    hasEmailSettings,
+    organizationName: org?.name ?? '',
+  }
 }
 
 export async function hasFeaturePermission(

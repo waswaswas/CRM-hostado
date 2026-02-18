@@ -1,6 +1,6 @@
 import nodemailer from 'nodemailer'
 
-interface EmailConfig {
+export interface EmailConfig {
   host: string
   port: number
   secure: boolean
@@ -31,9 +31,7 @@ interface SendEmailOptions {
   attachments?: Attachment[]
 }
 
-let transporter: nodemailer.Transporter | null = null
-
-function getEmailConfig(): EmailConfig | null {
+export function getEmailConfig(): EmailConfig | null {
   const host = process.env.SMTP_HOST
   const port = process.env.SMTP_PORT
   const user = process.env.SMTP_USER
@@ -73,71 +71,30 @@ function getEmailConfig(): EmailConfig | null {
   }
 }
 
-function getTransporter(): nodemailer.Transporter | null {
-  if (transporter) {
-    return transporter
-  }
-
-  const config = getEmailConfig()
-  if (!config) {
-    return null
-  }
-
-  // Configure transporter with proper SSL/TLS settings
+function buildTransporterFromConfig(config: EmailConfig): nodemailer.Transporter {
   const transporterConfig: any = {
     host: config.host,
     port: config.port,
-    secure: config.secure, // true for port 465 (SSL/TLS), false for port 587 (STARTTLS)
+    secure: config.secure,
     auth: {
       user: config.auth.user,
-      pass: config.auth.password, // nodemailer uses 'pass' not 'password'
+      pass: config.auth.password,
     },
-    // Additional TLS options for better compatibility
-    tls: {
-      rejectUnauthorized: false, // Accept self-signed certificates if needed
-    },
+    tls: { rejectUnauthorized: false },
   }
-
-  // For port 587, require TLS
   if (config.port === 587) {
     transporterConfig.requireTLS = true
   }
-
-  try {
-    transporter = nodemailer.createTransport(transporterConfig)
-    return transporter
-  } catch (error) {
-    console.error('Failed to create transporter:', error)
-    return null
-  }
+  return nodemailer.createTransport(transporterConfig)
 }
 
-export async function sendEmail(options: SendEmailOptions): Promise<{
-  success: boolean
-  messageId?: string
-  error?: string
-  response?: any
-}> {
-  const transporter = getTransporter()
-  if (!transporter) {
-    return {
-      success: false,
-      error: 'Email provider is not configured. Please set SMTP environment variables.',
-    }
-  }
-
-  const config = getEmailConfig()
-  if (!config) {
-    return {
-      success: false,
-      error: 'Email configuration is missing.',
-    }
-  }
-
+async function sendWithConfig(
+  options: SendEmailOptions,
+  config: EmailConfig
+): Promise<{ success: boolean; messageId?: string; error?: string; response?: any }> {
+  const transporter = buildTransporterFromConfig(config)
   try {
-    // Verify connection before sending
     await transporter.verify()
-
     const mailOptions: any = {
       from: `"${config.from.name}" <${config.from.email}>`,
       to: options.toName ? `"${options.toName}" <${options.to}>` : options.to,
@@ -147,33 +104,16 @@ export async function sendEmail(options: SendEmailOptions): Promise<{
       cc: options.cc,
       bcc: options.bcc,
     }
-
-    // Add attachments if provided
     if (options.attachments && options.attachments.length > 0) {
       mailOptions.attachments = options.attachments.map((att) => {
-        // If path is a Buffer, use content property instead
         if (Buffer.isBuffer(att.path)) {
-          return {
-            filename: att.filename,
-            content: att.path,
-            contentType: att.contentType,
-          }
+          return { filename: att.filename, content: att.path, contentType: att.contentType }
         }
-        return {
-          filename: att.filename,
-          path: att.path,
-          contentType: att.contentType,
-        }
+        return { filename: att.filename, path: att.path, contentType: att.contentType }
       })
     }
-
     const info = await transporter.sendMail(mailOptions)
-
-    return {
-      success: true,
-      messageId: info.messageId,
-      response: info.response,
-    }
+    return { success: true, messageId: info.messageId, response: info.response }
   } catch (error) {
     console.error('Error sending email:', error)
     return {
@@ -181,6 +121,29 @@ export async function sendEmail(options: SendEmailOptions): Promise<{
       error: error instanceof Error ? error.message : 'Unknown error occurred',
     }
   }
+}
+
+/** Send using optional config (e.g. org settings). If config is omitted (undefined), uses env (hostado). If explicitly null, returns error. */
+export async function sendEmail(
+  options: SendEmailOptions,
+  config?: EmailConfig | null
+): Promise<{
+  success: boolean
+  messageId?: string
+  error?: string
+  response?: any
+}> {
+  const effectiveConfig = config !== undefined ? config : getEmailConfig()
+  if (!effectiveConfig) {
+    return {
+      success: false,
+      error:
+        config === undefined
+          ? 'Email provider is not configured. Please set SMTP environment variables.'
+          : 'Email is not configured for this organization. Add SMTP details in Organization Settings.',
+    }
+  }
+  return sendWithConfig(options, effectiveConfig)
 }
 
 export function isEmailConfigured(): boolean {

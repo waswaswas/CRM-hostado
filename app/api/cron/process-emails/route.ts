@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { sendEmail } from '@/lib/email-provider'
 import { createInteraction } from '@/app/actions/interactions'
+import { getOrganizationEmailConfigForSendingById } from '@/app/actions/organizations'
 
 // This endpoint should be called by a cron job (e.g., cron-job.org, Vercel Cron)
 // It processes scheduled emails and sends them
@@ -52,16 +53,21 @@ export async function GET(request: NextRequest) {
           .update({ status: 'sending' })
           .eq('id', email.id)
 
-        // Send email
-        const result = await sendEmail({
-          to: email.to_email,
-          toName: email.to_name || undefined,
-          subject: email.subject,
-          html: email.body_html,
-          text: email.body_text || undefined,
-          cc: email.cc_emails || undefined,
-          bcc: email.bcc_emails || undefined,
-        })
+        // Send email using org-specific SMTP (hostado = env, others = org settings)
+        const orgId = (email as { organization_id?: string }).organization_id
+        const orgConfig = orgId ? await getOrganizationEmailConfigForSendingById(orgId) : null
+        const result = await sendEmail(
+          {
+            to: email.to_email,
+            toName: email.to_name || undefined,
+            subject: email.subject,
+            html: email.body_html,
+            text: email.body_text || undefined,
+            cc: email.cc_emails || undefined,
+            bcc: email.bcc_emails || undefined,
+          },
+          orgConfig?.config ?? null
+        )
 
         if (result.success) {
           // Update email status to sent
