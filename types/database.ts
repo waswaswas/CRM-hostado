@@ -96,8 +96,10 @@ export interface OfferMetadata {
   unpublish_after_days?: number
   is_archived?: boolean
   opened_at?: string | null
+  opened_history?: string[]
   line_items?: OfferLineItem[]
   recipient_snapshot?: OfferRecipientSnapshot | null
+  correction_requests?: { message: string; email: string; at: string }[]
 }
 
 export interface Offer {
@@ -130,8 +132,10 @@ export interface Offer {
   unpublish_after_days?: number | null
   is_archived?: boolean
   opened_at?: string | null
+  opened_history?: string[]
   line_items?: OfferLineItem[]
   recipient_snapshot?: OfferRecipientSnapshot | null
+  correction_requests?: { message: string; email: string; at: string }[]
 }
 
 export interface Payment {

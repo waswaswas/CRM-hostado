@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -17,8 +16,7 @@ import { JoinOrganizationDialog } from '@/components/organizations/join-organiza
 import Link from 'next/link'
 
 export function OrganizationSelector() {
-  const { currentOrganization, organizations, setCurrentOrganization, isLoading } = useOrganization()
-  const router = useRouter()
+  const { currentOrganization, organizations, switchOrganization, isLoading } = useOrganization()
   const [pendingInvitations, setPendingInvitations] = useState(0)
   const [joinOrgOpen, setJoinOrgOpen] = useState(false)
 
@@ -33,8 +31,7 @@ export function OrganizationSelector() {
   const handleSelectOrganization = async (orgId: string) => {
     const org = organizations.find(o => o.id === orgId)
     if (org) {
-      await setCurrentOrganization(org)
-      router.refresh()
+      await switchOrganization(org)
     }
   }
 

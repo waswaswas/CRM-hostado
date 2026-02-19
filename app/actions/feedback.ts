@@ -6,7 +6,7 @@ import { getCurrentOrganizationId } from './organizations'
 
 const FEEDBACK_ADMIN_EMAIL = 'waswaswas28@gmail.com'
 
-export type FeedbackStatus = 'pending' | 'working_on' | 'done' | 'info_needed'
+export type FeedbackStatus = 'pending' | 'working_on' | 'done' | 'info_needed' | 'test_needed'
 
 export interface Feedback {
   id: string

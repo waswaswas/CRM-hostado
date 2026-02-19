@@ -11,7 +11,7 @@ import { Select } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
-import { updateOffer, deleteOffer, generatePaymentLink, markOfferAsPaid, duplicateOffer, toggleOfferPublished, archiveOffer, restoreOffer } from '@/app/actions/offers'
+import { updateOffer, deleteOffer, generatePaymentLink, markOfferAsPaid, duplicateOffer, toggleOfferPublished, archiveOffer, restoreOffer, resetOfferOpenedHistory } from '@/app/actions/offers'
 import { getPaymentHistory } from '@/app/actions/payments'
 import { useToast } from '@/components/ui/toaster'
 import { format } from 'date-fns'
@@ -338,8 +338,10 @@ export function OfferDetail({ initialOffer }: OfferDetailProps) {
               {offer.is_public && offer.is_published && (
                 <Badge variant="outline" className="bg-green-50 text-green-800 dark:bg-green-900/30 dark:text-green-300">Published</Badge>
               )}
-              {offer.opened_at && (
-                <Badge variant="outline" className="bg-blue-50 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">Opened</Badge>
+              {(offer.opened_history?.length ?? (offer.opened_at ? 1 : 0)) > 0 && (
+                <Badge variant="outline" className="bg-blue-50 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
+                  Opened {offer.opened_history?.length ?? 1}x
+                </Badge>
               )}
             </div>
           )}
@@ -630,6 +632,19 @@ export function OfferDetail({ initialOffer }: OfferDetailProps) {
                       </div>
                     </div>
                   )}
+                  {offer.correction_requests && offer.correction_requests.length > 0 && (
+                    <div>
+                      <label className="text-sm font-medium text-muted-foreground">Correction requests</label>
+                      <div className="mt-2 space-y-3">
+                        {offer.correction_requests.map((cr, i) => (
+                          <div key={i} className="p-3 border rounded-lg bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800">
+                            <p className="text-sm whitespace-pre-wrap">{cr.message}</p>
+                            <p className="text-xs text-muted-foreground mt-1">{cr.email} • {format(new Date(cr.at), 'MMM d, yyyy HH:mm')}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </>
               )}
             </CardContent>
@@ -762,6 +777,32 @@ export function OfferDetail({ initialOffer }: OfferDetailProps) {
                 <label className="text-muted-foreground">Last Updated</label>
                 <p>{format(new Date(offer.updated_at), 'MMM d, yyyy HH:mm')}</p>
               </div>
+              {((offer.opened_history?.length ?? 0) > 0 || offer.opened_at) && (
+                <div>
+                  <label className="text-muted-foreground">Opened history</label>
+                  <ul className="mt-1 space-y-1 max-h-32 overflow-y-auto">
+                    {(offer.opened_history ?? (offer.opened_at ? [offer.opened_at] : [])).map((at, i) => (
+                      <li key={i}>{format(new Date(at), 'MMM d, yyyy HH:mm')}</li>
+                    ))}
+                  </ul>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-2"
+                    onClick={async () => {
+                      try {
+                        const updated = await resetOfferOpenedHistory(offer.id)
+                        setOffer(updated)
+                        toast({ title: 'Reset', description: 'Opened history cleared' })
+                      } catch (e) {
+                        toast({ title: 'Error', description: e instanceof Error ? e.message : 'Failed', variant: 'destructive' })
+                      }
+                    }}
+                  >
+                    Reset opened history
+                  </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>

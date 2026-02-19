@@ -184,6 +184,7 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
   const STATUS_OPTIONS: { value: FeedbackStatus; label: string }[] = [
     { value: 'pending', label: 'Pending' },
     { value: 'working_on', label: 'Working on' },
+    { value: 'test_needed', label: 'Test needed' },
     { value: 'info_needed', label: 'Info needed' },
     { value: 'done', label: 'Done' },
   ]
@@ -423,6 +424,8 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
                                       ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-200'
                                       : (feedback.status || '') === 'working_on'
                                       ? 'bg-blue-500/20 text-blue-700 dark:text-blue-500'
+                                      : (feedback.status || '') === 'test_needed'
+                                      ? 'bg-red-300 text-white dark:bg-red-600 dark:text-white'
                                       : (feedback.status || '') === 'info_needed'
                                       ? 'bg-amber-500/20 text-amber-700 dark:text-amber-400'
                                       : 'bg-gray-500/20 text-gray-700 dark:text-gray-400'

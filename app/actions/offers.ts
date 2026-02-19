@@ -29,6 +29,8 @@ function normalizeOffer(row: Record<string, unknown> | null | undefined): Offer 
     throw new Error('Invalid offer row')
   }
   const meta = (row.metadata as OfferMetadata | null) || {}
+  const openedHistory = Array.isArray(meta.opened_history) ? meta.opened_history : (meta.opened_at ? [meta.opened_at] : [])
+  const openedAt = openedHistory.length > 0 ? openedHistory[openedHistory.length - 1] : null
   return {
     ...row,
     metadata: meta,
@@ -37,9 +39,11 @@ function normalizeOffer(row: Record<string, unknown> | null | undefined): Offer 
     published_at: meta.published_at ?? null,
     unpublish_after_days: meta.unpublish_after_days ?? null,
     is_archived: meta.is_archived ?? false,
-    opened_at: meta.opened_at ?? null,
+    opened_at: openedAt,
+    opened_history: openedHistory,
     line_items: meta.line_items ?? [],
     recipient_snapshot: meta.recipient_snapshot ?? null,
+    correction_requests: meta.correction_requests ?? [],
   } as Offer
 }
 
@@ -137,10 +141,19 @@ export async function getOfferByToken(token: string) {
   if (!offer.is_public || !offer.is_published) {
     throw new Error('Offer not found')
   }
+  const publishedAt = offer.published_at
+  const days = Number(offer.unpublish_after_days ?? 14)
+  if (publishedAt && days > 0) {
+    const unpublishAt = new Date(publishedAt)
+    unpublishAt.setDate(unpublishAt.getDate() + days)
+    if (unpublishAt <= new Date()) {
+      throw new Error('Offer not found')
+    }
+  }
   return offer
 }
 
-/** Mark offer as opened when an external customer opens the link. Call from public page on mount. No auth. */
+/** Mark offer as opened when an external customer opens the link. Appends to opened_history. Call from public page on mount. No auth. */
 export async function markOfferOpened(offerId: string, token: string): Promise<{ ok: boolean }> {
   const supabase = await createClient()
   const { data: row, error: fetchErr } = await supabase
@@ -151,8 +164,10 @@ export async function markOfferOpened(offerId: string, token: string): Promise<{
     .single()
   if (fetchErr || !row) return { ok: false }
   const meta = (row.metadata as OfferMetadata) || {}
-  if (meta.opened_at) return { ok: true }
-  const nextMeta: OfferMetadata = { ...meta, opened_at: new Date().toISOString() }
+  const history = Array.isArray(meta.opened_history) ? [...meta.opened_history] : (meta.opened_at ? [meta.opened_at] : [])
+  const now = new Date().toISOString()
+  history.push(now)
+  const nextMeta: OfferMetadata = { ...meta, opened_history: history, opened_at: now }
   const { error: updateErr } = await supabase
     .from('offers')
     .update({ metadata: nextMeta })
@@ -160,6 +175,39 @@ export async function markOfferOpened(offerId: string, token: string): Promise<{
     .eq('payment_token', token)
   if (updateErr) return { ok: false }
   return { ok: true }
+}
+
+/** Reset offer opened history. Auth required. */
+export async function resetOfferOpenedHistory(offerId: string): Promise<Offer> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Not authenticated')
+  const organizationId = await getCurrentOrganizationId()
+  if (!organizationId) throw new Error('No organization selected')
+
+  const { data: row, error: fetchErr } = await supabase
+    .from('offers')
+    .select('metadata')
+    .eq('id', offerId)
+    .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
+    .single()
+  if (fetchErr || !row) throw new Error('Offer not found')
+
+  const meta = (row.metadata as OfferMetadata) || {}
+  const nextMeta = { ...meta, opened_history: [], opened_at: null }
+  const { data: offer, error } = await supabase
+    .from('offers')
+    .update({ metadata: nextMeta })
+    .eq('id', offerId)
+    .eq('owner_id', user.id)
+    .eq('organization_id', organizationId)
+    .select('*')
+    .single()
+  if (error) throw new Error(error.message)
+  revalidatePath('/offers')
+  revalidatePath(`/offers/${offerId}`)
+  return normalizeOffer(offer) as Offer
 }
 
 /** Accept offer by token (external customer). No auth. */
@@ -351,13 +399,13 @@ export async function updateOffer(
     throw new Error('No organization selected')
   }
 
-  const hasMeta = data.unpublish_after_days !== undefined || data.line_items !== undefined || data.recipient_snapshot !== undefined
+  const hasMeta = data.unpublish_after_days !== undefined || data.line_items !== undefined || data.recipient_snapshot !== undefined || data.amount !== undefined
   let updatePayload: Record<string, unknown> = { ...data }
   delete (updatePayload as Record<string, unknown>).line_items
   delete (updatePayload as Record<string, unknown>).recipient_snapshot
   delete (updatePayload as Record<string, unknown>).unpublish_after_days
 
-  if (hasMeta) {
+  if (hasMeta || data.amount !== undefined) {
     const { data: current } = await supabase
       .from('offers')
       .select('metadata')
@@ -369,6 +417,14 @@ export async function updateOffer(
     if (data.unpublish_after_days !== undefined) meta.unpublish_after_days = data.unpublish_after_days
     if (data.line_items !== undefined) meta.line_items = data.line_items
     if (data.recipient_snapshot !== undefined) meta.recipient_snapshot = data.recipient_snapshot
+    if (data.amount !== undefined) {
+      const newAmount = data.amount
+      const lineItems = meta.line_items || []
+      const currentSum = lineItems.reduce((s: number, i: { quantity?: number; unit_price?: number }) => s + (i.quantity || 1) * (i.unit_price || 0), 0)
+      if (Math.abs(currentSum - newAmount) > 0.01) {
+        meta.line_items = [{ name: 'Item', quantity: 1, unit_price: newAmount }]
+      }
+    }
     updatePayload.metadata = meta
   }
 

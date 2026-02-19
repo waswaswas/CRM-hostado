@@ -48,7 +48,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { useToast } from '@/components/ui/toaster'
-import { Archive, Calendar, Check, ChevronDown, Clock, Copy, FolderOpen, Pencil, Plus, Search, Settings, Square, Trash2, UserMinus, Users, X } from 'lucide-react'
+import { Archive, Calendar, Check, CheckCircle2, CheckSquare, Circle, ChevronDown, Clock, Copy, FolderOpen, Pencil, Plus, Search, Settings, Square, Trash2, UserMinus, Users, X } from 'lucide-react'
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { MentionTextarea } from '@/components/todo/mention-textarea'
 
@@ -1016,10 +1016,9 @@ export function TodoPageClient({
                     activeTaskId === task.id ? 'border-primary/50 bg-muted/30' : 'hover:bg-muted/30'
                   }`}
                 >
-                  <input
-                    type="checkbox"
-                    checked={selectedTaskIds.has(task.id)}
-                    onChange={() => {
+                  <button
+                    type="button"
+                    onClick={() => {
                       setSelectedTaskIds((prev) => {
                         const next = new Set(prev)
                         if (next.has(task.id)) {
@@ -1030,15 +1029,27 @@ export function TodoPageClient({
                         return next
                       })
                     }}
-                    className="h-4 w-4 rounded border-gray-300 shrink-0"
-                  />
-                  <input
-                    type="checkbox"
-                    checked={task.completed}
-                    onChange={() => handleUpdateTask(task.id, { completed: !task.completed })}
-                    className="h-5 w-5 rounded border-gray-300 shrink-0 sm:h-4 sm:w-4"
+                    className="shrink-0 p-0.5 rounded border border-muted-foreground/40 hover:border-primary/60 hover:bg-muted/50 transition-colors"
+                    aria-label={selectedTaskIds.has(task.id) ? 'Deselect task' : 'Select task'}
+                  >
+                    {selectedTaskIds.has(task.id) ? (
+                      <CheckSquare className="h-4 w-4 text-primary" />
+                    ) : (
+                      <Square className="h-4 w-4 text-muted-foreground" />
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleUpdateTask(task.id, { completed: !task.completed })}
+                    className="shrink-0 p-0.5 rounded-full hover:bg-muted/50 transition-colors"
                     aria-label={task.completed ? 'Mark incomplete' : 'Mark complete'}
-                  />
+                  >
+                    {task.completed ? (
+                      <CheckCircle2 className="h-5 w-5 text-emerald-500 sm:h-4 sm:w-4" />
+                    ) : (
+                      <Circle className="h-5 w-5 text-muted-foreground sm:h-4 sm:w-4" />
+                    )}
+                  </button>
                   <div className="flex-1 min-w-0">
                     {editingTaskId === task.id ? (
                       <Input
