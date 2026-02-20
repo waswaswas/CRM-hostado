@@ -277,7 +277,7 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto bg-popover text-popover-foreground">
         <DialogHeader>
           <DialogTitle>Feedback & Improvements</DialogTitle>
           <DialogDescription>
