@@ -93,6 +93,29 @@
     --input: 217.2 32.6% 17.5%;
     --ring: 224.3 76.3% 48%;
   }
+
+  /* Gradient theme: blue–purple gradient + decorative motive (surfaces semi-transparent so gradient shows) */
+  .gradient {
+    --background: 263 55% 45% / 0.35;
+    --foreground: 0 0% 98%;
+    --card: 263 35% 22% / 0.82;
+    --card-foreground: 0 0% 98%;
+    --popover: 263 35% 20% / 0.94;
+    --popover-foreground: 0 0% 98%;
+    --primary: 270 70% 68%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 263 40% 38% / 0.75;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 263 40% 35% / 0.7;
+    --muted-foreground: 270 25% 88%;
+    --accent: 270 55% 60% / 0.85;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 62.8% 48%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 263 45% 50% / 0.5;
+    --input: 263 40% 40% / 0.7;
+    --ring: 270 70% 65%;
+  }
 }
 
 @layer base {
@@ -101,6 +124,27 @@
   }
   body {
     @apply bg-background text-foreground;
+  }
+
+  /* Gradient theme: full-page gradient and decorative motive */
+  .gradient body {
+    background: linear-gradient(105deg, #5f5df0 0%, #6767ec 35%, #7c3aed 65%, #9d4edd 100%);
+    min-height: 100vh;
+    position: relative;
+  }
+  .gradient body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 800' fill='none' opacity='0.12'%3E%3Cellipse cx='900' cy='200' rx='320' ry='280' fill='%23ffffff'/%3E%3Cellipse cx='200' cy='550' rx='380' ry='320' fill='%23ffffff'/%3E%3Cpath d='M0 400 Q400 200 800 350 T1200 500 V800 H0 Z' fill='%23ffffff' opacity='0.08'/%3E%3Cpath d='M0 600 Q500 400 900 550 T1200 700 V800 H0 Z' fill='%23ffffff' opacity='0.06'/%3E%3C/svg%3E");
+    background-size: cover;
+    background-position: center;
+  }
+  .gradient body > * {
+    position: relative;
+    z-index: 1;
   }
   
   /* Hide native select arrows to prevent double arrows */
