@@ -227,7 +227,7 @@ function NewOfferContent() {
                 </div>
                 {formData.is_public && (
                   <div className="flex items-center gap-2 mt-2">
-                    <span className="text-sm text-muted-foreground">Auto-unpublish after</span>
+                    <span className="text-sm text-muted-foreground">Auto-unpublish after (days from creation)</span>
                     <Select
                       value={String(formData.unpublish_after_days)}
                       onChange={(e) => setFormData({ ...formData, unpublish_after_days: Number(e.target.value) })}

@@ -30,6 +30,8 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null)
   const [editingCommentContent, setEditingCommentContent] = useState('')
   const [newCommentByFeedback, setNewCommentByFeedback] = useState<Record<string, string>>({})
+  const [filterStatus, setFilterStatus] = useState<string>('')
+  const [filterSubmitter, setFilterSubmitter] = useState<string>('')
   const [formData, setFormData] = useState({
     note: '',
     priority: '',
@@ -347,8 +349,32 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
 
           {/* List */}
           <div className="space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <h3 className="font-semibold">{viewMeta.isFeedbackAdmin ? 'All Feedback' : 'Your Feedback'}</h3>
+              {feedbackList.length > 0 && (
+                <div className="flex items-center gap-2">
+                  <Select
+                    value={filterStatus}
+                    onChange={(e) => setFilterStatus(e.target.value)}
+                    className="h-8 w-[10rem] text-xs"
+                  >
+                    <option value="">All statuses</option>
+                    {STATUS_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </Select>
+                  <Select
+                    value={filterSubmitter}
+                    onChange={(e) => setFilterSubmitter(e.target.value)}
+                    className="h-8 w-[11rem] text-xs"
+                  >
+                    <option value="">All submitters</option>
+                    {[...new Set(feedbackList.map((f) => f.owner_email).filter(Boolean))].sort().map((email) => (
+                      <option key={email} value={email!}>{email}</option>
+                    ))}
+                  </Select>
+                </div>
+              )}
               {editingId && (
                 <Button
                   variant="ghost"
@@ -371,7 +397,18 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
               </p>
             ) : (
               <div className="space-y-2">
-                {feedbackList.map((feedback) => (
+                {(() => {
+                  const filtered = feedbackList
+                    .filter((f) => !filterStatus || (f.status || (f.completed ? 'done' : 'pending')) === filterStatus)
+                    .filter((f) => !filterSubmitter || f.owner_email === filterSubmitter)
+                  if (filtered.length === 0) {
+                    return (
+                      <p className="text-sm text-muted-foreground text-center py-8">
+                        No feedback matches your filters.
+                      </p>
+                    )
+                  }
+                  return filtered.map((feedback) => (
                   <div
                     key={feedback.id}
                     className={`border rounded-lg p-4 ${
@@ -399,7 +436,11 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
                                   <Button
                                     variant="outline"
                                     size="sm"
-                                    className="h-7 text-xs px-2 gap-1 min-w-[7rem] justify-between"
+                                    className={`h-7 text-xs px-2 gap-1 min-w-[7rem] justify-between ${
+                                      (feedback.status || (feedback.completed ? 'done' : 'pending')) === 'test_needed'
+                                        ? 'border-red-500 bg-red-500/15 text-red-600 dark:text-red-400 dark:bg-red-500/20'
+                                        : ''
+                                    }`}
                                   >
                                     {STATUS_OPTIONS.find((o) => o.value === (feedback.status || (feedback.completed ? 'done' : 'pending')))?.label || 'Pending'}
                                     <ChevronDown className="h-3 w-3 opacity-50" />
@@ -425,7 +466,7 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
                                       : (feedback.status || '') === 'working_on'
                                       ? 'bg-blue-500/20 text-blue-700 dark:text-blue-500'
                                       : (feedback.status || '') === 'test_needed'
-                                      ? 'bg-red-300 text-white dark:bg-red-600 dark:text-white'
+                                      ? 'bg-red-500 text-white font-medium ring-1 ring-red-400 dark:bg-red-600 dark:ring-red-500'
                                       : (feedback.status || '') === 'info_needed'
                                       ? 'bg-amber-500/20 text-amber-700 dark:text-amber-400'
                                       : 'bg-gray-500/20 text-gray-700 dark:text-gray-400'
@@ -584,7 +625,8 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
                       </div>
                     </div>
                   </div>
-                ))}
+                  ))
+                })()}
               </div>
             )}
           </div>

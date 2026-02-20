@@ -518,7 +518,7 @@ export function OfferDetail({ initialOffer }: OfferDetailProps) {
                   </div>
                   {offer.is_public && (
                     <div>
-                      <label className="text-sm font-medium">Auto-unpublish after (days)</label>
+                      <label className="text-sm font-medium">Auto-unpublish after (days from creation)</label>
                       <Select
                         value={String(editValues.unpublish_after_days)}
                         onChange={(e) => setEditValues({ ...editValues, unpublish_after_days: Number(e.target.value) })}
