@@ -43,6 +43,7 @@ import {
   Edit,
   Link as LinkIcon,
   Unlink,
+  Copy,
 } from 'lucide-react'
 
 import { AccountingCustomerWithRelations } from '@/types/database'
@@ -337,12 +338,30 @@ export function ClientDetail({ client: initialClient, linkedAccountingCustomers 
                     <Button size="sm" variant="ghost" onClick={cancelEditing}>Cancel</Button>
                   </div>
                 ) : (
-                  <p 
-                    className="text-sm cursor-pointer hover:underline"
-                    onClick={() => startEditing('email')}
-                  >
-                    {client.email || 'Click to add email'}
-                  </p>
+                  <div className="flex items-center gap-2">
+                    <p
+                      className="text-sm cursor-pointer hover:underline flex-1 min-w-0 truncate"
+                      onClick={() => startEditing('email')}
+                    >
+                      {client.email || 'Click to add email'}
+                    </p>
+                    {client.email && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 shrink-0"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          navigator.clipboard.writeText(client.email!).then(() => {
+                            toast({ title: 'Copied', description: 'Email copied to clipboard' })
+                          })
+                        }}
+                        title="Copy email"
+                      >
+                        <Copy className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
                 )}
               </div>
               <div>
@@ -359,12 +378,30 @@ export function ClientDetail({ client: initialClient, linkedAccountingCustomers 
                     <Button size="sm" variant="ghost" onClick={cancelEditing}>Cancel</Button>
                   </div>
                 ) : (
-                  <p 
-                    className="text-sm cursor-pointer hover:underline"
-                    onClick={() => startEditing('phone')}
-                  >
-                    {client.phone || 'Click to add phone'}
-                  </p>
+                  <div className="flex items-center gap-2">
+                    <p
+                      className="text-sm cursor-pointer hover:underline flex-1 min-w-0 truncate"
+                      onClick={() => startEditing('phone')}
+                    >
+                      {client.phone || 'Click to add phone'}
+                    </p>
+                    {client.phone && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 shrink-0"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          navigator.clipboard.writeText(client.phone!).then(() => {
+                            toast({ title: 'Copied', description: 'Phone copied to clipboard' })
+                          })
+                        }}
+                        title="Copy phone"
+                      >
+                        <Copy className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
                 )}
               </div>
               <div>
@@ -986,6 +1023,15 @@ export function ClientDetail({ client: initialClient, linkedAccountingCustomers 
   )
 }
 
+function toLocalDateTimeLocalString(d: Date) {
+  const year = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  const hours = String(d.getHours()).padStart(2, '0')
+  const minutes = String(d.getMinutes()).padStart(2, '0')
+  return `${year}-${month}-${day}T${hours}:${minutes}`
+}
+
 function InteractionForm({
   clientId,
   onSuccess,
@@ -998,7 +1044,7 @@ function InteractionForm({
   const [formData, setFormData] = useState({
     type: 'call' as 'call' | 'email' | 'meeting' | 'other',
     direction: 'outbound' as 'inbound' | 'outbound' | '',
-    date: new Date().toISOString().slice(0, 16),
+    date: toLocalDateTimeLocalString(new Date()),
     duration_minutes: '',
     subject: '',
     notes: '',
@@ -1098,11 +1144,10 @@ function InteractionForm({
       </div>
 
       <div className="space-y-2">
-        <label className="text-sm font-medium">Subject</label>
+        <label className="text-sm font-medium">Subject (optional)</label>
         <Input
           value={formData.subject}
           onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
-          required
           disabled={loading}
         />
       </div>

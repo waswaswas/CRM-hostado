@@ -11,7 +11,7 @@ export async function createInteraction(data: {
   direction?: InteractionDirection
   date: string
   duration_minutes?: number
-  subject: string
+  subject?: string
   notes?: string
   email_id?: string
 }) {
