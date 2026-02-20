@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Building2, Plus, Users, ArrowRight, CheckCircle, XCircle, ArrowLeft, LogOut, Building } from 'lucide-react'
+import { Building2, Plus, Users, ArrowRight, CheckCircle, XCircle, ArrowLeft, LogOut, Building, Loader2 } from 'lucide-react'
 import { joinOrganizationByCode, validateInvitationCode, getOrganizations } from '@/app/actions/organizations'
 import { createOrganization } from '@/app/actions/organizations'
 import { signOut } from '@/app/actions/auth'
@@ -34,6 +34,7 @@ export default function JoinOrganizationPage() {
   const [hasOrganizations, setHasOrganizations] = useState<boolean | null>(null)
   const [showMyOrganizations, setShowMyOrganizations] = useState(false)
   const [loadingOrganizations, setLoadingOrganizations] = useState(false)
+  const [redirectingToNewOrg, setRedirectingToNewOrg] = useState(false)
 
   async function handleValidateCode() {
     if (!invitationCode.trim()) {
@@ -121,7 +122,8 @@ export default function JoinOrganizationPage() {
         title: 'Success',
         description: 'Organization created successfully!',
       })
-      router.push('/dashboard')
+      setRedirectingToNewOrg(true)
+      window.location.href = '/dashboard'
     } catch (error) {
       toast({
         title: 'Error',
@@ -176,6 +178,15 @@ export default function JoinOrganizationPage() {
     } finally {
       setLoadingOrganizations(false)
     }
+  }
+
+  if (redirectingToNewOrg) {
+    return (
+      <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center gap-4 bg-background">
+        <Loader2 className="h-10 w-10 animate-spin text-primary" aria-hidden />
+        <p className="text-muted-foreground">Switching to your new organization...</p>
+      </div>
+    )
   }
 
   if (step === 'choose') {

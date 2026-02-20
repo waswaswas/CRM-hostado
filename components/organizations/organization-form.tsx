@@ -8,12 +8,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Label } from '@/components/ui/label'
 import { createOrganization } from '@/app/actions/organizations'
 import { useToast } from '@/components/ui/toaster'
-import { Building2 } from 'lucide-react'
+import { Building2, Loader2 } from 'lucide-react'
 
 export function OrganizationForm() {
   const router = useRouter()
   const { toast } = useToast()
   const [isLoading, setIsLoading] = useState(false)
+  const [redirecting, setRedirecting] = useState(false)
   const [name, setName] = useState('')
   const [slug, setSlug] = useState('')
 
@@ -47,7 +48,8 @@ export function OrganizationForm() {
         description: `${organization.name} has been created successfully.`,
       })
 
-      router.push(`/organizations/${organization.id}`)
+      setRedirecting(true)
+      window.location.href = '/dashboard'
     } catch (error) {
       toast({
         title: 'Error',
@@ -57,6 +59,15 @@ export function OrganizationForm() {
     } finally {
       setIsLoading(false)
     }
+  }
+
+  if (redirecting) {
+    return (
+      <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center gap-4 bg-background">
+        <Loader2 className="h-10 w-10 animate-spin text-primary" aria-hidden />
+        <p className="text-muted-foreground">Switching to your new organization...</p>
+      </div>
+    )
   }
 
   return (
