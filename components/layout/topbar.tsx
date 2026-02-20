@@ -28,7 +28,7 @@ export function Topbar({ userName, sidebarCollapsed }: { userName?: string; side
     <>
       <div
         className={cn(
-          'flex h-14 sm:h-16 items-center justify-between gap-4 border-b border-border/80 bg-background px-4 pr-4 transition-[padding] duration-300',
+          'relative z-10 flex h-14 sm:h-16 items-center justify-between gap-4 border-b border-border/80 bg-background px-4 pr-4 transition-[padding] duration-300',
           'pl-16 md:pl-5 md:pr-5 lg:px-6', // mobile: space for hamburger; tablet+: comfortable padding
           sidebarCollapsed && 'md:pl-4'
         )}
@@ -38,8 +38,8 @@ export function Topbar({ userName, sidebarCollapsed }: { userName?: string; side
           <OrganizationSelector />
         </div>
 
-        {/* Right: actions — grouped and spaced for clarity */}
-        <div className="flex flex-shrink-0 items-center gap-2 sm:gap-3">
+        {/* Right: actions — grouped and spaced for clarity; pointer-events-auto so nothing blocks clicks */}
+        <div className="relative z-0 flex flex-shrink-0 items-center gap-2 sm:gap-3 pointer-events-auto">
           <ThemeToggle />
           <div className="min-h-[44px] min-w-[44px] flex items-center justify-center">
             <NotificationBadge />

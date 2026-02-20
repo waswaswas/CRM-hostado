@@ -18,36 +18,54 @@ export function DropdownMenu({ children }: { children: React.ReactNode }) {
 
   return (
     <DropdownMenuContext.Provider value={{ open, setOpen, triggerRef }}>
-      <div ref={triggerRef} className="relative">{children}</div>
+      <div ref={triggerRef} className="relative z-0 isolate" data-dropdown-menu>{children}</div>
     </DropdownMenuContext.Provider>
   )
 }
+
+const THEME_DEBUG =
+  typeof window !== 'undefined' &&
+  (window.location.search.includes('theme_debug=1') || (window as any).__CRM_THEME_DEBUG__ === true)
 
 export function DropdownMenuTrigger({
   asChild,
   children,
   className,
+  ...rest
 }: {
   asChild?: boolean
   children: React.ReactNode
   className?: string
-}) {
+} & React.ButtonHTMLAttributes<HTMLButtonElement>) {
   const context = React.useContext(DropdownMenuContext)
   if (!context) throw new Error('DropdownMenuTrigger must be used within DropdownMenu')
 
-  const handleClick = () => {
+  const toggle = () => {
+    if (THEME_DEBUG) console.log('[DropdownMenu] toggle, open was', context.open)
     context.setOpen(!context.open)
   }
 
+  // Use pointerdown so the menu opens even if something captures or blocks the click event
+  const handlePointerDown = (e: React.PointerEvent) => {
+    if (THEME_DEBUG) console.log('[DropdownMenu] trigger pointerdown', e.target, e.currentTarget)
+    e.preventDefault()
+    e.stopPropagation()
+    toggle()
+  }
+
   if (asChild && React.isValidElement(children)) {
+    const childProps = (children.props as Record<string, unknown>) || {}
     return React.cloneElement(children, {
-      onClick: handleClick,
+      onPointerDown: (e: React.PointerEvent) => {
+        handlePointerDown(e)
+        ;(childProps.onPointerDown as ((e: React.PointerEvent) => void) | undefined)?.(e)
+      },
       className: cn(className, (children.props as { className?: string }).className),
     } as any)
   }
 
   return (
-    <button onClick={handleClick} className={className}>
+    <button type="button" onPointerDown={handlePointerDown} className={className} {...rest}>
       {children}
     </button>
   )
@@ -72,7 +90,12 @@ export function DropdownMenuContent({
   const context = React.useContext(DropdownMenuContext)
   if (!context) throw new Error('DropdownMenuContent must be used within DropdownMenu')
   const [position, setPosition] = React.useState({ top: 0, left: 0, right: 0, bottom: 0 })
+  const [positionReady, setPositionReady] = React.useState(false)
   const [isNarrow, setIsNarrow] = React.useState(false)
+
+  React.useEffect(() => {
+    if (!context.open) setPositionReady(false)
+  }, [context.open])
 
   React.useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -104,6 +127,7 @@ export function DropdownMenuContent({
       left: rect.left,
       right: window.innerWidth - rect.right,
     })
+    setPositionReady(true)
   }, [context.open, align, side])
 
   React.useEffect(() => {
@@ -113,7 +137,12 @@ export function DropdownMenuContent({
     return () => window.removeEventListener('resize', onResize)
   }, [mobileInsetProp])
 
-  if (!context.open) return null
+  if (!context.open || !positionReady) return null
+
+  if (THEME_DEBUG && typeof document !== 'undefined') {
+    const rect = context.triggerRef.current?.getBoundingClientRect()
+    console.log('[DropdownMenu] content rendering, trigger rect', rect, 'position', position)
+  }
 
   const useInset = mobileInsetProp && isNarrow
 
