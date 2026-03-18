@@ -1,6 +1,6 @@
 import { AppLayout } from '@/components/layout/app-layout'
 import { OrganizationsList } from '@/components/organizations/organizations-list'
-import { getOrganizations } from '@/app/actions/organizations'
+import { getOrganizations, getUserRole } from '@/app/actions/organizations'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 
@@ -17,6 +17,13 @@ export default async function OrganizationsPage() {
   }
 
   const organizations = await getOrganizations()
+  const initialUserRoles: Record<string, 'owner' | 'admin' | 'moderator' | 'viewer' | null> = {}
+  await Promise.all(
+    organizations.map(async (org) => {
+      const role = await getUserRole(org.id)
+      initialUserRoles[org.id] = role
+    })
+  )
 
   return (
     <AppLayout>
@@ -27,7 +34,7 @@ export default async function OrganizationsPage() {
             Manage your organizations and team members
           </p>
         </div>
-        <OrganizationsList initialOrganizations={organizations} />
+        <OrganizationsList initialOrganizations={organizations} initialUserRoles={initialUserRoles} />
       </div>
     </AppLayout>
   )

@@ -528,15 +528,17 @@ export function ClientDetail({ client: initialClient, linkedAccountingCustomers 
           </Card>
         </div>
 
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-2 min-w-0">
           <Tabs defaultValue="timeline" className="w-full">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <TabsList className="flex flex-wrap">
-                <TabsTrigger value="timeline">Timeline</TabsTrigger>
-                <TabsTrigger value="notes">Notes</TabsTrigger>
-                <TabsTrigger value="offers">Offers</TabsTrigger>
-                <TabsTrigger value="reminders">Reminders</TabsTrigger>
-              </TabsList>
+              <div className="min-w-0 overflow-x-auto overflow-y-hidden -mx-1 px-1 md:mx-0 md:px-0 [scrollbar-width:thin]">
+                <TabsList className="flex flex-nowrap w-max">
+                  <TabsTrigger value="timeline" className="shrink-0">Timeline</TabsTrigger>
+                  <TabsTrigger value="notes" className="shrink-0">Notes</TabsTrigger>
+                  <TabsTrigger value="offers" className="shrink-0">Offers</TabsTrigger>
+                  <TabsTrigger value="reminders" className="shrink-0">Reminders</TabsTrigger>
+                </TabsList>
+              </div>
               <div className="flex flex-wrap items-center gap-2">
                 <Link href={`/emails/compose?client_id=${client.id}`}>
                   <Button variant="outline" className="min-h-[40px]">

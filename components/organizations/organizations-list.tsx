@@ -16,9 +16,10 @@ import { getUserRole } from '@/app/actions/organizations'
 
 interface OrganizationsListProps {
   initialOrganizations: Organization[]
+  initialUserRoles?: Record<string, 'owner' | 'admin' | 'moderator' | 'viewer' | null>
 }
 
-export function OrganizationsList({ initialOrganizations }: OrganizationsListProps) {
+export function OrganizationsList({ initialOrganizations, initialUserRoles: initialUserRolesProp = {} }: OrganizationsListProps) {
   const { currentOrganization, refreshOrganizations } = useOrganization()
   const router = useRouter()
   const { toast } = useToast()
@@ -28,7 +29,7 @@ export function OrganizationsList({ initialOrganizations }: OrganizationsListPro
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [orgToDelete, setOrgToDelete] = useState<Organization | null>(null)
   const [deleting, setDeleting] = useState(false)
-  const [userRoles, setUserRoles] = useState<Record<string, 'owner' | 'admin' | 'moderator' | 'viewer' | null>>({})
+  const [userRoles, setUserRoles] = useState<Record<string, 'owner' | 'admin' | 'moderator' | 'viewer' | null>>(initialUserRolesProp)
 
   // If no organizations, redirect to join-organization page
   useEffect(() => {
@@ -37,26 +38,27 @@ export function OrganizationsList({ initialOrganizations }: OrganizationsListPro
     }
   }, [organizations.length, router])
 
-  // Load user roles for each organization
-  // IMPORTANT: This must be called before any early returns to avoid hooks violation
+  // Sync roles when organizations change (e.g. after delete) and we don't have server-provided roles
   useEffect(() => {
-    async function loadRoles() {
-      const roles: Record<string, 'owner' | 'admin' | 'moderator' | 'viewer' | null> = {}
-      for (const org of organizations) {
-        try {
-          const role = await getUserRole(org.id)
-          roles[org.id] = role
-        } catch (error) {
-          console.error(`Error loading role for org ${org.id}:`, error)
-          roles[org.id] = null
+    const hasInitialRoles = organizations.every((org) => initialUserRolesProp[org.id] !== undefined)
+    if (organizations.length > 0 && !hasInitialRoles) {
+      async function loadRoles() {
+        const roles: Record<string, 'owner' | 'admin' | 'moderator' | 'viewer' | null> = { ...initialUserRolesProp }
+        for (const org of organizations) {
+          if (roles[org.id] !== undefined) continue
+          try {
+            const role = await getUserRole(org.id)
+            roles[org.id] = role
+          } catch (error) {
+            console.error(`Error loading role for org ${org.id}:`, error)
+            roles[org.id] = null
+          }
         }
+        setUserRoles(roles)
       }
-      setUserRoles(roles)
-    }
-    if (organizations.length > 0) {
       loadRoles()
     }
-  }, [organizations])
+  }, [organizations, initialUserRolesProp])
 
   // Early return AFTER all hooks have been called
   if (organizations.length === 0) {

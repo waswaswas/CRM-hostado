@@ -240,7 +240,7 @@ export function RemindersCard({
   }
 
   return (
-    <Card>
+    <Card className="min-w-0 overflow-hidden">
       <CardHeader>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>

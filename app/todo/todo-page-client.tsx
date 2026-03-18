@@ -707,21 +707,21 @@ export function TodoPageClient({
               {visibleLists.map((list) => (
                 <div
                   key={list.id}
-                  className="flex flex-nowrap items-center justify-between gap-2 rounded-lg border px-4 py-3 min-w-0"
+                  className="flex flex-col md:flex-row md:flex-nowrap md:items-center md:justify-between gap-2 rounded-lg border px-4 py-3 min-w-0"
                 >
                   <div className="flex items-center gap-3 min-w-0 flex-1">
                     <span
                       className="h-3 w-3 rounded-full shrink-0"
                       style={{ backgroundColor: list.color }}
                     />
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                       <p className="font-medium truncate">{list.name}</p>
-                      <p className="text-xs text-muted-foreground whitespace-nowrap">
+                      <p className="text-xs text-muted-foreground mt-0.5">
                         Created {new Date(list.createdAt).toLocaleDateString()}
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex items-center gap-2 shrink-0 flex-wrap md:flex-nowrap">
                     <Badge variant="secondary" className="whitespace-nowrap text-xs">
                       {list.members.length} members
                     </Badge>
@@ -963,7 +963,7 @@ export function TodoPageClient({
           </Select>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 min-w-0">
           <Input
             placeholder="Enter a task name and press enter"
             value={newTaskTitle}
@@ -974,8 +974,9 @@ export function TodoPageClient({
                 handleAddTask()
               }
             }}
+            className="min-w-0 flex-1"
           />
-          <Button onClick={handleAddTask} disabled={addingTask}>
+          <Button onClick={handleAddTask} disabled={addingTask} className="shrink-0">
             <Plus className="h-4 w-4 mr-2" />
             {addingTask ? 'Adding…' : 'Add'}
           </Button>
@@ -1050,7 +1051,7 @@ export function TodoPageClient({
                       <Circle className="h-5 w-5 text-muted-foreground sm:h-4 sm:w-4" />
                     )}
                   </button>
-                  <div className="flex-1 min-w-0">
+                  <div className="flex-1 min-w-0 overflow-hidden">
                     {editingTaskId === task.id ? (
                       <Input
                         value={task.title}
@@ -1066,7 +1067,7 @@ export function TodoPageClient({
                         className="min-h-[44px] sm:min-h-0"
                       />
                     ) : (
-                      <button className="text-left w-full" onClick={() => setActiveTaskId(task.id)}>
+                      <button className="text-left w-full min-w-0 block" onClick={() => setActiveTaskId(task.id)}>
                         <p className={`font-medium text-base sm:text-sm break-words ${task.completed ? 'line-through text-muted-foreground' : ''}`}>
                           {task.title}
                         </p>
@@ -1100,18 +1101,47 @@ export function TodoPageClient({
                         : 'Member'
                       : 'Unassigned'}
                   </Badge>
-                  <div className="flex items-center gap-2 sm:gap-1 shrink-0">
-                    <Button variant="ghost" size="sm" onClick={() => setEditingTaskId(task.id)} className="h-10 w-10 sm:h-8 sm:w-8 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 p-0">
-                      <Pencil className="h-5 w-5 sm:h-4 sm:w-4" />
+                  {/* Mobile: single settings menu */}
+                  <div className="md:hidden shrink-0">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="sm" className="h-10 w-10 min-h-[44px] min-w-[44px] p-0" aria-label="Task actions">
+                          <Settings className="h-5 w-5" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => setEditingTaskId(task.id)}>
+                          <Pencil className="h-4 w-4 mr-2" />
+                          Edit
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleDuplicateTask(task)}>
+                          <Copy className="h-4 w-4 mr-2" />
+                          Duplicate
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleArchiveTask(task.id)}>
+                          <Archive className="h-4 w-4 mr-2" />
+                          Archive
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleDeleteTask(task.id)} className="text-destructive">
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                  {/* Desktop: separate action buttons */}
+                  <div className="hidden md:flex items-center gap-1 shrink-0">
+                    <Button variant="ghost" size="sm" onClick={() => setEditingTaskId(task.id)} className="h-8 w-8 p-0">
+                      <Pencil className="h-4 w-4" />
                     </Button>
-                    <Button variant="ghost" size="sm" onClick={() => handleDuplicateTask(task)} className="h-10 w-10 sm:h-8 sm:w-8 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 p-0">
-                      <Copy className="h-5 w-5 sm:h-4 sm:w-4" />
+                    <Button variant="ghost" size="sm" onClick={() => handleDuplicateTask(task)} className="h-8 w-8 p-0">
+                      <Copy className="h-4 w-4" />
                     </Button>
-                    <Button variant="ghost" size="sm" onClick={() => handleArchiveTask(task.id)} className="h-10 w-10 sm:h-8 sm:w-8 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 p-0">
-                      <Archive className="h-5 w-5 sm:h-4 sm:w-4" />
+                    <Button variant="ghost" size="sm" onClick={() => handleArchiveTask(task.id)} className="h-8 w-8 p-0">
+                      <Archive className="h-4 w-4" />
                     </Button>
-                    <Button variant="ghost" size="sm" onClick={() => handleDeleteTask(task.id)} className="h-10 w-10 sm:h-8 sm:w-8 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 p-0 text-destructive">
-                      <Trash2 className="h-5 w-5 sm:h-4 sm:w-4" />
+                    <Button variant="ghost" size="sm" onClick={() => handleDeleteTask(task.id)} className="h-8 w-8 p-0 text-destructive">
+                      <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
                 </div>

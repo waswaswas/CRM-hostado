@@ -105,7 +105,7 @@ export function RecentClients({ initialClients, customStatuses }: RecentClientsP
   }, [currentOrganization?.id])
 
   return (
-    <Card>
+    <Card className="min-w-0 overflow-hidden">
       <CardHeader className="pb-3">
         <div className="flex flex-col gap-2">
           <div className="flex flex-wrap items-center justify-between gap-2">

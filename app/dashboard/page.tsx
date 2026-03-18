@@ -178,8 +178,9 @@ export default async function DashboardPage() {
           <h1 className="text-3xl font-bold">Dashboard</h1>
         </div>
 
-        <div className={`grid gap-6 ${permContext.hasClients || permContext.hasReminders ? 'md:grid-cols-2' : ''}`}>
+        <div className={`grid gap-6 min-w-0 ${permContext.hasClients || permContext.hasReminders ? 'md:grid-cols-2' : ''}`}>
           {permContext.hasReminders && (
+            <div className="min-w-0 overflow-hidden">
             <RemindersCard 
               reminders={reminders}
               overdueReminders={overdueReminders}
@@ -188,10 +189,13 @@ export default async function DashboardPage() {
               completedReminders={completedReminders}
               clients={clients}
             />
+            </div>
           )}
 
           {permContext.hasClients && (
-            <RecentClients initialClients={clients} customStatuses={customStatuses} />
+            <div className="min-w-0 overflow-hidden">
+              <RecentClients initialClients={clients} customStatuses={customStatuses} />
+            </div>
           )}
 
           {!permContext.hasReminders && !permContext.hasClients && (
