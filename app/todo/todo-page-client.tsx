@@ -99,7 +99,7 @@ type TodoTask = {
   updatedAt: string
 }
 
-const TODO_TASKS_CACHE_TTL_MS = 2 * 60 * 1000 // 2 minutes
+const TODO_TASKS_CACHE_TTL_MS = 30 * 60 * 1000 // 30 minutes
 
 type TodoTasksCacheEntry = {
   fetchedAt: number
@@ -108,6 +108,68 @@ type TodoTasksCacheEntry = {
 
 // In-memory cache for faster back/forward navigation.
 const todoTasksCache = new Map<string, TodoTasksCacheEntry>()
+
+const TODO_RECENT_TASKS_CACHE_TTL_MS = 30 * 60 * 1000 // 30 minutes
+
+type TodoRecentTasksCacheEntry = {
+  fetchedAt: number
+  tasks: TodoTask[]
+}
+
+// In-memory cache for recent tasks list.
+const todoRecentTasksCache = new Map<string, TodoRecentTasksCacheEntry>()
+
+const TODO_TASKS_CACHE_STORAGE_PREFIX = 'hostado:todo-tasks-cache:v1:'
+const TODO_RECENT_TASKS_CACHE_STORAGE_PREFIX = 'hostado:todo-recent-tasks-cache:v1:'
+
+function readTodoTasksCacheFromSession(cacheKey: string): TodoTasksCacheEntry | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = window.sessionStorage.getItem(`${TODO_TASKS_CACHE_STORAGE_PREFIX}${cacheKey}`)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as TodoTasksCacheEntry
+    if (!parsed || typeof parsed.fetchedAt !== 'number') return null
+    if (Date.now() - parsed.fetchedAt > TODO_TASKS_CACHE_TTL_MS) return null
+    return parsed
+  } catch {
+    return null
+  }
+}
+
+function writeTodoTasksCacheToSession(cacheKey: string, entry: TodoTasksCacheEntry) {
+  if (typeof window === 'undefined') return
+  try {
+    window.sessionStorage.setItem(`${TODO_TASKS_CACHE_STORAGE_PREFIX}${cacheKey}`, JSON.stringify(entry))
+  } catch {
+    // ignore quota/security errors
+  }
+}
+
+function readTodoRecentTasksCacheFromSession(orgId: string): TodoRecentTasksCacheEntry | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = window.sessionStorage.getItem(`${TODO_RECENT_TASKS_CACHE_STORAGE_PREFIX}${orgId}`)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as TodoRecentTasksCacheEntry
+    if (!parsed || typeof parsed.fetchedAt !== 'number') return null
+    if (Date.now() - parsed.fetchedAt > TODO_RECENT_TASKS_CACHE_TTL_MS) return null
+    return parsed
+  } catch {
+    return null
+  }
+}
+
+function writeTodoRecentTasksCacheToSession(orgId: string, entry: TodoRecentTasksCacheEntry) {
+  if (typeof window === 'undefined') return
+  try {
+    window.sessionStorage.setItem(
+      `${TODO_RECENT_TASKS_CACHE_STORAGE_PREFIX}${orgId}`,
+      JSON.stringify(entry)
+    )
+  } catch {
+    // ignore quota/security errors
+  }
+}
 
 const COLORS = ['#2563eb', '#22c55e', '#f97316', '#ef4444', '#a855f7', '#0ea5e9']
 const STATUS_LABELS: Record<TaskStatus, string> = {
@@ -330,8 +392,28 @@ export function TodoPageClient({
 
   useEffect(() => {
     if (!currentOrganization?.id) return
+    const orgId = currentOrganization.id
+    const cachedFromSession = readTodoRecentTasksCacheFromSession(orgId)
+    if (cachedFromSession) {
+      todoRecentTasksCache.set(orgId, cachedFromSession)
+      setRecentTasks(cachedFromSession.tasks)
+      return
+    }
+
+    const cached = todoRecentTasksCache.get(orgId)
+    const isFresh = cached && Date.now() - cached.fetchedAt < TODO_RECENT_TASKS_CACHE_TTL_MS
+    if (isFresh && cached) {
+      setRecentTasks(cached.tasks)
+      return
+    }
+
     getRecentTodoTasks()
-      .then((data) => setRecentTasks(data.map(mapTaskFromDb)))
+      .then((data) => {
+        const mapped = data.map(mapTaskFromDb)
+        setRecentTasks(mapped)
+        todoRecentTasksCache.set(orgId, { fetchedAt: Date.now(), tasks: mapped })
+        writeTodoRecentTasksCacheToSession(orgId, { fetchedAt: Date.now(), tasks: mapped })
+      })
       .catch(() => setRecentTasks([]))
   }, [currentOrganization?.id])
 
@@ -371,6 +453,16 @@ export function TodoPageClient({
         : null
 
       if (cacheKey) {
+        // 1) sessionStorage hydration (works after refresh)
+        const cachedFromSession = readTodoTasksCacheFromSession(cacheKey)
+        if (cachedFromSession) {
+          todoTasksCache.set(cacheKey, cachedFromSession)
+          setTasks(cachedFromSession.tasks)
+          setLoadingTasks(false)
+          return
+        }
+
+        // 2) in-memory cache (works across in-app navigation)
         const cached = todoTasksCache.get(cacheKey)
         const isFresh = cached && Date.now() - cached.fetchedAt < TODO_TASKS_CACHE_TTL_MS
         if (isFresh && cached) {
@@ -387,7 +479,9 @@ export function TodoPageClient({
         setTasks(mapped)
 
         if (cacheKey) {
-          todoTasksCache.set(cacheKey, { fetchedAt: Date.now(), tasks: mapped })
+          const entry: TodoTasksCacheEntry = { fetchedAt: Date.now(), tasks: mapped }
+          todoTasksCache.set(cacheKey, entry)
+          writeTodoTasksCacheToSession(cacheKey, entry)
         }
       } finally {
         setLoadingTasks(false)
@@ -543,13 +637,33 @@ export function TodoPageClient({
   }
 
   async function refreshTasks(listId: string, projectId?: string | null) {
+    const orgId = currentOrganization?.id
+    const cacheKey = orgId
+      ? `${orgId}|${listId}|${projectId ?? 'all'}`
+      : null
+
     const data = await getTodoTasks(listId, projectId ?? undefined)
-    setTasks(data.map(mapTaskFromDb))
+    const mapped = data.map(mapTaskFromDb)
+    setTasks(mapped)
+
+    if (cacheKey) {
+      const entry: TodoTasksCacheEntry = { fetchedAt: Date.now(), tasks: mapped }
+      todoTasksCache.set(cacheKey, entry)
+      writeTodoTasksCacheToSession(cacheKey, entry)
+    }
   }
 
   async function refreshRecentTasks() {
+    const orgId = currentOrganization?.id
     getRecentTodoTasks()
-      .then((data) => setRecentTasks(data.map(mapTaskFromDb)))
+      .then((data) => {
+        const mapped = data.map(mapTaskFromDb)
+        setRecentTasks(mapped)
+        if (orgId) {
+          todoRecentTasksCache.set(orgId, { fetchedAt: Date.now(), tasks: mapped })
+          writeTodoRecentTasksCacheToSession(orgId, { fetchedAt: Date.now(), tasks: mapped })
+        }
+      })
       .catch(() => setRecentTasks([]))
   }
 

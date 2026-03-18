@@ -52,7 +52,7 @@ import { LinkAccountingCustomerDialog } from './link-accounting-customer-dialog'
 const SOURCE_OPTIONS = ['Phone Inbound', 'Phone Outbound', 'Chat', 'Email']
 const CUSTOM_SOURCE_VALUE = '__custom__'
 
-const CLIENT_DETAIL_CACHE_TTL_MS = 2 * 60 * 1000 // 2 minutes
+const CLIENT_DETAIL_CACHE_TTL_MS = 30 * 60 * 1000 // 30 minutes
 
 type ClientDetailCacheEntry = {
   fetchedAt: number
@@ -64,6 +64,34 @@ type ClientDetailCacheEntry = {
 
 // In-memory cache for faster back/forward navigation.
 const clientDetailCache = new Map<string, ClientDetailCacheEntry>()
+
+const CLIENT_DETAIL_CACHE_STORAGE_PREFIX = 'hostado:client-detail-cache:v1:'
+
+function readClientDetailCacheFromSession(clientId: string): ClientDetailCacheEntry | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = window.sessionStorage.getItem(`${CLIENT_DETAIL_CACHE_STORAGE_PREFIX}${clientId}`)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as ClientDetailCacheEntry
+    if (!parsed || typeof parsed.fetchedAt !== 'number') return null
+    if (Date.now() - parsed.fetchedAt > CLIENT_DETAIL_CACHE_TTL_MS) return null
+    return parsed
+  } catch {
+    return null
+  }
+}
+
+function writeClientDetailCacheToSession(clientId: string, entry: ClientDetailCacheEntry) {
+  if (typeof window === 'undefined') return
+  try {
+    window.sessionStorage.setItem(
+      `${CLIENT_DETAIL_CACHE_STORAGE_PREFIX}${clientId}`,
+      JSON.stringify(entry)
+    )
+  } catch {
+    // ignore quota/security errors
+  }
+}
 
 interface ClientDetailProps {
   client: Client
@@ -116,11 +144,23 @@ export function ClientDetail({ client: initialClient, linkedAccountingCustomers 
 
   async function loadData() {
     const clientId = client.id
+
+    // 1) Prefer sessionStorage so a full refresh can still hydrate quickly.
+    const cachedFromSession = readClientDetailCacheFromSession(clientId)
+    if (cachedFromSession) {
+      clientDetailCache.set(clientId, cachedFromSession)
+      setInteractions(cachedFromSession.interactions)
+      setReminders(cachedFromSession.reminders)
+      setNotes(cachedFromSession.notes)
+      setOffers(cachedFromSession.offers)
+      setLoading(false)
+      return
+    }
+
+    // 2) Fallback to in-memory cache (works for navigation back/forward).
     const cached = clientDetailCache.get(clientId)
     const isFresh = cached && Date.now() - cached.fetchedAt < CLIENT_DETAIL_CACHE_TTL_MS
-
     if (isFresh && cached) {
-      // Paint instantly from cache; avoids waiting on navigation back.
       setInteractions(cached.interactions)
       setReminders(cached.reminders)
       setNotes(cached.notes)
@@ -165,13 +205,16 @@ export function ClientDetail({ client: initialClient, linkedAccountingCustomers 
       setNotes(nextNotes)
       setOffers(nextOffers)
 
-      clientDetailCache.set(clientId, {
+      const entry: ClientDetailCacheEntry = {
         fetchedAt: Date.now(),
         interactions: nextInteractions,
         reminders: nextReminders,
         notes: nextNotes,
         offers: nextOffers,
-      })
+      }
+
+      clientDetailCache.set(clientId, entry)
+      writeClientDetailCacheToSession(clientId, entry)
     } catch (error) {
       console.error('Unexpected error loading client data:', error)
       toast({
