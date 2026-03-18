@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useLayoutEffect, useMemo } from 'react'
 import { Client, Interaction, Reminder, ClientNote, ClientStatus, Offer } from '@/types/database'
 import { getStatusesForType, getStatusColor, formatStatus, STATUS_DESCRIPTIONS } from '@/lib/status-utils'
 import { getSettings } from '@/app/actions/settings'
@@ -101,6 +101,8 @@ interface ClientDetailProps {
 export function ClientDetail({ client: initialClient, linkedAccountingCustomers = [] }: ClientDetailProps) {
   const { toast } = useToast()
   const [client, setClient] = useState(initialClient)
+  // IMPORTANT: Keep initial render identical on server + client to avoid hydration mismatch.
+  // We'll hydrate from sessionStorage in `useLayoutEffect` (client-only) before paint.
   const [interactions, setInteractions] = useState<Interaction[]>([])
   const [reminders, setReminders] = useState<Reminder[]>([])
   const [notes, setNotes] = useState<ClientNote[]>([])
@@ -138,7 +140,23 @@ export function ClientDetail({ client: initialClient, linkedAccountingCustomers 
     loadCustomStatuses()
   }, [])
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    const clientId = client.id
+
+    // Hydrate synchronously from sessionStorage (client-only) before paint.
+    // This keeps the first client render aligned with the server HTML (no cache-dependent render),
+    // then swaps to cached data immediately.
+    const cachedFromSession = readClientDetailCacheFromSession(clientId)
+    if (cachedFromSession) {
+      clientDetailCache.set(clientId, cachedFromSession)
+      setInteractions(cachedFromSession.interactions)
+      setReminders(cachedFromSession.reminders)
+      setNotes(cachedFromSession.notes)
+      setOffers(cachedFromSession.offers)
+      setLoading(false)
+      return
+    }
+
     loadData()
   }, [client.id])
 
