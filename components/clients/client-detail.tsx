@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Client, Interaction, Reminder, ClientNote, ClientStatus, Offer } from '@/types/database'
 import { getStatusesForType, getStatusColor, formatStatus, STATUS_DESCRIPTIONS } from '@/lib/status-utils'
 import { getSettings } from '@/app/actions/settings'
@@ -52,6 +52,19 @@ import { LinkAccountingCustomerDialog } from './link-accounting-customer-dialog'
 const SOURCE_OPTIONS = ['Phone Inbound', 'Phone Outbound', 'Chat', 'Email']
 const CUSTOM_SOURCE_VALUE = '__custom__'
 
+const CLIENT_DETAIL_CACHE_TTL_MS = 2 * 60 * 1000 // 2 minutes
+
+type ClientDetailCacheEntry = {
+  fetchedAt: number
+  interactions: Interaction[]
+  reminders: Reminder[]
+  notes: ClientNote[]
+  offers: Offer[]
+}
+
+// In-memory cache for faster back/forward navigation.
+const clientDetailCache = new Map<string, ClientDetailCacheEntry>()
+
 interface ClientDetailProps {
   client: Client
   linkedAccountingCustomers?: AccountingCustomerWithRelations[]
@@ -102,42 +115,63 @@ export function ClientDetail({ client: initialClient, linkedAccountingCustomers 
   }, [client.id])
 
   async function loadData() {
+    const clientId = client.id
+    const cached = clientDetailCache.get(clientId)
+    const isFresh = cached && Date.now() - cached.fetchedAt < CLIENT_DETAIL_CACHE_TTL_MS
+
+    if (isFresh && cached) {
+      // Paint instantly from cache; avoids waiting on navigation back.
+      setInteractions(cached.interactions)
+      setReminders(cached.reminders)
+      setNotes(cached.notes)
+      setOffers(cached.offers)
+      setLoading(false)
+      return
+    }
+
     setLoading(true)
     try {
       const [interactionsData, remindersData, notesData, offersData] = await Promise.allSettled([
-        getInteractionsForClient(client.id),
-        getRemindersForClient(client.id),
-        getNotesForClient(client.id),
-        getOffersForClient(client.id),
+        getInteractionsForClient(clientId),
+        getRemindersForClient(clientId),
+        getNotesForClient(clientId),
+        getOffersForClient(clientId),
       ])
-      
-      if (interactionsData.status === 'fulfilled') {
-        setInteractions(interactionsData.value)
-      } else {
+
+      const nextInteractions =
+        interactionsData.status === 'fulfilled' ? interactionsData.value : []
+      const nextReminders =
+        remindersData.status === 'fulfilled' ? remindersData.value : []
+      const nextNotes =
+        notesData.status === 'fulfilled' ? notesData.value : []
+      const nextOffers =
+        offersData.status === 'fulfilled' ? offersData.value : []
+
+      if (interactionsData.status !== 'fulfilled') {
         console.error('Failed to load interactions:', interactionsData.reason)
-        setInteractions([])
       }
-      
-      if (remindersData.status === 'fulfilled') {
-        setReminders(remindersData.value)
-      } else {
+      if (remindersData.status !== 'fulfilled') {
         console.error('Failed to load reminders:', remindersData.reason)
-        setReminders([])
       }
-      
-      if (notesData.status === 'fulfilled') {
-        setNotes(notesData.value)
-      } else {
+      if (notesData.status !== 'fulfilled') {
         console.error('Failed to load notes:', notesData.reason)
-        setNotes([])
       }
-      
-      if (offersData.status === 'fulfilled') {
-        setOffers(offersData.value)
-      } else {
+      if (offersData.status !== 'fulfilled') {
         console.error('Failed to load offers:', offersData.reason)
-        setOffers([])
       }
+
+      setInteractions(nextInteractions)
+      setReminders(nextReminders)
+      setNotes(nextNotes)
+      setOffers(nextOffers)
+
+      clientDetailCache.set(clientId, {
+        fetchedAt: Date.now(),
+        interactions: nextInteractions,
+        reminders: nextReminders,
+        notes: nextNotes,
+        offers: nextOffers,
+      })
     } catch (error) {
       console.error('Unexpected error loading client data:', error)
       toast({
@@ -227,6 +261,29 @@ export function ClientDetail({ client: initialClient, linkedAccountingCustomers 
         return <Calendar className="h-4 w-4" />
     }
   }
+
+  // Memoized view-models so we don't re-run formatting + icon selection on every re-render.
+  const timelineInteractions = useMemo(() => {
+    return interactions.map((interaction) => ({
+      ...interaction,
+      icon: getInteractionIcon(interaction.type),
+      displayDate: format(new Date(interaction.date), 'MMM d, yyyy HH:mm'),
+    }))
+  }, [interactions])
+
+  const noteCards = useMemo(() => {
+    return notes.map((note) => ({
+      ...note,
+      displayDate: format(new Date(note.created_at), 'MMM d, yyyy HH:mm'),
+    }))
+  }, [notes])
+
+  const reminderCards = useMemo(() => {
+    return reminders.map((reminder) => ({
+      ...reminder,
+      displayDue: format(new Date(reminder.due_at), 'MMM d, yyyy HH:mm'),
+    }))
+  }, [reminders])
 
   return (
     <div className="space-y-6">
@@ -556,15 +613,15 @@ export function ClientDetail({ client: initialClient, linkedAccountingCustomers 
             <TabsContent value="timeline" className="space-y-4">
               {loading ? (
                 <p className="text-muted-foreground">Loading...</p>
-              ) : interactions.length > 0 ? (
+              ) : timelineInteractions.length > 0 ? (
                 <div className="space-y-4">
-                  {interactions.map((interaction) => (
+                  {timelineInteractions.map((interaction) => (
                     <Card key={interaction.id}>
                       <CardContent className="p-4">
                         <div className="flex items-start justify-between">
                           <div className="flex-1">
                             <div className="flex items-center gap-2">
-                              {getInteractionIcon(interaction.type)}
+                              {interaction.icon}
                               <span className="font-medium capitalize">
                                 {interaction.type}
                               </span>
@@ -591,7 +648,7 @@ export function ClientDetail({ client: initialClient, linkedAccountingCustomers 
                             )}
                             <div className="mt-2 flex gap-4 text-xs text-muted-foreground">
                               <span>
-                                {format(new Date(interaction.date), 'MMM d, yyyy HH:mm')}
+                                {interaction.displayDate}
                               </span>
                               {interaction.duration_minutes && (
                                 <span>{interaction.duration_minutes} min</span>
@@ -648,9 +705,9 @@ export function ClientDetail({ client: initialClient, linkedAccountingCustomers 
 
               {loading ? (
                 <p className="text-muted-foreground">Loading...</p>
-              ) : notes.length > 0 ? (
+              ) : noteCards.length > 0 ? (
                 <div className="space-y-4">
-                  {notes.map((note) => (
+                  {noteCards.map((note) => (
                     <Card key={note.id} className={note.pinned ? 'border-primary' : ''}>
                       <CardContent className="p-4">
                         <div className="flex items-start justify-between">
@@ -709,7 +766,7 @@ export function ClientDetail({ client: initialClient, linkedAccountingCustomers 
                               <>
                                 <p className="whitespace-pre-wrap">{note.content}</p>
                                 <p className="mt-2 text-xs text-muted-foreground">
-                                  {format(new Date(note.created_at), 'MMM d, yyyy HH:mm')}
+                                  {note.displayDate}
                                 </p>
                               </>
                             )}
@@ -873,9 +930,9 @@ export function ClientDetail({ client: initialClient, linkedAccountingCustomers 
 
               {loading ? (
                 <p className="text-muted-foreground">Loading...</p>
-              ) : reminders.length > 0 ? (
+              ) : reminderCards.length > 0 ? (
                 <div className="space-y-4">
-                  {reminders.map((reminder) => (
+                  {reminderCards.map((reminder) => (
                     <Card
                       key={reminder.id}
                       className={reminder.done ? 'opacity-60' : ''}
@@ -895,7 +952,7 @@ export function ClientDetail({ client: initialClient, linkedAccountingCustomers 
                               </p>
                             )}
                             <p className="mt-2 text-xs text-muted-foreground">
-                              Due: {format(new Date(reminder.due_at), 'MMM d, yyyy HH:mm')}
+                              Due: {reminder.displayDue}
                             </p>
                           </div>
                           <div className="flex gap-2">

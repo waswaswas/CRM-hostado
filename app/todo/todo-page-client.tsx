@@ -99,6 +99,16 @@ type TodoTask = {
   updatedAt: string
 }
 
+const TODO_TASKS_CACHE_TTL_MS = 2 * 60 * 1000 // 2 minutes
+
+type TodoTasksCacheEntry = {
+  fetchedAt: number
+  tasks: TodoTask[]
+}
+
+// In-memory cache for faster back/forward navigation.
+const todoTasksCache = new Map<string, TodoTasksCacheEntry>()
+
 const COLORS = ['#2563eb', '#22c55e', '#f97316', '#ef4444', '#a855f7', '#0ea5e9']
 const STATUS_LABELS: Record<TaskStatus, string> = {
   to_do: 'To Do',
@@ -355,16 +365,36 @@ export function TodoPageClient({
     const listId = activeListId
     const projectId = activeProjectId
     async function loadTasks() {
+      const orgId = currentOrganization?.id
+      const cacheKey = orgId
+        ? `${orgId}|${listId}|${projectId ?? 'all'}`
+        : null
+
+      if (cacheKey) {
+        const cached = todoTasksCache.get(cacheKey)
+        const isFresh = cached && Date.now() - cached.fetchedAt < TODO_TASKS_CACHE_TTL_MS
+        if (isFresh && cached) {
+          setTasks(cached.tasks)
+          setLoadingTasks(false)
+          return
+        }
+      }
+
       setLoadingTasks(true)
       try {
         const data = await getTodoTasks(listId, projectId ?? undefined)
-        setTasks(data.map(mapTaskFromDb))
+        const mapped = data.map(mapTaskFromDb)
+        setTasks(mapped)
+
+        if (cacheKey) {
+          todoTasksCache.set(cacheKey, { fetchedAt: Date.now(), tasks: mapped })
+        }
       } finally {
         setLoadingTasks(false)
       }
     }
     loadTasks()
-  }, [activeListId, activeProjectId])
+  }, [activeListId, activeProjectId, currentOrganization?.id])
 
   const visibleLists = useMemo(() => {
     if (!userId) return []
@@ -421,6 +451,34 @@ export function TodoPageClient({
         return dateA - dateB
       })
   }, [listTasks, searchQuery, statusFilter, priorityFilter, assigneeFilter, dueFilter, sortBy, userId])
+
+  // Memoized row view-model so we don't redo date formatting/overdue checks and assignee labels on every render.
+  const taskRows = useMemo(() => {
+    const nowMs = Date.now()
+    return filteredTasks.map((task) => {
+      const dueMs = task.dueDate ? new Date(task.dueDate).getTime() : null
+      const isOverdue = dueMs != null ? dueMs < nowMs : false
+
+      return {
+        ...task,
+        priorityLabel: PRIORITY_LABELS[task.priority],
+        statusLabel: STATUS_LABELS[task.status],
+        displayDueDate: dueMs != null ? new Date(dueMs).toLocaleDateString() : null,
+        isOverdue,
+        assigneeLabel: task.assigneeId
+          ? task.assigneeId === userId
+            ? 'ME'
+            : 'Member'
+          : 'Unassigned',
+      } as typeof task & {
+        priorityLabel: string
+        statusLabel: string
+        displayDueDate: string | null
+        isOverdue: boolean
+        assigneeLabel: string
+      }
+    })
+  }, [filteredTasks, userId])
 
   const selectedTasks = filteredTasks.filter((task) => selectedTaskIds.has(task.id))
   const activeTask = tasks.find((task) => task.id === activeTaskId) || null
@@ -1010,7 +1068,7 @@ export function TodoPageClient({
               </CardContent>
             </Card>
           ) : (
-            filteredTasks.map((task) => (
+            taskRows.map((task) => (
               <div key={task.id} className="space-y-1">
                 <div
                   className={`border rounded-lg px-4 py-3 sm:px-3 sm:py-2 flex items-start sm:items-center gap-3 ${
@@ -1074,33 +1132,23 @@ export function TodoPageClient({
                       </button>
                     )}
                     <div className="text-xs sm:text-xs text-muted-foreground flex flex-wrap items-center gap-2 mt-2 sm:mt-1">
-                      <Badge variant="secondary" className="text-xs px-2 py-0.5">{PRIORITY_LABELS[task.priority]}</Badge>
-                      <span className="text-xs">{STATUS_LABELS[task.status]}</span>
+                      <Badge variant="secondary" className="text-xs px-2 py-0.5">{task.priorityLabel}</Badge>
+                      <span className="text-xs">{task.statusLabel}</span>
                       {task.dueDate && (
-                        <span className={`flex items-center gap-1 text-xs ${new Date(task.dueDate) < new Date() ? 'text-red-500' : ''}`}>
+                        <span className={`flex items-center gap-1 text-xs ${task.isOverdue ? 'text-red-500' : ''}`}>
                           <Calendar className="h-3 w-3" />
-                          {new Date(task.dueDate).toLocaleDateString()}
+                          {task.displayDueDate}
                         </span>
                       )}
                       {task.tags.slice(0, 2).map((tag) => (
                         <Badge key={tag} variant="outline" className="text-xs px-2 py-0.5">{tag}</Badge>
                       ))}
                       <Badge variant="outline" className="text-xs px-2 py-0.5 sm:hidden">
-                        {task.assigneeId
-                          ? task.assigneeId === userId
-                            ? 'ME'
-                            : 'Member'
-                          : 'Unassigned'}
+                        {task.assigneeLabel}
                       </Badge>
                     </div>
                   </div>
-                  <Badge variant="outline" className="hidden sm:inline-flex shrink-0">
-                    {task.assigneeId
-                      ? task.assigneeId === userId
-                        ? 'ME'
-                        : 'Member'
-                      : 'Unassigned'}
-                  </Badge>
+                  <Badge variant="outline" className="hidden sm:inline-flex shrink-0">{task.assigneeLabel}</Badge>
                   {/* Mobile: single settings menu */}
                   <div className="md:hidden shrink-0">
                     <DropdownMenu>
