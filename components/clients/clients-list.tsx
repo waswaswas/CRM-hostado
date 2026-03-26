@@ -6,12 +6,13 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Select } from '@/components/ui/select'
-import { Client, ClientStatus, ClientType } from '@/types/database'
+import { Client, ClientStatus, ClientType, Interaction } from '@/types/database'
 import Link from 'next/link'
 import { Plus, Search, Trash2, Calendar, Link as LinkIcon, Mail, Phone } from 'lucide-react'
 import { format, subDays, isAfter, startOfDay, endOfDay } from 'date-fns'
 import { getStatusesForType, getClientStatusBadgeProps, formatStatus, STATUS_DESCRIPTIONS, isClientNew } from '@/lib/status-utils'
 import { deleteClient, updateClient } from '@/app/actions/clients'
+import { getInteractionsForClient } from '@/app/actions/interactions'
 import { useToast } from '@/components/ui/toaster'
 import type { StatusConfig } from '@/types/settings'
 import { useOrganization } from '@/lib/organization-context'
@@ -43,6 +44,9 @@ export function ClientsList({
   const [editingClient, setEditingClient] = useState<{ id: string; field: 'status' | 'type' } | null>(null)
   const [customStatuses, setCustomStatuses] = useState<StatusConfig[]>(initialCustomStatuses)
   const [selectedClients, setSelectedClients] = useState<Set<string>>(new Set())
+  const [hoveredClientId, setHoveredClientId] = useState<string | null>(null)
+  const [interactionPreviewByClient, setInteractionPreviewByClient] = useState<Record<string, Interaction[]>>({})
+  const [loadingInteractionPreviewByClient, setLoadingInteractionPreviewByClient] = useState<Record<string, boolean>>({})
   const { currentOrganization } = useOrganization()
 
   useEffect(() => {
@@ -347,6 +351,25 @@ export function ClientsList({
     }
   }
 
+  async function loadInteractionPreview(clientId: string) {
+    if (interactionPreviewByClient[clientId] || loadingInteractionPreviewByClient[clientId]) {
+      return
+    }
+
+    setLoadingInteractionPreviewByClient((prev) => ({ ...prev, [clientId]: true }))
+    try {
+      const interactions = await getInteractionsForClient(clientId)
+      setInteractionPreviewByClient((prev) => ({
+        ...prev,
+        [clientId]: (interactions || []).slice(0, 3),
+      }))
+    } catch {
+      setInteractionPreviewByClient((prev) => ({ ...prev, [clientId]: [] }))
+    } finally {
+      setLoadingInteractionPreviewByClient((prev) => ({ ...prev, [clientId]: false }))
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -513,9 +536,59 @@ export function ClientsList({
                       <div className="flex-1 min-w-0">
                         {/* Name and Primary Tags */}
                         <div className="flex flex-col sm:flex-row sm:items-center gap-2 mb-2">
-                          <Link href={`/clients/${client.id}`} className="text-base md:text-lg font-semibold hover:underline truncate">
-                            {client.name}
-                          </Link>
+                          <div
+                            className="relative"
+                            onMouseEnter={() => {
+                              setHoveredClientId(client.id)
+                              void loadInteractionPreview(client.id)
+                            }}
+                            onMouseLeave={() => setHoveredClientId((prev) => (prev === client.id ? null : prev))}
+                          >
+                            <Link href={`/clients/${client.id}`} className="text-base md:text-lg font-semibold hover:underline truncate">
+                              {client.name}
+                            </Link>
+                            {hoveredClientId === client.id && (
+                              <div className="hidden md:block absolute left-0 top-full z-30 mt-2 w-[460px] max-w-[70vw] rounded-lg border bg-popover text-popover-foreground shadow-lg">
+                                <div className="p-3">
+                                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
+                                    Last 3 interactions
+                                  </p>
+                                  {loadingInteractionPreviewByClient[client.id] ? (
+                                    <p className="text-sm text-muted-foreground">Loading...</p>
+                                  ) : (interactionPreviewByClient[client.id] || []).length > 0 ? (
+                                    <div className="space-y-2">
+                                      {(interactionPreviewByClient[client.id] || []).map((interaction) => (
+                                        <div key={interaction.id} className="rounded-md border p-2">
+                                          <div className="flex items-center justify-between gap-2">
+                                            <span className="text-xs capitalize text-muted-foreground">
+                                              {interaction.type}
+                                            </span>
+                                            <span className="text-xs text-muted-foreground">
+                                              {format(new Date(interaction.date), 'MMM d, HH:mm')}
+                                            </span>
+                                          </div>
+                                          {interaction.subject ? (
+                                            <p className="text-sm font-medium line-clamp-2 whitespace-pre-wrap break-words">
+                                              {interaction.subject}
+                                            </p>
+                                          ) : (
+                                            <p className="text-sm font-medium text-muted-foreground">No subject</p>
+                                          )}
+                                          {interaction.notes ? (
+                                            <p className="mt-1 text-xs text-muted-foreground line-clamp-6 whitespace-pre-wrap break-words">
+                                              {interaction.notes}
+                                            </p>
+                                          ) : null}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <p className="text-sm text-muted-foreground">No interactions yet.</p>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </div>
                           <div className="flex items-center gap-2 flex-wrap">
                             {/* "New" tag */}
                             {client.client_type === 'presales' && isClientNew(client.created_at) && (
