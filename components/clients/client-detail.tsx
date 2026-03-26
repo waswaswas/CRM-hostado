@@ -508,7 +508,8 @@ export function ClientDetail({
                       className={badgeProps.className}
                       style={badgeProps.style}
                       title={STATUS_DESCRIPTIONS[client.status as keyof typeof STATUS_DESCRIPTIONS] || 'Custom status'}
-                      onPointerDown={(e) => {
+                      onClick={(e) => {
+                        e.preventDefault()
                         e.stopPropagation()
                         setEditingStatus(true)
                       }}
@@ -517,7 +518,7 @@ export function ClientDetail({
                     </Badge>
                   )
                 })()}
-                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block z-10">
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block z-10 pointer-events-none">
                   <div className="bg-popover text-popover-foreground text-xs rounded-md px-2 py-1 shadow-md border whitespace-nowrap">
                     {STATUS_DESCRIPTIONS[client.status as keyof typeof STATUS_DESCRIPTIONS] || 'Custom status'}
                   </div>

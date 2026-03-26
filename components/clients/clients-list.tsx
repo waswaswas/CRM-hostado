@@ -594,7 +594,8 @@ export function ClientsList({
                                 className={`cursor-pointer hover:opacity-80 text-xs min-h-[24px] ${badgeProps.className}`}
                                 style={badgeProps.style}
                                 title={STATUS_DESCRIPTIONS[client.status as keyof typeof STATUS_DESCRIPTIONS] || ''}
-                                onPointerDown={(e) => {
+                                onClick={(e) => {
+                                  e.preventDefault()
                                   e.stopPropagation()
                                   setEditingClient({ id: client.id, field: 'status' })
                                 }}

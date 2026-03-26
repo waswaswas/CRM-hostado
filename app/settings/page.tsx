@@ -151,37 +151,6 @@ export default function SettingsPage() {
 
       setDefaultStatusColors(nextDefaultColors)
       setCustomStatuses(customStatusesLoaded)
-
-      const shouldPersistSyncedDefaults = DEFAULT_PRESALES_STATUS_KEYS.some((key) => {
-        const existing = loadedStatuses.find((s) => s.key === key)
-        const existingColor = existing?.color
-        const oldDefaultColor = getDefaultClientStatusColorHex(key)
-        const computed = computedDefaultColors[key]
-        return (!existingColor || existingColor === oldDefaultColor) && computed !== nextDefaultColors[key]
-          ? false
-          : (!existingColor || existingColor === oldDefaultColor) && computed !== oldDefaultColor
-      })
-
-      if (shouldPersistSyncedDefaults) {
-        const defaultConfigs: StatusConfig[] = DEFAULT_PRESALES_STATUS_KEYS.map((key, index) => {
-          const existing = loadedStatuses.find((s) => s.key === key)
-          return {
-            key,
-            label: existing?.label || formatStatus(key),
-            order: existing?.order ?? index,
-            color: nextDefaultColors[key],
-          }
-        })
-
-        try {
-          await updateSettings({
-            new_tag_days: settings.new_tag_days,
-            custom_statuses: [...defaultConfigs, ...customStatusesLoaded],
-          })
-        } catch {
-          // Non-blocking: if persistence fails, the UI still reflects the correct colors in this settings session.
-        }
-      }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to load settings'
       toast({
