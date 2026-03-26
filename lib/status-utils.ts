@@ -1,5 +1,6 @@
 import { ClientStatus, ClientType, PresalesStatus, CustomerStatus } from '@/types/database'
 import { subDays, isAfter } from 'date-fns'
+import type { StatusConfig } from '@/types/settings'
 
 export const STATUS_DESCRIPTIONS: Record<ClientStatus, string> = {
   // Presales statuses (Note: "new" is now a separate tag, not a status)
@@ -14,20 +15,52 @@ export const STATUS_DESCRIPTIONS: Record<ClientStatus, string> = {
   inactive: 'Inactive customer',
 }
 
-export function getStatusesForType(clientType: ClientType | null, customStatuses?: Array<{ key: string; label: string; order: number }>): ClientStatus[] {
+export function getDefaultClientStatusColorHex(status: ClientStatus): string {
+  // Values are approximate Tailwind "100" background colors used by getStatusColor()
+  switch (status) {
+    case 'contacted':
+      return '#FEF9C3' // yellow-100
+    case 'attention_needed':
+      return '#FFEDD5' // orange-100
+    case 'follow_up_required':
+      return '#FEE2E2' // red-100
+    case 'waits_for_offer':
+      return '#E0E7FF' // indigo-100
+    case 'on_hold':
+      return '#F3F4F6' // gray-100
+    case 'abandoned':
+      return '#FEE2E2' // red-100
+    default:
+      return '#F3F4F6'
+  }
+}
+
+const DEFAULT_PRESALES_STATUS_KEYS: ClientStatus[] = [
+  'contacted',
+  'attention_needed',
+  'follow_up_required',
+  'waits_for_offer',
+  'on_hold',
+  'abandoned',
+]
+
+export function getStatusesForType(clientType: ClientType | null, customStatuses?: StatusConfig[]): ClientStatus[] {
   if (clientType === 'customer') {
     return ['active', 'inactive']
   }
   // Presales or null (default to presales) - "new" is now a separate tag, not a status
   const defaultStatuses: ClientStatus[] = ['contacted', 'attention_needed', 'follow_up_required', 'waits_for_offer', 'on_hold', 'abandoned']
+  const defaultSet = new Set(defaultStatuses)
   
   // Merge custom statuses if provided
   if (customStatuses && customStatuses.length > 0) {
     // Sort custom statuses by order
     const sortedCustom = [...customStatuses].sort((a, b) => a.order - b.order)
-    // Add custom status keys to the list
-    const customKeys = sortedCustom.map(s => s.key as ClientStatus)
-    return [...defaultStatuses, ...customKeys]
+    // Add custom status keys to the list (but don't duplicate built-ins)
+    const additionalKeys = sortedCustom
+      .map((s) => s.key as ClientStatus)
+      .filter((key) => !defaultSet.has(key))
+    return [...defaultStatuses, ...additionalKeys]
   }
   
   return defaultStatuses
@@ -67,6 +100,67 @@ export function getStatusColor(status: ClientStatus, clientType: ClientType | nu
       return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
     default:
       return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200'
+  }
+}
+
+function parseHexColorToRgb(color: string): { r: number; g: number; b: number } | null {
+  const hex = color.trim()
+  if (!hex.startsWith('#')) return null
+
+  const normalized =
+    hex.length === 4
+      ? `#${hex[1]}${hex[1]}${hex[2]}${hex[2]}${hex[3]}${hex[3]}`
+      : hex
+
+  const match = /^#([0-9a-fA-F]{6})$/.exec(normalized)
+  if (!match) return null
+
+  const intVal = Number.parseInt(match[1], 16)
+  const r = (intVal >> 16) & 255
+  const g = (intVal >> 8) & 255
+  const b = intVal & 255
+  return { r, g, b }
+}
+
+function getContrastingTextColor(bgHex: string): string {
+  const rgb = parseHexColorToRgb(bgHex)
+  if (!rgb) return '#111827'
+
+  // Relative luminance (WCAG)
+  const luminance = (0.2126 * rgb.r + 0.7152 * rgb.g + 0.0722 * rgb.b) / 255
+  return luminance > 0.6 ? '#111827' : '#FFFFFF'
+}
+
+export function getClientStatusBadgeProps(
+  status: ClientStatus,
+  clientType: ClientType | null,
+  customStatuses?: StatusConfig[]
+): { className: string; style?: Record<string, string> } {
+  const overrideColor = customStatuses?.find((s) => s.key === status)?.color
+  if (overrideColor) {
+    // If the stored default matches our historical "old default mapping", treat it as unset.
+    // This keeps badge colors in sync with the original `getStatusColor()` Tailwind output until
+    // the user truly customizes a color in Settings.
+    if (DEFAULT_PRESALES_STATUS_KEYS.includes(status)) {
+      const oldDefault = getDefaultClientStatusColorHex(status)
+      if (overrideColor === oldDefault) {
+        return { className: getStatusColor(status, clientType) }
+      }
+    }
+
+    const bg = overrideColor.trim()
+    const fg = getContrastingTextColor(bg)
+    return {
+      className: '',
+      style: {
+        backgroundColor: bg,
+        color: fg,
+      },
+    }
+  }
+
+  return {
+    className: getStatusColor(status, clientType),
   }
 }
 

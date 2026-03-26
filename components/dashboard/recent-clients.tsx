@@ -15,13 +15,14 @@ import { Users, ChevronRight, Plus, ChevronDown } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useOrganization } from '@/lib/organization-context'
 import type { Client } from '@/types/database'
-import { formatStatus, getStatusColor } from '@/lib/status-utils'
+import { formatStatus, getClientStatusBadgeProps } from '@/lib/status-utils'
+import type { StatusConfig } from '@/types/settings'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 
 interface RecentClientsProps {
   initialClients: Client[]
-  customStatuses: Array<{ key: string; label: string }>
+  customStatuses: StatusConfig[]
 }
 
 export function RecentClients({ initialClients, customStatuses }: RecentClientsProps) {
@@ -173,8 +174,9 @@ export function RecentClients({ initialClients, customStatuses }: RecentClientsP
                     <Badge
                       className={cn(
                         'shrink-0 text-xs font-medium px-2.5 py-1 sm:px-2 sm:py-0.5 rounded-md',
-                        getStatusColor(client.status, client.client_type)
+                        getClientStatusBadgeProps(client.status, client.client_type, customStatuses).className
                       )}
+                      style={getClientStatusBadgeProps(client.status, client.client_type, customStatuses).style}
                     >
                       {formatStatus(client.status, customStatuses)}
                     </Badge>

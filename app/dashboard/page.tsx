@@ -6,10 +6,10 @@ import { getUpcomingReminders, getCompletedReminders } from '@/app/actions/remin
 import { getClients } from '@/app/actions/clients'
 import { getDashboardStats } from '@/app/actions/stats'
 import { getSettings } from '@/app/actions/settings'
-import { formatStatus, getStatusColor } from '@/lib/status-utils'
 import Link from 'next/link'
 import { Calendar, Users, AlertCircle, TrendingUp, Clock, Tag, List, LayoutDashboard, FileText } from 'lucide-react'
 import type { Client } from '@/types/database'
+import type { StatusConfig } from '@/types/settings'
 import { RemindersCard } from '@/components/dashboard/reminders-card'
 import { RecentClients } from '@/components/dashboard/recent-clients'
 import { NoPermissionsCard } from '@/components/dashboard/no-permissions-card'
@@ -89,7 +89,7 @@ export default async function DashboardPage() {
   let clients = []
   let stats = { newLeadsWeek: 0, newLeadsMonth: 0, newTagLeads: 0, waitingForOffer: 0 }
   let dbError = null
-  let customStatuses: Array<{ key: string; label: string }> = []
+  let customStatuses: StatusConfig[] = []
 
   let completedReminders = []
 

@@ -2,9 +2,16 @@
 
 import { useState, useEffect, useLayoutEffect, useMemo } from 'react'
 import { Client, Interaction, Reminder, ClientNote, ClientStatus, Offer } from '@/types/database'
-import { getStatusesForType, getStatusColor, formatStatus, STATUS_DESCRIPTIONS } from '@/lib/status-utils'
-import { getSettings } from '@/app/actions/settings'
+import {
+  getStatusesForType,
+  getStatusColor,
+  formatStatus,
+  STATUS_DESCRIPTIONS,
+  getClientStatusBadgeProps,
+} from '@/lib/status-utils'
 import type { StatusConfig } from '@/types/settings'
+import { useOrganization } from '@/lib/organization-context'
+import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -97,9 +104,14 @@ function writeClientDetailCacheToSession(clientId: string, entry: ClientDetailCa
 interface ClientDetailProps {
   client: Client
   linkedAccountingCustomers?: AccountingCustomerWithRelations[]
+  initialCustomStatuses?: StatusConfig[]
 }
 
-export function ClientDetail({ client: initialClient, linkedAccountingCustomers = [] }: ClientDetailProps) {
+export function ClientDetail({
+  client: initialClient,
+  linkedAccountingCustomers = [],
+  initialCustomStatuses = [],
+}: ClientDetailProps) {
   const { toast } = useToast()
   const [client, setClient] = useState(initialClient)
   // IMPORTANT: Keep initial render identical on server + client to avoid hydration mismatch.
@@ -125,23 +137,74 @@ export function ClientDetail({ client: initialClient, linkedAccountingCustomers 
     source: '',
     notes_summary: '',
   })
-  const [customStatuses, setCustomStatuses] = useState<StatusConfig[]>([])
+  const [customStatuses, setCustomStatuses] = useState<StatusConfig[]>(initialCustomStatuses)
   const [showLinkMenu, setShowLinkMenu] = useState(false)
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null)
   const [editingNoteContent, setEditingNoteContent] = useState('')
 
-  // Load custom statuses on mount
+  // customStatuses is provided by the server to avoid an initial "partial statuses" render.
+
+  const { currentOrganization } = useOrganization()
+
   useEffect(() => {
-    async function loadCustomStatuses() {
+    if (!currentOrganization?.id) return
+    let isMounted = true
+    const supabase = createClient()
+    let channel: any = null
+
+    async function loadSettings() {
       try {
-        const settings = await getSettings()
-        setCustomStatuses(settings.custom_statuses || [])
-      } catch (error) {
-        console.warn('Failed to load custom statuses:', error)
+        const {
+          data: { user },
+        } = await supabase.auth.getUser()
+        if (!user) return
+
+        const { data, error } = await supabase
+          .from('settings')
+          .select('custom_statuses')
+          .eq('owner_id', user.id)
+          .eq('organization_id', currentOrganization.id)
+          .single()
+
+        if (!isMounted) return
+        if (error) return
+        setCustomStatuses((data?.custom_statuses as StatusConfig[]) || [])
+      } catch {
+        // ignore realtime/settings errors - keep initial statuses
       }
     }
-    loadCustomStatuses()
-  }, [])
+
+    async function start() {
+      await loadSettings()
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+      if (!user) return
+
+      channel = supabase
+        .channel(`client-detail-settings-${currentOrganization.id}-${user.id}`)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'settings',
+            filter: `organization_id=eq.${currentOrganization.id}`,
+          },
+          () => {
+            void loadSettings()
+          }
+        )
+        .subscribe()
+    }
+
+    void start()
+
+    return () => {
+      isMounted = false
+      if (channel) supabase.removeChannel(channel)
+    }
+  }, [currentOrganization?.id])
 
   useLayoutEffect(() => {
     const clientId = client.id
@@ -255,6 +318,19 @@ export function ClientDetail({ client: initialClient, linkedAccountingCustomers 
       reminders: nextReminders,
       notes,
       offers,
+    }
+    clientDetailCache.set(client.id, entry)
+    writeClientDetailCacheToSession(client.id, entry)
+  }
+
+  function syncClientDetailCacheForInteractions(nextInteractions: Interaction[]) {
+    const cached = clientDetailCache.get(client.id)
+    const entry: ClientDetailCacheEntry = {
+      fetchedAt: Date.now(),
+      interactions: nextInteractions,
+      reminders: cached?.reminders ?? reminders,
+      notes: cached?.notes ?? notes,
+      offers: cached?.offers ?? offers,
     }
     clientDetailCache.set(client.id, entry)
     writeClientDetailCacheToSession(client.id, entry)
@@ -425,12 +501,22 @@ export function ClientDetail({ client: initialClient, linkedAccountingCustomers 
           ) : (
             <div className="flex items-center gap-2">
               <div className="group relative">
-                <Badge 
-                  className={getStatusColor(client.status, client.client_type)}
-                  title={STATUS_DESCRIPTIONS[client.status as keyof typeof STATUS_DESCRIPTIONS] || 'Custom status'}
-                >
-                  {formatStatus(client.status, customStatuses)}
-                </Badge>
+                {(() => {
+                  const badgeProps = getClientStatusBadgeProps(client.status, client.client_type, customStatuses)
+                  return (
+                    <Badge
+                      className={badgeProps.className}
+                      style={badgeProps.style}
+                      title={STATUS_DESCRIPTIONS[client.status as keyof typeof STATUS_DESCRIPTIONS] || 'Custom status'}
+                      onPointerDown={(e) => {
+                        e.stopPropagation()
+                        setEditingStatus(true)
+                      }}
+                    >
+                      {formatStatus(client.status, customStatuses)}
+                    </Badge>
+                  )
+                })()}
                 <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block z-10">
                   <div className="bg-popover text-popover-foreground text-xs rounded-md px-2 py-1 shadow-md border whitespace-nowrap">
                     {STATUS_DESCRIPTIONS[client.status as keyof typeof STATUS_DESCRIPTIONS] || 'Custom status'}
@@ -738,9 +824,11 @@ export function ClientDetail({ client: initialClient, linkedAccountingCustomers 
                               if (confirm('Delete this interaction?')) {
                                 try {
                                   await deleteInteraction(interaction.id, client.id)
-                                  setInteractions((prev) =>
-                                    prev.filter((i) => i.id !== interaction.id)
-                                  )
+                                  setInteractions((prev) => {
+                                    const next = prev.filter((i) => i.id !== interaction.id)
+                                    syncClientDetailCacheForInteractions(next)
+                                    return next
+                                  })
                                   toast({
                                     title: 'Success',
                                     description: 'Interaction deleted',
@@ -1130,9 +1218,15 @@ export function ClientDetail({ client: initialClient, linkedAccountingCustomers 
           </DialogHeader>
           <InteractionForm
             clientId={client.id}
-            onSuccess={() => {
+            onSuccess={(created) => {
               setShowInteractionDialog(false)
-              loadData()
+              setInteractions((prev) => {
+                const next = [created, ...prev].sort(
+                  (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+                )
+                syncClientDetailCacheForInteractions(next)
+                return next
+              })
             }}
           />
         </DialogContent>
@@ -1224,7 +1318,7 @@ function InteractionForm({
   onSuccess,
 }: {
   clientId: string
-  onSuccess: () => void
+  onSuccess: (created: Interaction) => void
 }) {
   const { toast } = useToast()
   const [loading, setLoading] = useState(false)
@@ -1242,11 +1336,13 @@ function InteractionForm({
     setLoading(true)
 
     try {
-      await createInteraction({
+      const created = await createInteraction({
         client_id: clientId,
         type: formData.type,
         direction: formData.direction || undefined,
-        date: formData.date,
+        // `datetime-local` is interpreted as "local time" by the browser; convert to ISO (with offset)
+        // so the server doesn't shift it based on its own timezone.
+        date: new Date(formData.date).toISOString(),
         duration_minutes: formData.duration_minutes
           ? parseInt(formData.duration_minutes)
           : undefined,
@@ -1258,7 +1354,7 @@ function InteractionForm({
         title: 'Success',
         description: 'Interaction created',
       })
-      onSuccess()
+      onSuccess(created)
     } catch (error) {
       toast({
         title: 'Error',

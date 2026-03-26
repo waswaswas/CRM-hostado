@@ -10,20 +10,27 @@ import { Client, ClientStatus, ClientType } from '@/types/database'
 import Link from 'next/link'
 import { Plus, Search, Trash2, Calendar, Link as LinkIcon, Mail, Phone } from 'lucide-react'
 import { format, subDays, isAfter, startOfDay, endOfDay } from 'date-fns'
-import { getStatusesForType, getStatusColor, formatStatus, STATUS_DESCRIPTIONS, isClientNew } from '@/lib/status-utils'
+import { getStatusesForType, getClientStatusBadgeProps, formatStatus, STATUS_DESCRIPTIONS, isClientNew } from '@/lib/status-utils'
 import { deleteClient, updateClient } from '@/app/actions/clients'
 import { useToast } from '@/components/ui/toaster'
-import { getSettings } from '@/app/actions/settings'
 import type { StatusConfig } from '@/types/settings'
+import { useOrganization } from '@/lib/organization-context'
+import { createClient } from '@/lib/supabase/client'
 
 interface ClientsListProps {
   initialClients: Client[]
   linkedClientIds?: string[]
+  initialCustomStatuses?: StatusConfig[]
   /** When false (e.g. viewer), hide/disable delete actions. Defaults to true for backwards compatibility. */
   canDelete?: boolean
 }
 
-export function ClientsList({ initialClients, linkedClientIds = [], canDelete = true }: ClientsListProps) {
+export function ClientsList({
+  initialClients,
+  linkedClientIds = [],
+  initialCustomStatuses = [],
+  canDelete = true,
+}: ClientsListProps) {
   const { toast } = useToast()
   const [clients, setClients] = useState<Client[]>(initialClients)
   const [filteredClients, setFilteredClients] = useState<Client[]>(initialClients)
@@ -34,22 +41,70 @@ export function ClientsList({ initialClients, linkedClientIds = [], canDelete = 
   const [dateFilter, setDateFilter] = useState<{ from: string; to: string }>({ from: '', to: '' })
   const [showNewToggle, setShowNewToggle] = useState(false)
   const [editingClient, setEditingClient] = useState<{ id: string; field: 'status' | 'type' } | null>(null)
-  const [customStatuses, setCustomStatuses] = useState<StatusConfig[]>([])
+  const [customStatuses, setCustomStatuses] = useState<StatusConfig[]>(initialCustomStatuses)
   const [selectedClients, setSelectedClients] = useState<Set<string>>(new Set())
+  const { currentOrganization } = useOrganization()
 
-  // Load custom statuses on mount
   useEffect(() => {
-    async function loadCustomStatuses() {
+    if (!currentOrganization?.id) return
+    let isMounted = true
+    const supabase = createClient()
+    let channel: any = null
+
+    async function loadSettings() {
       try {
-        const settings = await getSettings()
-        setCustomStatuses(settings.custom_statuses || [])
-      } catch (error) {
-        // Silently fail - custom statuses are optional
-        console.warn('Failed to load custom statuses:', error)
+        const {
+          data: { user },
+        } = await supabase.auth.getUser()
+        if (!user) return
+
+        const { data, error } = await supabase
+          .from('settings')
+          .select('custom_statuses')
+          .eq('owner_id', user.id)
+          .eq('organization_id', currentOrganization.id)
+          .single()
+
+        if (!isMounted) return
+        if (error) return
+        setCustomStatuses((data?.custom_statuses as StatusConfig[]) || [])
+      } catch {
+        // ignore realtime/settings errors - keep initial statuses
       }
     }
-    loadCustomStatuses()
-  }, [])
+
+    async function startRealtime() {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+      if (!user) return
+
+      await loadSettings()
+
+      channel = supabase
+        .channel(`settings-${currentOrganization.id}-${user.id}`)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'settings',
+            filter: `organization_id=eq.${currentOrganization.id}`,
+          },
+          () => {
+            void loadSettings()
+          }
+        )
+        .subscribe()
+    }
+
+    void startRealtime()
+
+    return () => {
+      isMounted = false
+      if (channel) supabase.removeChannel(channel)
+    }
+  }, [currentOrganization?.id])
 
   useEffect(() => {
     let filtered = clients.filter((client) => !client.is_deleted)
@@ -532,17 +587,22 @@ export function ClientsList({ initialClients, linkedClientIds = [], canDelete = 
                                 ))}
                               </Select>
                             ) : (
+                              (() => {
+                                const badgeProps = getClientStatusBadgeProps(client.status, client.client_type, customStatuses)
+                                return (
                               <Badge 
-                                className={`${getStatusColor(client.status, client.client_type)} cursor-pointer hover:opacity-80 text-xs min-h-[24px]`}
+                                className={`cursor-pointer hover:opacity-80 text-xs min-h-[24px] ${badgeProps.className}`}
+                                style={badgeProps.style}
                                 title={STATUS_DESCRIPTIONS[client.status as keyof typeof STATUS_DESCRIPTIONS] || ''}
-                                onClick={(e) => {
-                                  e.preventDefault()
+                                onPointerDown={(e) => {
                                   e.stopPropagation()
                                   setEditingClient({ id: client.id, field: 'status' })
                                 }}
                               >
                                 {formatStatus(client.status, customStatuses)}
                               </Badge>
+                                )
+                              })()
                             )}
                           </div>
                         </div>

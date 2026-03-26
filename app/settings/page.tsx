@@ -7,12 +7,57 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { getSettings, updateSettings, getStatusChangeHistory } from '@/app/actions/settings'
 import { getCurrentUserEmail, getAdminCode, regenerateAdminCode } from '@/app/actions/admin'
+import type { ClientStatus } from '@/types/database'
 import type { StatusConfig } from '@/types/settings'
 import { useToast } from '@/components/ui/toaster'
 import { GripVertical, Plus, Trash2, Save, Key } from 'lucide-react'
 import { format } from 'date-fns'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog'
+import { formatStatus, getClientStatusBadgeProps, getDefaultClientStatusColorHex, getStatusColor } from '@/lib/status-utils'
+
+const DEFAULT_PRESALES_STATUS_KEYS: ClientStatus[] = [
+  'contacted',
+  'attention_needed',
+  'follow_up_required',
+  'waits_for_offer',
+  'on_hold',
+  'abandoned',
+]
+
+function rgbStringToHex(color: string): string | null {
+  const match = color
+    .replace(/\s+/g, '')
+    .match(/^rgba?\((\d+),(\d+),(\d+)(?:,([0-9.]+))?\)$/i)
+  if (!match) return null
+
+  const r = Number(match[1])
+  const g = Number(match[2])
+  const b = Number(match[3])
+
+  const toHex = (n: number) => n.toString(16).padStart(2, '0')
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`
+}
+
+function getTailwindBgHexForClientStatus(status: ClientStatus): string {
+  // We want the exact same colors currently rendered by the client list badges,
+  // including theme-dependent `dark:` variants.
+  if (typeof window === 'undefined') return getDefaultClientStatusColorHex(status)
+
+  const el = document.createElement('div')
+  el.className = getStatusColor(status, null)
+  el.style.position = 'fixed'
+  el.style.left = '-9999px'
+  el.style.top = '-9999px'
+  el.style.width = '1px'
+  el.style.height = '1px'
+
+  document.body.appendChild(el)
+  const bg = window.getComputedStyle(el).backgroundColor
+  document.body.removeChild(el)
+
+  return rgbStringToHex(bg) || getDefaultClientStatusColorHex(status)
+}
 
 // Simple Label component
 const Label = ({ htmlFor, className, children, ...props }: { htmlFor?: string; className?: string; children: React.ReactNode }) => (
@@ -27,6 +72,12 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false)
   const [newTagDays, setNewTagDays] = useState(14)
   const [customStatuses, setCustomStatuses] = useState<StatusConfig[]>([])
+  const [defaultStatusColors, setDefaultStatusColors] = useState<Record<ClientStatus, string>>(() => {
+    return DEFAULT_PRESALES_STATUS_KEYS.reduce((acc, key) => {
+      acc[key] = getDefaultClientStatusColorHex(key)
+      return acc
+    }, {} as Record<ClientStatus, string>)
+  })
   const [statusHistory, setStatusHistory] = useState<any[]>([])
   const [newStatusKey, setNewStatusKey] = useState('')
   const [newStatusLabel, setNewStatusLabel] = useState('')
@@ -68,7 +119,69 @@ export default function SettingsPage() {
       setLoading(true)
       const settings = await getSettings()
       setNewTagDays(settings.new_tag_days)
-      setCustomStatuses(settings.custom_statuses || [])
+      const loadedStatuses = settings.custom_statuses || []
+
+      const computedDefaultColors = DEFAULT_PRESALES_STATUS_KEYS.reduce((acc, key) => {
+        acc[key] = getTailwindBgHexForClientStatus(key)
+        return acc
+      }, {} as Record<ClientStatus, string>)
+
+      const nextDefaultColors = DEFAULT_PRESALES_STATUS_KEYS.reduce((acc, key) => {
+        const existing = loadedStatuses.find((s) => s.key === key)
+        const existingColor = existing?.color
+        const oldDefaultColor = getDefaultClientStatusColorHex(key)
+
+        // If color is missing OR it still matches the old "guessed" default mapping,
+        // sync it to whatever the UI is currently rendering for this theme.
+        if (!existingColor || existingColor === oldDefaultColor) {
+          acc[key] = computedDefaultColors[key]
+        } else {
+          acc[key] = existingColor
+        }
+
+        return acc
+      }, {} as Record<ClientStatus, string>)
+
+      const customStatusesLoaded: StatusConfig[] = loadedStatuses
+        .filter((s) => !DEFAULT_PRESALES_STATUS_KEYS.includes(s.key as ClientStatus))
+        .map((s) => ({
+          ...s,
+          color: s.color || '#2563eb',
+        }))
+
+      setDefaultStatusColors(nextDefaultColors)
+      setCustomStatuses(customStatusesLoaded)
+
+      const shouldPersistSyncedDefaults = DEFAULT_PRESALES_STATUS_KEYS.some((key) => {
+        const existing = loadedStatuses.find((s) => s.key === key)
+        const existingColor = existing?.color
+        const oldDefaultColor = getDefaultClientStatusColorHex(key)
+        const computed = computedDefaultColors[key]
+        return (!existingColor || existingColor === oldDefaultColor) && computed !== nextDefaultColors[key]
+          ? false
+          : (!existingColor || existingColor === oldDefaultColor) && computed !== oldDefaultColor
+      })
+
+      if (shouldPersistSyncedDefaults) {
+        const defaultConfigs: StatusConfig[] = DEFAULT_PRESALES_STATUS_KEYS.map((key, index) => {
+          const existing = loadedStatuses.find((s) => s.key === key)
+          return {
+            key,
+            label: existing?.label || formatStatus(key),
+            order: existing?.order ?? index,
+            color: nextDefaultColors[key],
+          }
+        })
+
+        try {
+          await updateSettings({
+            new_tag_days: settings.new_tag_days,
+            custom_statuses: [...defaultConfigs, ...customStatusesLoaded],
+          })
+        } catch {
+          // Non-blocking: if persistence fails, the UI still reflects the correct colors in this settings session.
+        }
+      }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to load settings'
       toast({
@@ -112,9 +225,15 @@ export default function SettingsPage() {
   async function handleSave() {
     try {
       setSaving(true)
+      const defaultConfigs: StatusConfig[] = DEFAULT_PRESALES_STATUS_KEYS.map((key, index) => ({
+        key,
+        label: formatStatus(key),
+        order: index,
+        color: defaultStatusColors[key],
+      }))
       await updateSettings({
         new_tag_days: newTagDays,
-        custom_statuses: customStatuses,
+        custom_statuses: [...defaultConfigs, ...customStatuses],
       })
       toast({
         title: 'Success',
@@ -141,7 +260,10 @@ export default function SettingsPage() {
       return
     }
 
-    if (customStatuses.some((s) => s.key === newStatusKey)) {
+    if (
+      customStatuses.some((s) => s.key === newStatusKey) ||
+      DEFAULT_PRESALES_STATUS_KEYS.includes(newStatusKey as ClientStatus)
+    ) {
       toast({
         title: 'Error',
         description: 'Status key already exists',
@@ -154,6 +276,7 @@ export default function SettingsPage() {
       key: newStatusKey,
       label: newStatusLabel,
       order: customStatuses.length,
+      color: '#2563eb',
     }
 
     setCustomStatuses([...customStatuses, newStatus])
@@ -182,6 +305,12 @@ export default function SettingsPage() {
   function handleUpdateStatusLabel(index: number, label: string) {
     const newStatuses = [...customStatuses]
     newStatuses[index].label = label
+    setCustomStatuses(newStatuses)
+  }
+
+  function handleUpdateStatusColor(index: number, color: string) {
+    const newStatuses = [...customStatuses]
+    newStatuses[index].color = color
     setCustomStatuses(newStatuses)
   }
 
@@ -296,18 +425,49 @@ export default function SettingsPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* Default Presales Statuses (read-only info) */}
+            {/* Default Presales Statuses (org-color editable) */}
             <div>
               <Label className="text-sm font-semibold mb-2 block">Default Presales Statuses</Label>
-              <div className="flex flex-wrap gap-2 mb-4">
-                {['contacted', 'attention_needed', 'follow_up_required', 'waits_for_offer', 'on_hold', 'abandoned'].map((status) => (
-                  <Badge key={status} variant="outline">
-                    {status.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())}
-                  </Badge>
-                ))}
+              <div className="space-y-2 mb-4">
+                {DEFAULT_PRESALES_STATUS_KEYS.map((status) => {
+                  const badgeProps = getClientStatusBadgeProps(status, null, [
+                    {
+                      key: status,
+                      label: formatStatus(status),
+                      order: 0,
+                      color: defaultStatusColors[status],
+                    },
+                  ])
+                  return (
+                    <div key={status} className="flex items-center justify-between gap-3 p-3 border rounded-lg">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Badge
+                          className={badgeProps.className}
+                          style={badgeProps.style}
+                          title={status}
+                        >
+                          {formatStatus(status)}
+                        </Badge>
+                        <Badge variant="outline" className="font-mono text-xs shrink-0">
+                          {status}
+                        </Badge>
+                      </div>
+                      <input
+                        type="color"
+                        value={defaultStatusColors[status]}
+                        onChange={(e) => {
+                          const next = e.target.value
+                          setDefaultStatusColors((prev) => ({ ...prev, [status]: next }))
+                        }}
+                        className="h-9 w-14 p-0 border rounded-md bg-transparent"
+                        aria-label={`Color for ${status}`}
+                      />
+                    </div>
+                  )
+                })}
               </div>
               <p className="text-sm text-muted-foreground mb-4">
-                These are the default system statuses. Custom statuses can be added below.
+                These statuses exist in every organization. Use the color picker to customize how they look for your org.
               </p>
             </div>
 
@@ -321,6 +481,13 @@ export default function SettingsPage() {
                   {customStatuses.map((status, index) => (
                     <div key={status.key} className="flex items-center gap-2 p-3 border rounded-lg">
                       <GripVertical className="h-5 w-5 text-muted-foreground cursor-move" />
+                      <input
+                        type="color"
+                        value={status.color || '#2563eb'}
+                        onChange={(e) => handleUpdateStatusColor(index, e.target.value)}
+                        className="h-9 w-14 p-0 border rounded-md bg-transparent"
+                        aria-label={`Color for ${status.key}`}
+                      />
                       <Input
                         value={status.label}
                         onChange={(e) => handleUpdateStatusLabel(index, e.target.value)}

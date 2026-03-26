@@ -3,6 +3,7 @@ import { AppLayout } from '@/components/layout/app-layout'
 import { getClient } from '@/app/actions/clients'
 import { getAccountingCustomersByClientId } from '@/app/actions/accounting-customers'
 import { ClientDetail } from '@/components/clients/client-detail'
+import { getSettings } from '@/app/actions/settings'
 
 export default async function ClientDetailPage({
   params,
@@ -19,12 +20,14 @@ export default async function ClientDetailPage({
 
   // Get linked accounting customers
   const linkedAccountingCustomers = await getAccountingCustomersByClientId(id).catch(() => [])
+  const settings = await getSettings().catch(() => ({ custom_statuses: [] }))
 
   return (
     <AppLayout>
       <ClientDetail 
         client={client} 
         linkedAccountingCustomers={linkedAccountingCustomers}
+        initialCustomStatuses={settings.custom_statuses || []}
       />
     </AppLayout>
   )
