@@ -22,6 +22,7 @@ import {
   getRemindersForClient,
   createReminder,
   markReminderDone,
+  updateReminder,
   deleteReminder,
 } from '@/app/actions/reminders'
 import { getNotesForClient, createNote, updateNote, toggleNotePin, deleteNote } from '@/app/actions/notes'
@@ -110,6 +111,8 @@ export function ClientDetail({ client: initialClient, linkedAccountingCustomers 
   const [loading, setLoading] = useState(true)
   const [showInteractionDialog, setShowInteractionDialog] = useState(false)
   const [showReminderDialog, setShowReminderDialog] = useState(false)
+  const [showReminderEditDialog, setShowReminderEditDialog] = useState(false)
+  const [editingReminder, setEditingReminder] = useState<Reminder | null>(null)
   const [showNoteDialog, setShowNoteDialog] = useState(false)
   const [editingStatus, setEditingStatus] = useState(false)
   const [editingField, setEditingField] = useState<string | null>(null)
@@ -243,6 +246,18 @@ export function ClientDetail({ client: initialClient, linkedAccountingCustomers 
     } finally {
       setLoading(false)
     }
+  }
+
+  function syncClientDetailCacheForReminders(nextReminders: Reminder[]) {
+    const entry: ClientDetailCacheEntry = {
+      fetchedAt: Date.now(),
+      interactions,
+      reminders: nextReminders,
+      notes,
+      offers,
+    }
+    clientDetailCache.set(client.id, entry)
+    writeClientDetailCacheToSession(client.id, entry)
   }
 
   async function handleStatusChange(newStatus: ClientStatus) {
@@ -1024,11 +1039,13 @@ export function ClientDetail({ client: initialClient, linkedAccountingCustomers 
                                 onClick={async () => {
                                   try {
                                     await markReminderDone(reminder.id, client.id)
-                                    setReminders((prev) =>
-                                      prev.map((r) =>
+                                    setReminders((prev) => {
+                                      const next = prev.map((r) =>
                                         r.id === reminder.id ? { ...r, done: true } : r
                                       )
-                                    )
+                                      syncClientDetailCacheForReminders(next)
+                                      return next
+                                    })
                                     toast({
                                       title: 'Success',
                                       description: 'Reminder marked as done',
@@ -1045,6 +1062,19 @@ export function ClientDetail({ client: initialClient, linkedAccountingCustomers 
                                 <Check className="h-4 w-4" />
                               </Button>
                             )}
+                            {!reminder.done && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => {
+                                  setEditingReminder(reminder as unknown as Reminder)
+                                  setShowReminderEditDialog(true)
+                                }}
+                                title="Edit reminder"
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                            )}
                             <Button
                               variant="ghost"
                               size="icon"
@@ -1052,9 +1082,11 @@ export function ClientDetail({ client: initialClient, linkedAccountingCustomers 
                                 if (confirm('Delete this reminder?')) {
                                   try {
                                     await deleteReminder(reminder.id, client.id)
-                                    setReminders((prev) =>
-                                      prev.filter((r) => r.id !== reminder.id)
-                                    )
+                                    setReminders((prev) => {
+                                      const next = prev.filter((r) => r.id !== reminder.id)
+                                      syncClientDetailCacheForReminders(next)
+                                      return next
+                                    })
                                     toast({
                                       title: 'Success',
                                       description: 'Reminder deleted',
@@ -1120,6 +1152,41 @@ export function ClientDetail({ client: initialClient, linkedAccountingCustomers 
               loadData()
             }}
           />
+        </DialogContent>
+      </Dialog>
+
+      {/* Reminder Edit Dialog (pending reminders only) */}
+      <Dialog
+        open={showReminderEditDialog}
+        onOpenChange={(open) => {
+          setShowReminderEditDialog(open)
+          if (!open) setEditingReminder(null)
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Reminder</DialogTitle>
+            <DialogClose onClose={() => setShowReminderEditDialog(false)} />
+          </DialogHeader>
+          {editingReminder && (
+            <ReminderEditForm
+              clientId={client.id}
+              reminder={editingReminder}
+              onUpdated={(updated) => {
+                setShowReminderEditDialog(false)
+                setEditingReminder(null)
+                setReminders((prev) => {
+                  const next = prev.map((r) => (r.id === updated.id ? { ...r, ...updated } : r))
+                  syncClientDetailCacheForReminders(next)
+                  return next
+                })
+                toast({ title: 'Success', description: 'Reminder updated successfully' })
+              }}
+              onCancel={() => {
+                setShowReminderEditDialog(false)
+              }}
+            />
+          )}
         </DialogContent>
       </Dialog>
 
@@ -1370,6 +1437,124 @@ function ReminderForm({
       <div className="flex justify-end gap-2">
         <Button type="submit" disabled={loading}>
           {loading ? 'Creating...' : 'Create'}
+        </Button>
+      </div>
+    </form>
+  )
+}
+
+function ReminderEditForm({
+  clientId,
+  reminder,
+  onUpdated,
+  onCancel,
+}: {
+  clientId: string
+  reminder: Reminder
+  onUpdated: (updated: {
+    id: string
+    title: string
+    due_at: string
+    description: string | null
+    done: boolean
+  }) => void
+  onCancel: () => void
+}) {
+  const { toast } = useToast()
+  const [loading, setLoading] = useState(false)
+  const [formData, setFormData] = useState({
+    title: reminder.title,
+    due_at: toLocalDateTimeLocalString(new Date(reminder.due_at)),
+    description: reminder.description ?? '',
+  })
+
+  useEffect(() => {
+    setFormData({
+      title: reminder.title,
+      due_at: toLocalDateTimeLocalString(new Date(reminder.due_at)),
+      description: reminder.description ?? '',
+    })
+  }, [reminder.id])
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setLoading(true)
+
+    try {
+      // Allow clearing description: empty string -> null (updateReminder does `value || null`)
+      await updateReminder(reminder.id, clientId, {
+        due_at: formData.due_at,
+        title: formData.title,
+        description: formData.description.trim(),
+      })
+
+      const nextDueIso = new Date(formData.due_at).toISOString()
+      const nextDescription = formData.description.trim() ? formData.description.trim() : null
+
+      onUpdated({
+        id: reminder.id,
+        title: formData.title,
+        due_at: nextDueIso,
+        description: nextDescription,
+        done: reminder.done,
+      })
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to update reminder',
+        variant: 'destructive',
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div>
+        <label className="text-sm font-medium">Title</label>
+        <Input
+          value={formData.title}
+          onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+          required
+          disabled={loading}
+        />
+      </div>
+
+      <div>
+        <label className="text-sm font-medium">Date & Time</label>
+        <Input
+          type="datetime-local"
+          value={formData.due_at}
+          onChange={(e) => setFormData({ ...formData, due_at: e.target.value })}
+          required
+          disabled={loading}
+        />
+      </div>
+
+      <div>
+        <label className="text-sm font-medium">Note (optional)</label>
+        <Textarea
+          value={formData.description}
+          onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+          disabled={loading}
+          rows={3}
+        />
+      </div>
+
+      <div className="flex justify-end gap-2 pt-2">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => {
+            onCancel()
+          }}
+          disabled={loading}
+        >
+          Cancel
+        </Button>
+        <Button type="submit" disabled={loading}>
+          {loading ? 'Updating...' : 'Update Reminder'}
         </Button>
       </div>
     </form>
