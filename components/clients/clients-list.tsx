@@ -39,6 +39,7 @@ export function ClientsList({
   const [typeFilter, setTypeFilter] = useState<ClientType | 'all'>('all')
   const [statusFilter, setStatusFilter] = useState<ClientStatus | 'all'>('all')
   const [newFilter, setNewFilter] = useState<'all' | 'new'>('all')
+  const [ignoreSpamAbandoned, setIgnoreSpamAbandoned] = useState(true)
   const [dateFilter, setDateFilter] = useState<{ from: string; to: string }>({ from: '', to: '' })
   const [showNewToggle, setShowNewToggle] = useState(false)
   const [editingClient, setEditingClient] = useState<{ id: string; field: 'status' | 'type' } | null>(null)
@@ -138,6 +139,11 @@ export function ClientsList({
       filtered = filtered.filter((client) => client.status === statusFilter)
     }
 
+    // Hide spam/abandoned by default unless explicitly disabled
+    if (ignoreSpamAbandoned) {
+      filtered = filtered.filter((client) => client.status !== 'abandoned' && client.status !== 'spam')
+    }
+
     // New filter (Presales added within 14 days - "New" is now a tag, not a status)
     if (newFilter === 'new') {
       filtered = filtered.filter((client) => {
@@ -164,7 +170,7 @@ export function ClientsList({
     }
 
     setFilteredClients(filtered)
-  }, [search, typeFilter, statusFilter, newFilter, dateFilter, clients])
+  }, [search, typeFilter, statusFilter, newFilter, ignoreSpamAbandoned, dateFilter, clients])
 
   async function handleDeleteClient(clientId: string, clientName: string, e: React.MouseEvent) {
     e.preventDefault()
@@ -420,6 +426,15 @@ export function ClientsList({
                 </option>
               ))}
             </Select>
+              <label className="flex items-center gap-2 text-sm text-muted-foreground pt-1">
+                <input
+                  type="checkbox"
+                  checked={ignoreSpamAbandoned}
+                  onChange={(e) => setIgnoreSpamAbandoned(e.target.checked)}
+                  className="h-4 w-4 rounded border-gray-300 accent-blue-600"
+                />
+                Ignore spam/abandoned
+              </label>
           </div>
 
           <div className="space-y-2">
