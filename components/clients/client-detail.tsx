@@ -220,14 +220,73 @@ export function ClientDetail({
       setNotes(cachedFromSession.notes)
       setOffers(cachedFromSession.offers)
       setLoading(false)
+      // Stale-while-revalidate: keep instant cached render, then refresh from DB in background.
+      void loadData({ forceNetwork: true, background: true })
       return
     }
 
     loadData()
   }, [client.id])
 
-  async function loadData() {
+  async function loadData(options?: { forceNetwork?: boolean; background?: boolean }) {
     const clientId = client.id
+
+    const forceNetwork = options?.forceNetwork === true
+    const background = options?.background === true
+
+    // When forcing network, bypass both sessionStorage hydration and in-memory cache.
+    // This is important after mutations (notes/reminders/interactions) where the cached entry
+    // may still be stale.
+    if (forceNetwork) {
+      if (!background) {
+        setLoading(true)
+      }
+      try {
+        const [interactionsData, remindersData, notesData, offersData] = await Promise.allSettled([
+          getInteractionsForClient(clientId),
+          getRemindersForClient(clientId),
+          getNotesForClient(clientId),
+          getOffersForClient(clientId),
+        ])
+
+        const nextInteractions =
+          interactionsData.status === 'fulfilled' ? interactionsData.value : []
+        const nextReminders =
+          remindersData.status === 'fulfilled' ? remindersData.value : []
+        const nextNotes =
+          notesData.status === 'fulfilled' ? notesData.value : []
+        const nextOffers =
+          offersData.status === 'fulfilled' ? offersData.value : []
+
+        setInteractions(nextInteractions)
+        setReminders(nextReminders)
+        setNotes(nextNotes)
+        setOffers(nextOffers)
+
+        const entry: ClientDetailCacheEntry = {
+          fetchedAt: Date.now(),
+          interactions: nextInteractions,
+          reminders: nextReminders,
+          notes: nextNotes,
+          offers: nextOffers,
+        }
+        clientDetailCache.set(clientId, entry)
+        writeClientDetailCacheToSession(clientId, entry)
+      } catch (error) {
+        console.error('Unexpected error loading client data:', error)
+        toast({
+          title: 'Error',
+          description: 'Failed to load some client data. Please check the browser console.',
+          variant: 'destructive',
+        })
+      } finally {
+        if (!background) {
+          setLoading(false)
+        }
+      }
+
+      return
+    }
 
     // 1) Prefer sessionStorage so a full refresh can still hydrate quickly.
     const cachedFromSession = readClientDetailCacheFromSession(clientId)
@@ -238,6 +297,8 @@ export function ClientDetail({
       setNotes(cachedFromSession.notes)
       setOffers(cachedFromSession.offers)
       setLoading(false)
+      // Keep data fresh even when cache hits.
+      void loadData({ forceNetwork: true, background: true })
       return
     }
 
@@ -1244,7 +1305,7 @@ export function ClientDetail({
             clientId={client.id}
             onSuccess={() => {
               setShowReminderDialog(false)
-              loadData()
+              loadData({ forceNetwork: true })
             }}
           />
         </DialogContent>
@@ -1296,7 +1357,7 @@ export function ClientDetail({
             clientId={client.id}
             onSuccess={() => {
               setShowNoteDialog(false)
-              loadData()
+              loadData({ forceNetwork: true })
             }}
           />
         </DialogContent>
