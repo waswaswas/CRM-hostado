@@ -147,7 +147,8 @@ export function ClientDetail({
   const { currentOrganization } = useOrganization()
 
   useEffect(() => {
-    if (!currentOrganization?.id) return
+    const organizationId = currentOrganization?.id
+    if (!organizationId) return
     let isMounted = true
     const supabase = createClient()
     let channel: any = null
@@ -163,7 +164,7 @@ export function ClientDetail({
           .from('settings')
           .select('custom_statuses')
           .eq('owner_id', user.id)
-          .eq('organization_id', currentOrganization.id)
+          .eq('organization_id', organizationId)
           .single()
 
         if (!isMounted) return
@@ -182,14 +183,14 @@ export function ClientDetail({
       if (!user) return
 
       channel = supabase
-        .channel(`client-detail-settings-${currentOrganization.id}-${user.id}`)
+        .channel(`client-detail-settings-${organizationId}-${user.id}`)
         .on(
           'postgres_changes',
           {
             event: '*',
             schema: 'public',
             table: 'settings',
-            filter: `organization_id=eq.${currentOrganization.id}`,
+            filter: `organization_id=eq.${organizationId}`,
           },
           () => {
             void loadSettings()

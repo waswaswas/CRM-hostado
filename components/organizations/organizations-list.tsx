@@ -42,7 +42,7 @@ export function OrganizationsList({ initialOrganizations, initialUserRoles: init
   useEffect(() => {
     const hasInitialRoles = organizations.every((org) => initialUserRolesProp[org.id] !== undefined)
     if (organizations.length > 0 && !hasInitialRoles) {
-      async function loadRoles() {
+      const loadRoles = async () => {
         const roles: Record<string, 'owner' | 'admin' | 'moderator' | 'viewer' | null> = { ...initialUserRolesProp }
         for (const org of organizations) {
           if (roles[org.id] !== undefined) continue
@@ -56,7 +56,7 @@ export function OrganizationsList({ initialOrganizations, initialUserRoles: init
         }
         setUserRoles(roles)
       }
-      loadRoles()
+      void loadRoles()
     }
   }, [organizations, initialUserRolesProp])
 

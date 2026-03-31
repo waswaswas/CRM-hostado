@@ -51,7 +51,8 @@ export function ClientsList({
   const { currentOrganization } = useOrganization()
 
   useEffect(() => {
-    if (!currentOrganization?.id) return
+    const organizationId = currentOrganization?.id
+    if (!organizationId) return
     let isMounted = true
     const supabase = createClient()
     let channel: any = null
@@ -67,7 +68,7 @@ export function ClientsList({
           .from('settings')
           .select('custom_statuses')
           .eq('owner_id', user.id)
-          .eq('organization_id', currentOrganization.id)
+          .eq('organization_id', organizationId)
           .single()
 
         if (!isMounted) return
@@ -87,14 +88,14 @@ export function ClientsList({
       await loadSettings()
 
       channel = supabase
-        .channel(`settings-${currentOrganization.id}-${user.id}`)
+        .channel(`settings-${organizationId}-${user.id}`)
         .on(
           'postgres_changes',
           {
             event: '*',
             schema: 'public',
             table: 'settings',
-            filter: `organization_id=eq.${currentOrganization.id}`,
+            filter: `organization_id=eq.${organizationId}`,
           },
           () => {
             void loadSettings()
@@ -141,7 +142,10 @@ export function ClientsList({
 
     // Hide spam/abandoned by default unless explicitly disabled
     if (ignoreSpamAbandoned) {
-      filtered = filtered.filter((client) => client.status !== 'abandoned' && client.status !== 'spam')
+      filtered = filtered.filter((client) => {
+        const status = client.status as string
+        return status !== 'abandoned' && status !== 'spam'
+      })
     }
 
     // New filter (Presales added within 14 days - "New" is now a tag, not a status)
