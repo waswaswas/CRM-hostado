@@ -2,33 +2,45 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, Users, FileText, Mail, Building2, ListTodo } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
+import { LayoutDashboard, Users, FileText, Mail, Building2, ListTodo, Sparkles } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
-import { useFeaturePermissions } from '@/lib/hooks/use-feature-permissions'
+import { useFeaturePermissions, type Feature } from '@/lib/hooks/use-feature-permissions'
+import { useAssistantsAccess } from '@/lib/hooks/use-assistants-access'
+import { useOrganization } from '@/lib/organization-context'
 
-const navigation = [
-  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, feature: 'dashboard' as const },
-  { name: 'Clients', href: '/clients', icon: Users, feature: 'clients' as const },
-  { name: 'Offers', href: '/offers', icon: FileText, feature: 'offers' as const },
-  { name: 'Emails', href: '/emails', icon: Mail, feature: 'emails' as const },
-  { name: 'Accounting', href: '/accounting', icon: Building2, badge: 'Beta', feature: 'accounting' as const },
-  { name: 'To-Do List', href: '/todo', icon: ListTodo, feature: 'todo' as const },
+type BottomNavItem =
+  | { name: string; href: string; icon: LucideIcon; feature: Feature; badge?: string }
+  | { name: string; href: string; icon: LucideIcon; assistantsOnly: true }
+
+const navigation: BottomNavItem[] = [
+  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, feature: 'dashboard' },
+  { name: 'Clients', href: '/clients', icon: Users, feature: 'clients' },
+  { name: 'Offers', href: '/offers', icon: FileText, feature: 'offers' },
+  { name: 'Emails', href: '/emails', icon: Mail, feature: 'emails' },
+  { name: 'Accounting', href: '/accounting', icon: Building2, badge: 'Beta', feature: 'accounting' },
+  { name: 'To-Do List', href: '/todo', icon: ListTodo, feature: 'todo' },
+  { name: 'AI', href: '/assistants', icon: Sparkles, assistantsOnly: true },
 ]
 
 export function BottomNav() {
   const pathname = usePathname()
   const { permissions, loading } = useFeaturePermissions()
-  
-  // Restrictive filtering: only show features with explicit permission
-  // This prevents flash of all features while permissions are loading
+  const { isLoading: orgLoading } = useOrganization()
+  const { loading: assistantsLoading, canOpen: canOpenAssistants } = useAssistantsAccess()
+
   const filtered = navigation.filter((item) => {
-    // If loading and no cached permission, don't show (restrictive default)
-    if (loading && permissions[item.feature] !== true) {
+    if ('assistantsOnly' in item && item.assistantsOnly) {
+      if (assistantsLoading || orgLoading) return false
+      return canOpenAssistants === true
+    }
+    if (!('feature' in item)) return false
+    const feature = item.feature
+    if (loading && permissions[feature] !== true) {
       return false
     }
-    // Only show if permission is explicitly true
-    return permissions[item.feature] === true
+    return permissions[feature] === true
   })
 
   return (
@@ -49,7 +61,7 @@ export function BottomNav() {
             >
               <div className="relative">
                 <item.icon className={cn('h-6 w-6', isActive && 'text-primary')} />
-                {item.badge && (
+                {'badge' in item && item.badge && (
                   <Badge
                     variant="secondary"
                     className="absolute -top-2 -right-2 h-4 px-1 text-[10px]"

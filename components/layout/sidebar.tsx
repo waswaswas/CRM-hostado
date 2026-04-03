@@ -3,20 +3,27 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, Users, Settings, FileText, Mail, Building2, Menu, X, User, ListTodo, ChevronLeft, ChevronRight } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
+import { LayoutDashboard, Users, Settings, FileText, Mail, Building2, Menu, X, User, ListTodo, ChevronLeft, ChevronRight, Sparkles } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { useFeaturePermissions } from '@/lib/hooks/use-feature-permissions'
+import { useFeaturePermissions, type Feature } from '@/lib/hooks/use-feature-permissions'
+import { useAssistantsAccess } from '@/lib/hooks/use-assistants-access'
 import { useOrganization } from '@/lib/organization-context'
 
-const allNavigation = [
-  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, feature: 'dashboard' as const },
-  { name: 'Clients', href: '/clients', icon: Users, feature: 'clients' as const },
-  { name: 'Offers', href: '/offers', icon: FileText, feature: 'offers' as const },
-  { name: 'Emails', href: '/emails', icon: Mail, feature: 'emails' as const },
-  { name: 'Accounting', href: '/accounting', icon: Building2, feature: 'accounting' as const },
-  { name: 'To-Do List', href: '/todo', icon: ListTodo, feature: 'todo' as const },
+type SidebarNavItem =
+  | { name: string; href: string; icon: LucideIcon; feature: Feature }
+  | { name: string; href: string; icon: LucideIcon; assistantsOnly: true }
+
+const allNavigation: SidebarNavItem[] = [
+  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, feature: 'dashboard' },
+  { name: 'Clients', href: '/clients', icon: Users, feature: 'clients' },
+  { name: 'Offers', href: '/offers', icon: FileText, feature: 'offers' },
+  { name: 'Emails', href: '/emails', icon: Mail, feature: 'emails' },
+  { name: 'Accounting', href: '/accounting', icon: Building2, feature: 'accounting' },
+  { name: 'To-Do List', href: '/todo', icon: ListTodo, feature: 'todo' },
+  { name: 'Assistants', href: '/assistants', icon: Sparkles, assistantsOnly: true },
 ]
 
 interface SidebarProps {
@@ -32,18 +39,21 @@ export function Sidebar({ userName, collapsed = false, onToggleCollapse }: Sideb
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const { permissions, loading: permissionsLoading } = useFeaturePermissions()
   const { isLoading: orgLoading } = useOrganization()
+  const { loading: assistantsLoading, canOpen: canOpenAssistants } = useAssistantsAccess()
 
   const isLoading = orgLoading || permissionsLoading
 
-  // Restrictive filtering: only show features with explicit permission
-  // This prevents flash of all features while permissions are loading
-  const navigation = allNavigation.filter(item => {
-    // If loading and no cached permission, don't show (restrictive default)
-    if (isLoading && permissions[item.feature] !== true) {
+  const navigation = allNavigation.filter((item) => {
+    if ('assistantsOnly' in item && item.assistantsOnly) {
+      if (assistantsLoading || orgLoading) return false
+      return canOpenAssistants === true
+    }
+    if (!('feature' in item)) return false
+    const feature = item.feature
+    if (isLoading && permissions[feature] !== true) {
       return false
     }
-    // Only show if permission is explicitly true
-    return permissions[item.feature] === true
+    return permissions[feature] === true
   })
 
   const showCollapseToggle = Boolean(onToggleCollapse)
