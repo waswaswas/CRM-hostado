@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogClose } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -21,6 +22,8 @@ interface RemindersCardProps {
   upcomingReminders: any[]
   completedReminders: any[]
   clients: any[]
+  /** Dashboard shows this while org context + data are loading after navigation/refresh. */
+  skeletonLoading?: boolean
 }
 
 function formatDateTime(dateString: string) {
@@ -48,6 +51,7 @@ export function RemindersCard({
   upcomingReminders,
   completedReminders,
   clients,
+  skeletonLoading = false,
 }: RemindersCardProps) {
   const { toast } = useToast()
   const router = useRouter()
@@ -237,6 +241,39 @@ export function RemindersCard({
     } finally {
       setLoading(false)
     }
+  }
+
+  if (skeletonLoading) {
+    return (
+      <Card className="min-w-0 overflow-hidden">
+        <CardHeader>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Calendar className="h-5 w-5" />
+                Reminders
+              </CardTitle>
+              <CardDescription>Loading reminders…</CardDescription>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <Skeleton className="h-10 w-full sm:w-28" />
+              <Skeleton className="h-10 w-full sm:w-48" />
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="flex gap-3 rounded-xl border border-border p-4">
+              <Skeleton className="h-5 w-5 shrink-0 rounded" />
+              <div className="flex-1 space-y-2">
+                <Skeleton className="h-4 w-[220px] max-w-full" />
+                <Skeleton className="h-3 w-[140px] max-w-full" />
+              </div>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+    )
   }
 
   return (

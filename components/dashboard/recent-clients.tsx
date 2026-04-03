@@ -21,18 +21,34 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 
 interface RecentClientsProps {
-  initialClients: Client[]
+  /** Used when the parent does not pass `clients` (self-managed mode). */
+  initialClients?: Client[]
+  /** When `managedByParent` is true, parent supplies the full client list; we show the first 7. */
+  clients?: Client[]
   customStatuses: StatusConfig[]
+  /** Dashboard passes this so we do not duplicate fetch/realtime with `DashboardPageClient`. */
+  managedByParent?: boolean
+  /** When parent is still fetching dashboard data (e.g. after refresh). */
+  parentLoading?: boolean
 }
 
-export function RecentClients({ initialClients, customStatuses }: RecentClientsProps) {
+export function RecentClients({
+  initialClients = [],
+  clients: clientsFromParent,
+  customStatuses,
+  managedByParent = false,
+  parentLoading = false,
+}: RecentClientsProps) {
   const { currentOrganization } = useOrganization()
-  const [clients, setClients] = useState<Client[]>(initialClients)
+  const [clientsSelf, setClientsSelf] = useState<Client[]>(initialClients)
+  const clients =
+    managedByParent && clientsFromParent !== undefined ? clientsFromParent : clientsSelf
   const [loading, setLoading] = useState(false)
 
   const recentClients = useMemo(() => clients.slice(0, 7), [clients])
 
   useEffect(() => {
+    if (managedByParent) return
     let isMounted = true
     const supabase = createClient()
 
@@ -53,7 +69,7 @@ export function RecentClients({ initialClients, customStatuses }: RecentClientsP
           .limit(7)
 
         if (isMounted) {
-          setClients(data || [])
+          setClientsSelf(data || [])
         }
       } finally {
         if (isMounted) setLoading(false)
@@ -67,9 +83,10 @@ export function RecentClients({ initialClients, customStatuses }: RecentClientsP
     return () => {
       isMounted = false
     }
-  }, [currentOrganization?.id])
+  }, [currentOrganization?.id, managedByParent])
 
   useEffect(() => {
+    if (managedByParent) return
     if (!currentOrganization?.id) return
     const supabase = createClient()
 
@@ -95,7 +112,7 @@ export function RecentClients({ initialClients, customStatuses }: RecentClientsP
             .eq('is_deleted', false)
             .order('created_at', { ascending: false })
             .limit(7)
-          setClients(data || [])
+          setClientsSelf(data || [])
         }
       )
       .subscribe()
@@ -103,7 +120,7 @@ export function RecentClients({ initialClients, customStatuses }: RecentClientsP
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [currentOrganization?.id])
+  }, [currentOrganization?.id, managedByParent])
 
   return (
     <Card className="min-w-0 overflow-hidden">
@@ -140,7 +157,8 @@ export function RecentClients({ initialClients, customStatuses }: RecentClientsP
         </div>
       </CardHeader>
       <CardContent className="space-y-2">
-        {loading && recentClients.length === 0 ? (
+        {((managedByParent && parentLoading) || (loading && !managedByParent)) &&
+        recentClients.length === 0 ? (
           <div className="space-y-2">
             {[1, 2, 3].map((i) => (
               <div key={i} className="flex items-center gap-3 rounded-xl border border-border p-3.5">
