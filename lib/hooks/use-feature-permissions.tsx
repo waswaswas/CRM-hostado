@@ -3,8 +3,12 @@
 import { useState, useEffect, useRef } from 'react'
 import { useOrganization } from '@/lib/organization-context'
 import { hasFeaturePermission } from '@/app/actions/organizations'
+import {
+  getAssistantsAccessState,
+  type AssistantsAccessState,
+} from '@/app/actions/ai-assistants'
 
-const CACHE_KEY_PREFIX = 'hostado-feature-permissions-'
+const CACHE_KEY_PREFIX = 'hostado-sidebar-access-v2-'
 const CACHE_EXPIRY_MS = 5 * 60 * 1000 // 5 minutes
 
 export type Feature = 'dashboard' | 'clients' | 'offers' | 'emails' | 'accounting' | 'reminders' | 'settings' | 'users' | 'todo'
@@ -21,38 +25,57 @@ const defaultPermissions: Record<Feature, boolean> = {
   todo: false,
 }
 
-interface CachedPermissions {
+interface CachedSidebarAccess {
+  v: 2
   permissions: Record<Feature, boolean>
+  assistantsCanOpen: boolean
+  assistantsCanManage: boolean
   timestamp: number
 }
 
-function getCachedPermissions(orgId: string): Record<Feature, boolean> | null {
+function getCached(orgId: string): CachedSidebarAccess | null {
   if (typeof window === 'undefined') return null
   try {
     const raw = localStorage.getItem(CACHE_KEY_PREFIX + orgId)
     if (!raw) return null
-    
-    const cached: CachedPermissions = JSON.parse(raw)
-    
-    // Check if cache is expired
-    const age = Date.now() - cached.timestamp
+
+    const cached = JSON.parse(raw) as Partial<CachedSidebarAccess>
+    if (cached.v !== 2 || typeof cached.assistantsCanOpen !== 'boolean') {
+      return null
+    }
+
+    const age = Date.now() - (cached.timestamp ?? 0)
     if (age > CACHE_EXPIRY_MS) {
       localStorage.removeItem(CACHE_KEY_PREFIX + orgId)
       return null
     }
-    
-    return { ...defaultPermissions, ...cached.permissions } as Record<Feature, boolean>
+
+    return {
+      v: 2,
+      permissions: { ...defaultPermissions, ...cached.permissions } as Record<Feature, boolean>,
+      assistantsCanOpen: cached.assistantsCanOpen,
+      assistantsCanManage: cached.assistantsCanManage === true,
+      timestamp: cached.timestamp!,
+    }
   } catch {
     return null
   }
 }
 
-function setCachedPermissions(orgId: string, perms: Record<Feature, boolean>) {
+function setCached(
+  orgId: string,
+  perms: Record<Feature, boolean>,
+  assistantsCanOpen: boolean,
+  assistantsCanManage: boolean
+) {
   if (typeof window === 'undefined') return
   try {
-    const cached: CachedPermissions = {
+    const cached: CachedSidebarAccess = {
+      v: 2,
       permissions: perms,
-      timestamp: Date.now()
+      assistantsCanOpen,
+      assistantsCanManage,
+      timestamp: Date.now(),
     }
     localStorage.setItem(CACHE_KEY_PREFIX + orgId, JSON.stringify(cached))
   } catch {
@@ -63,56 +86,48 @@ function setCachedPermissions(orgId: string, perms: Record<Feature, boolean>) {
 export function useFeaturePermissions() {
   const { currentOrganization } = useOrganization()
   const prevOrgIdRef = useRef<string | undefined>(undefined)
-  
-  // Initialize permissions from cache synchronously to prevent flash
-  const [permissions, setPermissions] = useState<Record<Feature, boolean>>(() => {
-    if (typeof window === 'undefined') return defaultPermissions
-    // Try to get cached permissions for current org if available
-    // Note: currentOrganization might not be available on first render, that's OK
-    return defaultPermissions
-  })
-  
-  // Initialize loading state based on cache availability
-  const [loading, setLoading] = useState(() => {
-    if (typeof window === 'undefined') return true
-    // We'll check cache availability in useEffect
-    return true
-  })
+
+  const [permissions, setPermissions] = useState<Record<Feature, boolean>>(defaultPermissions)
+  const [assistantsCanOpen, setAssistantsCanOpen] = useState(false)
+  const [assistantsCanManage, setAssistantsCanManage] = useState(false)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     async function loadPermissions() {
       if (!currentOrganization?.id) {
         setPermissions(defaultPermissions)
+        setAssistantsCanOpen(false)
+        setAssistantsCanManage(false)
         setLoading(false)
         prevOrgIdRef.current = undefined
         return
       }
 
       const orgId = currentOrganization.id
-      
-      // Clear cache if organization changed
-      if (prevOrgIdRef.current && prevOrgIdRef.current !== orgId) {
-        // Organization changed - cache will be loaded for new org below
-      }
       prevOrgIdRef.current = orgId
 
-      // Try to load from cache first (synchronous check)
-      const cached = getCachedPermissions(orgId)
+      const cached = getCached(orgId)
       if (cached) {
-        // Use cached permissions immediately to prevent flash
-        setPermissions(cached)
+        setPermissions(cached.permissions)
+        setAssistantsCanOpen(cached.assistantsCanOpen)
+        setAssistantsCanManage(cached.assistantsCanManage)
         setLoading(false)
       } else {
-        // No cache - we need to fetch, but start with restrictive default
-        // Permissions already initialized to defaultPermissions (all false)
         setLoading(true)
       }
 
-      // Always fetch fresh permissions (cache might be stale)
-      // This happens in the background and updates permissions when ready
       try {
-        const features: Feature[] = ['dashboard', 'clients', 'offers', 'emails', 'accounting', 'reminders', 'settings', 'users', 'todo']
-        const permMap: Partial<Record<Feature, boolean>> = {}
+        const features: Feature[] = [
+          'dashboard',
+          'clients',
+          'offers',
+          'emails',
+          'accounting',
+          'reminders',
+          'settings',
+          'users',
+          'todo',
+        ]
 
         const permissionChecks = features.map(async (feature) => {
           try {
@@ -124,19 +139,36 @@ export function useFeaturePermissions() {
           }
         })
 
-        const results = await Promise.all(permissionChecks)
+        const fallbackAssistants: AssistantsAccessState = {
+          canUseFeature: false,
+          canManage: false,
+          allowedBotIds: [],
+          orgId,
+        }
+
+        const [results, assistantsState] = await Promise.all([
+          Promise.all(permissionChecks),
+          getAssistantsAccessState().catch(() => fallbackAssistants),
+        ])
+
+        const permMap: Partial<Record<Feature, boolean>> = {}
         results.forEach(({ feature, hasAccess }) => {
           permMap[feature] = hasAccess
         })
-
         const next = permMap as Record<Feature, boolean>
+        const open = assistantsState.canUseFeature === true
+        const manage = assistantsState.canManage === true
+
         setPermissions(next)
-        setCachedPermissions(orgId, next)
+        setAssistantsCanOpen(open)
+        setAssistantsCanManage(manage)
+        setCached(orgId, next, open, manage)
       } catch (error) {
         console.error('Error loading permissions:', error)
-        // On error, keep cached permissions if available, otherwise use restrictive default
         if (!cached) {
           setPermissions(defaultPermissions)
+          setAssistantsCanOpen(false)
+          setAssistantsCanManage(false)
         }
       } finally {
         setLoading(false)
@@ -146,6 +178,5 @@ export function useFeaturePermissions() {
     loadPermissions()
   }, [currentOrganization?.id])
 
-  return { permissions, loading }
+  return { permissions, loading, assistantsCanOpen, assistantsCanManage }
 }
-

@@ -22,6 +22,7 @@ import {
   readOpenaiKeyFromAssistantsRaw,
 } from '@/lib/ai-assistants/openai-key-storage'
 import { revalidatePath } from 'next/cache'
+import { buildAssistantReferencedClientsContext } from '@/app/actions/assistant-client-context'
 
 function mergeAssistantsPayload(
   core: AiAssistantsOrgSettings,
@@ -124,7 +125,8 @@ export type ChatMessageInput = { role: 'user' | 'assistant'; content: string }
 
 export async function sendAssistantChatMessage(
   botId: string,
-  messages: ChatMessageInput[]
+  messages: ChatMessageInput[],
+  options?: { contextClientIds?: string[] }
 ): Promise<{ reply: string } | { error: string }> {
   const access = await getAssistantsAccessState()
   if (!access.canUseFeature || !access.orgId) {
@@ -144,13 +146,20 @@ export async function sendAssistantChatMessage(
   if (!apiKey) {
     return {
       error:
-        'No OpenAI API key is configured. The organization owner can add a key under Assistants → Manage access, or the server can set OPENAI_API_KEY.',
+        'No OpenAI API key is configured. The organization owner can add a key under Assistants → Manage, or the server can set OPENAI_API_KEY.',
     }
   }
 
   const ai = parseAiAssistantsSettings(rawAi)
   const extra = ai.extraKnowledgeByBot?.[botId]
-  const system = buildSystemPrompt(botId, extra)
+  let system = buildSystemPrompt(botId, extra)
+
+  const clientContext = await buildAssistantReferencedClientsContext(
+    options?.contextClientIds ?? []
+  )
+  if (clientContext) {
+    system = `${system}\n\n---\n\n${clientContext}`.slice(0, 100_000)
+  }
 
   const openaiMessages = [
     { role: 'system' as const, content: system },

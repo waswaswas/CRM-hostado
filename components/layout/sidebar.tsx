@@ -9,7 +9,6 @@ import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { useFeaturePermissions, type Feature } from '@/lib/hooks/use-feature-permissions'
-import { useAssistantsAccess } from '@/lib/hooks/use-assistants-access'
 import { useOrganization } from '@/lib/organization-context'
 
 type SidebarNavItem =
@@ -37,16 +36,15 @@ interface SidebarProps {
 export function Sidebar({ userName, collapsed = false, onToggleCollapse }: SidebarProps) {
   const pathname = usePathname()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const { permissions, loading: permissionsLoading } = useFeaturePermissions()
+  const { permissions, loading: permissionsLoading, assistantsCanOpen } = useFeaturePermissions()
   const { isLoading: orgLoading } = useOrganization()
-  const { loading: assistantsLoading, canOpen: canOpenAssistants } = useAssistantsAccess()
 
   const isLoading = orgLoading || permissionsLoading
 
   const navigation = allNavigation.filter((item) => {
     if ('assistantsOnly' in item && item.assistantsOnly) {
-      if (assistantsLoading || orgLoading) return false
-      return canOpenAssistants === true
+      if (isLoading && assistantsCanOpen !== true) return false
+      return assistantsCanOpen === true
     }
     if (!('feature' in item)) return false
     const feature = item.feature

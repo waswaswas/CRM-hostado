@@ -4,22 +4,26 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { ASSISTANT_BOTS_META, type AssistantBotId } from '@/lib/ai-assistants/bots-meta'
 import { sendAssistantChatMessage, type ChatMessageInput } from '@/app/actions/ai-assistants'
+import type { AssistantMentionClient } from '@/lib/ai-assistants/assistant-mention-options'
+import { ClientMentionTextarea } from '@/components/assistants/client-mention-textarea'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card'
 import { Select } from '@/components/ui/select'
-import { Textarea } from '@/components/ui/textarea'
 import { SendHorizontal, Sparkles, Settings2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/components/ui/toaster'
 
+const MAX_CONTEXT_CLIENTS = 5
+
 type Props = {
   allowedBotIds: AssistantBotId[]
   canManage: boolean
+  mentionClients: AssistantMentionClient[]
 }
 
 type BotSelection = 'auto' | AssistantBotId
 
-export function AssistantsPageClient({ allowedBotIds, canManage }: Props) {
+export function AssistantsPageClient({ allowedBotIds, canManage, mentionClients }: Props) {
   const { toast } = useToast()
   const visibleBots = useMemo(
     () => ASSISTANT_BOTS_META.filter((b) => allowedBotIds.includes(b.id)),
@@ -32,6 +36,12 @@ export function AssistantsPageClient({ allowedBotIds, canManage }: Props) {
   const [sending, setSending] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const prevEffectiveRef = useRef<AssistantBotId | null>(null)
+  const contextClientIdsRef = useRef<Set<string>>(new Set())
+  const draftMentionIdsRef = useRef<Set<string>>(new Set())
+
+  const onClientMention = useCallback((clientId: string) => {
+    draftMentionIdsRef.current.add(clientId)
+  }, [])
 
   const effectiveBotId = useMemo((): AssistantBotId | null => {
     if (visibleBots.length === 0) return null
@@ -57,6 +67,8 @@ export function AssistantsPageClient({ allowedBotIds, canManage }: Props) {
     if (prev !== null && effectiveBotId !== null && prev !== effectiveBotId) {
       setMessages([])
       setInput('')
+      contextClientIdsRef.current = new Set()
+      draftMentionIdsRef.current.clear()
     }
     prevEffectiveRef.current = effectiveBotId
   }, [effectiveBotId])
@@ -74,8 +86,17 @@ export function AssistantsPageClient({ allowedBotIds, canManage }: Props) {
     setInput('')
     setSending(true)
 
+    for (const id of draftMentionIdsRef.current) {
+      contextClientIdsRef.current.add(id)
+    }
+    draftMentionIdsRef.current.clear()
+
+    const contextClientIds = [...contextClientIdsRef.current].slice(0, MAX_CONTEXT_CLIENTS)
+
     try {
-      const result = await sendAssistantChatMessage(effectiveBotId, nextMessages)
+      const result = await sendAssistantChatMessage(effectiveBotId, nextMessages, {
+        contextClientIds,
+      })
       if ('error' in result) {
         toast({
           title: 'Assistant',
@@ -117,7 +138,7 @@ export function AssistantsPageClient({ allowedBotIds, canManage }: Props) {
             <Button variant="outline" size="sm" className="min-h-[44px] gap-2" asChild>
               <Link href="/assistants/manage">
                 <Settings2 className="h-4 w-4" />
-                Manage access
+                Manage
               </Link>
             </Button>
           )}
@@ -180,7 +201,7 @@ export function AssistantsPageClient({ allowedBotIds, canManage }: Props) {
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
               {messages.length === 0 && !sending && (
                 <p className="text-sm text-muted-foreground text-center py-10 px-4">
-                  Ask a question or paste a draft. Assistant:{' '}
+                  Ask a question or paste a draft. Type @ to tag a client from your list. Assistant:{' '}
                   <span className="font-medium text-foreground">{selectorLabel}</span>
                   {selection === 'auto' && selectedMeta ? (
                     <span className="text-muted-foreground"> ({selectedMeta.name})</span>
@@ -215,18 +236,15 @@ export function AssistantsPageClient({ allowedBotIds, canManage }: Props) {
               <div ref={bottomRef} />
             </div>
             <div className="border-t p-3 sm:p-4 bg-background space-y-3">
-              <Textarea
+              <ClientMentionTextarea
                 value={input}
-                onChange={(e) => setInput(e.target.value)}
-                placeholder="Write your message…"
+                onChange={setInput}
+                onMention={onClientMention}
+                options={mentionClients}
+                placeholder="Write your message… (@ to mention a client)"
                 className="min-h-[88px] resize-none text-base sm:text-sm"
                 disabled={sending}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault()
-                    send()
-                  }
-                }}
+                onSubmitHotkey={send}
               />
               <div className="flex justify-end">
                 <Button

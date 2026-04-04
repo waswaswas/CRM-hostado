@@ -7,7 +7,6 @@ import { LayoutDashboard, Users, FileText, Mail, Building2, ListTodo, Sparkles }
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { useFeaturePermissions, type Feature } from '@/lib/hooks/use-feature-permissions'
-import { useAssistantsAccess } from '@/lib/hooks/use-assistants-access'
 import { useOrganization } from '@/lib/organization-context'
 
 type BottomNavItem =
@@ -26,18 +25,19 @@ const navigation: BottomNavItem[] = [
 
 export function BottomNav() {
   const pathname = usePathname()
-  const { permissions, loading } = useFeaturePermissions()
+  const { permissions, loading, assistantsCanOpen } = useFeaturePermissions()
   const { isLoading: orgLoading } = useOrganization()
-  const { loading: assistantsLoading, canOpen: canOpenAssistants } = useAssistantsAccess()
+
+  const navLoading = orgLoading || loading
 
   const filtered = navigation.filter((item) => {
     if ('assistantsOnly' in item && item.assistantsOnly) {
-      if (assistantsLoading || orgLoading) return false
-      return canOpenAssistants === true
+      if (navLoading && assistantsCanOpen !== true) return false
+      return assistantsCanOpen === true
     }
     if (!('feature' in item)) return false
     const feature = item.feature
-    if (loading && permissions[feature] !== true) {
+    if (navLoading && permissions[feature] !== true) {
       return false
     }
     return permissions[feature] === true
