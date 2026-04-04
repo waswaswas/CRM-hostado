@@ -1,6 +1,7 @@
 'use client'
 
-import { useCallback, useRef, useState, useEffect } from 'react'
+import { useCallback, useRef, useState, useEffect, useLayoutEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 
@@ -19,6 +20,42 @@ interface ClientMentionTextareaProps {
   onSubmitHotkey?: () => void
 }
 
+type DropdownCoords = {
+  top: number
+  left: number
+  width: number
+  maxHeight: number
+}
+
+const PREFERRED_MAX_PX = 22 * 16 // ~352px — ~6–8 rows
+
+function measureDropdownPosition(el: HTMLTextAreaElement): DropdownCoords {
+  const r = el.getBoundingClientRect()
+  const gap = 6
+  const margin = 12
+  const spaceBelow = window.innerHeight - r.bottom - margin
+  const spaceAbove = r.top - margin
+
+  const openBelow = spaceBelow >= 180 || spaceBelow >= spaceAbove
+  let maxHeight: number
+  let top: number
+
+  if (openBelow) {
+    maxHeight = Math.min(PREFERRED_MAX_PX, Math.max(200, spaceBelow))
+    top = r.bottom + gap
+  } else {
+    maxHeight = Math.min(PREFERRED_MAX_PX, Math.max(200, spaceAbove))
+    top = Math.max(margin, r.top - gap - maxHeight)
+  }
+
+  return {
+    top,
+    left: r.left,
+    width: Math.max(r.width, 220),
+    maxHeight,
+  }
+}
+
 export function ClientMentionTextarea({
   value,
   onChange,
@@ -35,10 +72,40 @@ export function ClientMentionTextarea({
   const [suggestionQuery, setSuggestionQuery] = useState('')
   const [suggestionIndex, setSuggestionIndex] = useState(0)
   const [mentionStart, setMentionStart] = useState<number | null>(null)
+  const [dropdownCoords, setDropdownCoords] = useState<DropdownCoords | null>(null)
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   const filteredOptions = options.filter((o) =>
     o.label.toLowerCase().includes(suggestionQuery.toLowerCase())
   )
+
+  const updateDropdownPosition = useCallback(() => {
+    const el = textareaRef.current
+    if (!el || !showSuggestions) return
+    setDropdownCoords(measureDropdownPosition(el))
+  }, [showSuggestions])
+
+  useLayoutEffect(() => {
+    if (!showSuggestions || filteredOptions.length === 0) {
+      setDropdownCoords(null)
+      return
+    }
+    updateDropdownPosition()
+  }, [showSuggestions, filteredOptions.length, updateDropdownPosition, value])
+
+  useEffect(() => {
+    if (!showSuggestions || filteredOptions.length === 0) return
+    window.addEventListener('scroll', updateDropdownPosition, true)
+    window.addEventListener('resize', updateDropdownPosition)
+    return () => {
+      window.removeEventListener('scroll', updateDropdownPosition, true)
+      window.removeEventListener('resize', updateDropdownPosition)
+    }
+  }, [showSuggestions, filteredOptions.length, updateDropdownPosition])
 
   const handleChange = useCallback(
     (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -75,6 +142,7 @@ export function ClientMentionTextarea({
       onChange(newValue)
       setShowSuggestions(false)
       setMentionStart(null)
+      setDropdownCoords(null)
       onMention(opt.id)
       setTimeout(() => {
         textareaRef.current?.focus()
@@ -129,6 +197,41 @@ export function ClientMentionTextarea({
     }
   }, [filteredOptions.length, suggestionIndex])
 
+  const dropdown =
+    mounted &&
+    showSuggestions &&
+    filteredOptions.length > 0 &&
+    dropdownCoords &&
+    createPortal(
+      <div
+        className="fixed z-[300] overflow-y-auto overflow-x-hidden rounded-md border bg-popover p-1 shadow-lg"
+        style={{
+          top: dropdownCoords.top,
+          left: dropdownCoords.left,
+          width: dropdownCoords.width,
+          maxHeight: dropdownCoords.maxHeight,
+        }}
+        role="listbox"
+      >
+        {filteredOptions.map((opt, i) => (
+          <button
+            key={opt.id}
+            type="button"
+            role="option"
+            aria-selected={i === suggestionIndex}
+            className={cn(
+              'w-full rounded px-2 py-2.5 text-left text-sm leading-snug min-h-[44px] flex items-start',
+              i === suggestionIndex ? 'bg-accent' : 'hover:bg-accent/50'
+            )}
+            onClick={() => insertMention(opt)}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>,
+      document.body
+    )
+
   return (
     <div className="relative">
       <Textarea
@@ -141,26 +244,7 @@ export function ClientMentionTextarea({
         className={className}
         disabled={disabled}
       />
-      {showSuggestions && filteredOptions.length > 0 && (
-        <div
-          className="absolute z-50 mt-1 max-h-48 overflow-auto rounded-md border bg-popover p-1 shadow-md left-0 right-0"
-          style={{ minWidth: 180 }}
-        >
-          {filteredOptions.map((opt, i) => (
-            <button
-              key={opt.id}
-              type="button"
-              className={cn(
-                'w-full rounded px-2 py-1.5 text-left text-sm',
-                i === suggestionIndex ? 'bg-accent' : 'hover:bg-accent/50'
-              )}
-              onClick={() => insertMention(opt)}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
-      )}
+      {dropdown}
     </div>
   )
 }
