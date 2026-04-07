@@ -9,11 +9,30 @@ import { ClientMentionTextarea } from '@/components/assistants/client-mention-te
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card'
 import { Select } from '@/components/ui/select'
-import { SendHorizontal, Sparkles, Settings2 } from 'lucide-react'
+import { Copy, SendHorizontal, Sparkles, Settings2, UserRound } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/components/ui/toaster'
 
 const MAX_CONTEXT_CLIENTS = 5
+
+/** Resolve @labels in the message to client ids (longest label first). */
+function mentionedClientIdsInMessage(
+  content: string,
+  mentionClients: AssistantMentionClient[]
+): string[] {
+  if (!content || mentionClients.length === 0) return []
+  const sorted = [...mentionClients].sort((a, b) => b.label.length - a.label.length)
+  const ids: string[] = []
+  let remaining = content
+  for (const mc of sorted) {
+    const needle = `@${mc.label}`
+    if (remaining.includes(needle)) {
+      ids.push(mc.id)
+      remaining = remaining.split(needle).join('')
+    }
+  }
+  return [...new Set(ids)]
+}
 
 type Props = {
   allowedBotIds: AssistantBotId[]
@@ -76,6 +95,25 @@ export function AssistantsPageClient({ allowedBotIds, canManage, mentionClients 
   const onBotSelectChange = useCallback((value: string) => {
     setSelection(value === 'auto' ? 'auto' : (value as AssistantBotId))
   }, [])
+
+  const copyReply = useCallback(
+    async (text: string) => {
+      try {
+        await navigator.clipboard.writeText(text)
+        toast({
+          title: 'Copied',
+          description: 'Assistant reply copied to your clipboard.',
+        })
+      } catch {
+        toast({
+          title: 'Could not copy',
+          description: 'Your browser may block clipboard access.',
+          variant: 'destructive',
+        })
+      }
+    },
+    [toast]
+  )
 
   const send = useCallback(async () => {
     const text = input.trim()
@@ -209,23 +247,87 @@ export function AssistantsPageClient({ allowedBotIds, canManage, mentionClients 
                   .
                 </p>
               )}
-              {messages.map((m, i) => (
-                <div
-                  key={i}
-                  className={cn('flex', m.role === 'user' ? 'justify-end' : 'justify-start')}
-                >
+              {messages.map((m, i) => {
+                const taggedIds =
+                  m.role === 'user'
+                    ? mentionedClientIdsInMessage(m.content, mentionClients)
+                    : []
+                return (
                   <div
+                    key={i}
                     className={cn(
-                      'max-w-[min(100%,42rem)] rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap',
-                      m.role === 'user'
-                        ? 'bg-primary text-primary-foreground rounded-br-md'
-                        : 'bg-muted border border-border/60 rounded-bl-md'
+                      'flex flex-col gap-1.5',
+                      m.role === 'user' ? 'items-end' : 'items-start'
                     )}
                   >
-                    {m.content}
+                    <div
+                      className={cn(
+                        'flex max-w-[min(100%,42rem)] rounded-2xl text-sm leading-relaxed',
+                        m.role === 'user'
+                          ? 'bg-primary text-primary-foreground rounded-br-md'
+                          : 'bg-muted border border-border/60 rounded-bl-md'
+                      )}
+                    >
+                      {m.role === 'assistant' ? (
+                        <div className="flex w-full min-w-0 gap-2 px-4 py-3">
+                          <p className="min-w-0 flex-1 whitespace-pre-wrap">{m.content}</p>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-9 w-9 shrink-0 text-muted-foreground hover:text-foreground"
+                            onClick={() => copyReply(m.content)}
+                            aria-label="Copy reply"
+                            title="Copy reply"
+                          >
+                            <Copy className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="px-4 py-3 whitespace-pre-wrap">{m.content}</div>
+                      )}
+                    </div>
+                    {taggedIds.length > 0 && (
+                      <div
+                        className={cn(
+                          'flex max-w-[min(100%,42rem)] flex-wrap items-center gap-x-2 gap-y-1.5 justify-end rounded-lg border border-border/60 bg-card/80 px-3 py-2 text-xs',
+                          'text-muted-foreground'
+                        )}
+                      >
+                        <span className="flex items-center gap-1 font-medium text-foreground">
+                          <UserRound className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                          Tagged clients
+                        </span>
+                        {taggedIds.map((id) => {
+                          const label =
+                            mentionClients.find((c) => c.id === id)?.label ?? 'Client'
+                          return (
+                            <Button
+                              key={id}
+                              variant="secondary"
+                              size="sm"
+                              className="h-8 gap-1.5 px-2.5 text-xs font-normal"
+                              asChild
+                            >
+                              <Link href={`/clients/${id}`} title={`Open ${label}`}>
+                                {label}
+                              </Link>
+                            </Button>
+                          )
+                        })}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 px-2 text-xs text-muted-foreground"
+                          asChild
+                        >
+                          <Link href="/clients">All clients</Link>
+                        </Button>
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))}
+                )
+              })}
               {sending && (
                 <div className="flex justify-start">
                   <div className="bg-muted border border-border/60 rounded-2xl rounded-bl-md px-4 py-3 text-sm text-muted-foreground">

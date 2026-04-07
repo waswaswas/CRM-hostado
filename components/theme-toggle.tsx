@@ -18,7 +18,6 @@ const THEMES: { value: Theme; label: string; icon: typeof Sun }[] = [
 
 export function ThemeToggle() {
   const { theme, setTheme } = useTheme()
-  const resolved = theme === 'system' ? 'light' : theme
 
   return (
     <div data-theme-trigger-wrapper className="contents">
@@ -47,17 +46,10 @@ export function ThemeToggle() {
             >
               <Icon className="h-4 w-4" />
               {t.label}
-              {resolved === t.value && <Check className="h-4 w-4 ml-auto" />}
+              {theme === t.value && <Check className="h-4 w-4 ml-auto" />}
             </DropdownMenuItem>
           )
         })}
-        <DropdownMenuItem
-          onClick={() => setTheme('system')}
-          className="flex items-center gap-2"
-        >
-          <span className="text-muted-foreground text-xs">System</span>
-          {theme === 'system' && <Check className="h-4 w-4 ml-auto" />}
-        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
     </div>

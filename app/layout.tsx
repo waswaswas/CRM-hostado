@@ -33,7 +33,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={inter.className}>
-        <ThemeProvider defaultTheme="system" storageKey="crm-theme">
+        <ThemeProvider defaultTheme="dark" storageKey="crm-theme">
           <ToasterProvider>
             <OrganizationProvider>
               {children}
