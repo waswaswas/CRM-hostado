@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useLayoutEffect, useMemo } from 'react'
-import { Client, Interaction, Reminder, ClientNote, ClientStatus, Offer } from '@/types/database'
+import { Client, Interaction, Reminder, ClientNote, ClientStatus, ClientType, Offer } from '@/types/database'
 import {
   getStatusesForType,
   getStatusColor,
@@ -127,6 +127,7 @@ export function ClientDetail({
   const [editingReminder, setEditingReminder] = useState<Reminder | null>(null)
   const [showNoteDialog, setShowNoteDialog] = useState(false)
   const [editingStatus, setEditingStatus] = useState(false)
+  const [editingType, setEditingType] = useState(false)
   const [editingField, setEditingField] = useState<string | null>(null)
   const [sourceEditMode, setSourceEditMode] = useState<'preset' | 'custom'>('preset')
   const [editValues, setEditValues] = useState({
@@ -421,6 +422,31 @@ export function ClientDetail({
     setEditingStatus(false)
   }
 
+  async function handleTypeChange(newType: ClientType) {
+    try {
+      // Keep current status if valid for the new type; otherwise fallback to first valid one.
+      const validStatuses = getStatusesForType(newType, customStatuses)
+      const nextStatus = validStatuses.includes(client.status) ? client.status : validStatuses[0]
+      const updated = await updateClient(client.id, {
+        client_type: newType,
+        status: nextStatus,
+      })
+      setClient(updated)
+      toast({
+        title: 'Success',
+        description: 'Client type updated',
+      })
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to update client type',
+        variant: 'destructive',
+      })
+    } finally {
+      setEditingType(false)
+    }
+  }
+
   function startEditing(field: string) {
     setEditingField(field)
     setEditValues({
@@ -542,7 +568,36 @@ export function ClientDetail({
             </p>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 self-start sm:self-center">
+          {editingType ? (
+            <Select
+              value={client.client_type || 'presales'}
+              onChange={(e) => handleTypeChange(e.target.value as ClientType)}
+              onBlur={() => setEditingType(false)}
+              className="w-32"
+              autoFocus
+            >
+              <option value="presales">Presales</option>
+              <option value="customer">Customer</option>
+            </Select>
+          ) : (
+            <Badge
+              className={`inline-flex h-9 items-center px-4 cursor-pointer hover:opacity-80 ${
+                client.client_type === 'presales'
+                  ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
+                  : 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+              }`}
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                setEditingStatus(false)
+                setEditingType(true)
+              }}
+              title="Click to change client type"
+            >
+              {client.client_type === 'customer' ? 'Customer' : 'Presales'}
+            </Badge>
+          )}
           {editingStatus ? (
             <div className="space-y-1">
               <Select
@@ -567,12 +622,13 @@ export function ClientDetail({
                   const badgeProps = getClientStatusBadgeProps(client.status, client.client_type, customStatuses)
                   return (
                     <Badge
-                      className={badgeProps.className}
+                      className={`inline-flex h-9 items-center px-4 ${badgeProps.className}`}
                       style={badgeProps.style}
                       title={STATUS_DESCRIPTIONS[client.status as keyof typeof STATUS_DESCRIPTIONS] || 'Custom status'}
                       onClick={(e) => {
                         e.preventDefault()
                         e.stopPropagation()
+                        setEditingType(false)
                         setEditingStatus(true)
                       }}
                     >
@@ -589,7 +645,11 @@ export function ClientDetail({
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={() => setEditingStatus(true)}
+                className="h-9 w-9"
+                onClick={() => {
+                  setEditingType(false)
+                  setEditingStatus(true)
+                }}
                 title="Edit status"
               >
                 <Edit className="h-4 w-4" />
