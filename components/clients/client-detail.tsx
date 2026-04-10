@@ -126,6 +126,7 @@ export function ClientDetail({
   const [showReminderEditDialog, setShowReminderEditDialog] = useState(false)
   const [editingReminder, setEditingReminder] = useState<Reminder | null>(null)
   const [showNoteDialog, setShowNoteDialog] = useState(false)
+  const [detailTab, setDetailTab] = useState('timeline')
   const [editingStatus, setEditingStatus] = useState(false)
   const [editingType, setEditingType] = useState(false)
   const [editingField, setEditingField] = useState<string | null>(null)
@@ -568,13 +569,13 @@ export function ClientDetail({
             </p>
           )}
         </div>
-        <div className="flex items-center gap-2 self-start sm:self-center">
+        <div className="flex shrink-0 items-center gap-1.5 self-start sm:gap-2 sm:self-center">
           {editingType ? (
             <Select
               value={client.client_type || 'presales'}
               onChange={(e) => handleTypeChange(e.target.value as ClientType)}
               onBlur={() => setEditingType(false)}
-              className="w-32"
+              className="w-28 text-xs sm:w-32 sm:text-sm"
               autoFocus
             >
               <option value="presales">Presales</option>
@@ -582,7 +583,7 @@ export function ClientDetail({
             </Select>
           ) : (
             <Badge
-              className={`inline-flex h-9 items-center px-4 cursor-pointer hover:opacity-80 ${
+              className={`inline-flex h-7 max-w-[5.5rem] shrink-0 items-center justify-center overflow-hidden px-2 py-0 text-[11px] font-medium leading-none sm:h-9 sm:max-w-none sm:px-4 sm:text-sm sm:font-normal sm:leading-normal cursor-pointer hover:opacity-80 ${
                 client.client_type === 'presales'
                   ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
                   : 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
@@ -595,7 +596,7 @@ export function ClientDetail({
               }}
               title="Click to change client type"
             >
-              {client.client_type === 'customer' ? 'Customer' : 'Presales'}
+              <span className="truncate">{client.client_type === 'customer' ? 'Customer' : 'Presales'}</span>
             </Badge>
           )}
           {editingStatus ? (
@@ -616,15 +617,19 @@ export function ClientDetail({
               </p>
             </div>
           ) : (
-            <div className="flex items-center gap-2">
-              <div className="group relative">
+            <div className="flex items-center gap-1 sm:gap-2">
+              <div className="group relative min-w-0 max-w-[9.5rem] sm:max-w-none">
                 {(() => {
                   const badgeProps = getClientStatusBadgeProps(client.status, client.client_type, customStatuses)
                   return (
                     <Badge
-                      className={`inline-flex h-9 items-center px-4 ${badgeProps.className}`}
+                      className={`inline-flex h-7 min-w-0 max-w-full items-center overflow-hidden px-2 py-0 text-[11px] font-medium leading-tight sm:h-9 sm:px-4 sm:text-sm sm:font-normal sm:leading-normal ${badgeProps.className}`}
                       style={badgeProps.style}
-                      title={STATUS_DESCRIPTIONS[client.status as keyof typeof STATUS_DESCRIPTIONS] || 'Custom status'}
+                      title={
+                        (STATUS_DESCRIPTIONS[client.status as keyof typeof STATUS_DESCRIPTIONS] || 'Custom status') +
+                        ' — ' +
+                        formatStatus(client.status, customStatuses)
+                      }
                       onClick={(e) => {
                         e.preventDefault()
                         e.stopPropagation()
@@ -632,7 +637,7 @@ export function ClientDetail({
                         setEditingStatus(true)
                       }}
                     >
-                      {formatStatus(client.status, customStatuses)}
+                      <span className="truncate">{formatStatus(client.status, customStatuses)}</span>
                     </Badge>
                   )
                 })()}
@@ -645,14 +650,14 @@ export function ClientDetail({
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-9 w-9"
+                className="h-7 w-7 shrink-0 sm:h-9 sm:w-9"
                 onClick={() => {
                   setEditingType(false)
                   setEditingStatus(true)
                 }}
                 title="Edit status"
               >
-                <Edit className="h-4 w-4" />
+                <Edit className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
               </Button>
             </div>
           )}
@@ -871,7 +876,7 @@ export function ClientDetail({
         </div>
 
         <div className="lg:col-span-2 min-w-0">
-          <Tabs defaultValue="timeline" className="w-full">
+          <Tabs value={detailTab} onValueChange={setDetailTab} className="w-full">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="min-w-0 overflow-x-auto overflow-y-hidden -mx-1 px-1 md:mx-0 md:px-0 [scrollbar-width:thin]">
                 <TabsList className="flex flex-nowrap w-max">
@@ -888,10 +893,18 @@ export function ClientDetail({
                     Send Email
                   </Button>
                 </Link>
-                <Button onClick={() => setShowInteractionDialog(true)} className="min-h-[40px]">
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add Interaction
-                </Button>
+                {detailTab !== 'notes' && (
+                  <Button onClick={() => setShowInteractionDialog(true)} className="min-h-[40px]">
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add Interaction
+                  </Button>
+                )}
+                {detailTab === 'notes' && (
+                  <Button onClick={() => setShowNoteDialog(true)} className="min-h-[40px]">
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add Note
+                  </Button>
+                )}
               </div>
             </div>
 
@@ -983,13 +996,6 @@ export function ClientDetail({
             </TabsContent>
 
             <TabsContent value="notes" className="space-y-4">
-              <div className="flex justify-end">
-                <Button onClick={() => setShowNoteDialog(true)}>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add Note
-                </Button>
-              </div>
-
               {loading ? (
                 <p className="text-muted-foreground">Loading...</p>
               ) : noteCards.length > 0 ? (
