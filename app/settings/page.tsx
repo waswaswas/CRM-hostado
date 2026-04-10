@@ -7,10 +7,11 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { getSettings, updateSettings, getStatusChangeHistory } from '@/app/actions/settings'
 import { getCurrentUserEmail, getAdminCode, regenerateAdminCode } from '@/app/actions/admin'
+import { updateAccountPassword, sendPasswordResetEmailForCurrentUser } from '@/app/actions/auth'
 import type { ClientStatus } from '@/types/database'
 import type { StatusConfig } from '@/types/settings'
 import { useToast } from '@/components/ui/toaster'
-import { GripVertical, Plus, Trash2, Save, Key } from 'lucide-react'
+import { GripVertical, Plus, Trash2, Save, Key, Lock, Mail } from 'lucide-react'
 import { format } from 'date-fns'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog'
@@ -87,6 +88,10 @@ export default function SettingsPage() {
   const [adminCodeError, setAdminCodeError] = useState<string | null>(null)
   const [adminCodeLoading, setAdminCodeLoading] = useState(false)
   const [adminCodeRegenerating, setAdminCodeRegenerating] = useState(false)
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [passwordSaving, setPasswordSaving] = useState(false)
+  const [resetEmailSending, setResetEmailSending] = useState(false)
 
   useEffect(() => {
     loadSettings()
@@ -357,6 +362,119 @@ export default function SettingsPage() {
             )}
           </DialogContent>
         </Dialog>
+
+        {/* Account password */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Lock className="h-5 w-5" />
+              Account password
+            </CardTitle>
+            <CardDescription>
+              Change your sign-in password, or request an email link if you prefer to reset from your inbox.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="space-y-4">
+              <p className="text-sm font-medium">Set a new password</p>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="settings-new-password">New password</Label>
+                  <Input
+                    id="settings-new-password"
+                    type="password"
+                    autoComplete="new-password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="At least 6 characters"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="settings-confirm-password">Confirm password</Label>
+                  <Input
+                    id="settings-confirm-password"
+                    type="password"
+                    autoComplete="new-password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Repeat new password"
+                  />
+                </div>
+              </div>
+              <Button
+                type="button"
+                disabled={passwordSaving}
+                onClick={async () => {
+                  if (newPassword !== confirmPassword) {
+                    toast({
+                      title: 'Passwords do not match',
+                      description: 'Enter the same password in both fields.',
+                      variant: 'destructive',
+                    })
+                    return
+                  }
+                  try {
+                    setPasswordSaving(true)
+                    await updateAccountPassword(newPassword)
+                    setNewPassword('')
+                    setConfirmPassword('')
+                    toast({
+                      title: 'Password updated',
+                      description: 'Your account password has been changed.',
+                    })
+                  } catch (err) {
+                    toast({
+                      title: 'Could not update password',
+                      description: err instanceof Error ? err.message : 'Something went wrong.',
+                      variant: 'destructive',
+                    })
+                  } finally {
+                    setPasswordSaving(false)
+                  }
+                }}
+              >
+                {passwordSaving ? 'Updating…' : 'Update password'}
+              </Button>
+            </div>
+
+            <div className="border-t pt-6 space-y-3">
+              <p className="text-sm font-medium flex items-center gap-2">
+                <Mail className="h-4 w-4" />
+                Reset via email
+              </p>
+              <p className="text-sm text-muted-foreground">
+                We will send a link to <span className="font-medium text-foreground">{currentUserEmail || 'your email'}</span>.
+                Open it to choose a new password. Ensure <code className="text-xs bg-muted px-1 rounded">NEXT_PUBLIC_APP_URL</code>{' '}
+                matches your site URL in production so the link opens this app.
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={resetEmailSending || !currentUserEmail}
+                onClick={async () => {
+                  try {
+                    setResetEmailSending(true)
+                    await sendPasswordResetEmailForCurrentUser()
+                    toast({
+                      title: 'Check your email',
+                      description: 'If an account exists for this address, a reset link has been sent.',
+                    })
+                  } catch (err) {
+                    toast({
+                      title: 'Could not send email',
+                      description: err instanceof Error ? err.message : 'Something went wrong.',
+                      variant: 'destructive',
+                    })
+                  } finally {
+                    setResetEmailSending(false)
+                  }
+                }}
+              >
+                {resetEmailSending ? 'Sending…' : 'Send password reset link'}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* New Tag Days Setting */}
         <Card>

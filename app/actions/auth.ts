@@ -87,18 +87,19 @@ export async function signOut() {
   redirect('/login')
 }
 
+function getPasswordResetRedirectBaseUrl(): string {
+  const explicit = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, '')
+  if (explicit) return explicit
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL.replace(/\/$/, '')}`
+  return 'http://localhost:3000'
+}
+
 export async function resetPassword(email: string) {
   try {
     const supabase = await createClient()
-    
-    // Get the app URL from environment or construct it
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 
-                   process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` :
-                   typeof window !== 'undefined' ? window.location.origin :
-                   'https://gms.hostado.net'
-    
-    const redirectTo = `${appUrl}/auth/reset-password`
-    
+    const base = getPasswordResetRedirectBaseUrl()
+    const redirectTo = `${base}/auth/reset-password`
+
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo,
     })
@@ -114,6 +115,47 @@ export async function resetPassword(email: string) {
     }
     throw error
   }
+}
+
+/** Update password while signed in (Settings). */
+export async function updateAccountPassword(newPassword: string) {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) {
+    throw new Error('You must be signed in to change your password.')
+  }
+  const trimmed = newPassword.trim()
+  if (trimmed.length < 6) {
+    throw new Error('Password must be at least 6 characters.')
+  }
+  const { error } = await supabase.auth.updateUser({ password: trimmed })
+  if (error) {
+    throw new Error(error.message)
+  }
+  return { success: true as const }
+}
+
+/** Send a password reset link to the signed-in user's email (Supabase recovery flow). */
+export async function sendPasswordResetEmailForCurrentUser() {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user?.email) {
+    throw new Error('No email address is associated with this account.')
+  }
+  const base = getPasswordResetRedirectBaseUrl()
+  const redirectTo = `${base}/auth/reset-password`
+
+  const { error } = await supabase.auth.resetPasswordForEmail(user.email, {
+    redirectTo,
+  })
+  if (error) {
+    throw new Error(error.message)
+  }
+  return { success: true as const }
 }
 
 
