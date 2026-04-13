@@ -89,19 +89,21 @@ export function FloatingActionButton({ currentPath }: FloatingActionButtonProps)
           document.body
         )}
 
-        {/* Main FAB Button - Top Right (Mobile) */}
-        <Button
-          onClick={() => setIsOpen(!isOpen)}
-          size="lg"
-          className="h-11 w-11 rounded-full shadow-lg p-0 min-h-[44px] min-w-[44px]"
-          aria-label={isOpen ? 'Close menu' : 'Open quick actions'}
-        >
-          {isOpen ? (
-            <X className="h-5 w-5" />
-          ) : (
-            <Plus className="h-5 w-5" />
-          )}
-        </Button>
+        {/* Main FAB — smaller circle on mobile; outer box keeps ~44px tap target */}
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center touch-manipulation">
+          <Button
+            onClick={() => setIsOpen(!isOpen)}
+            size="lg"
+            className="h-9 w-9 min-h-0 min-w-0 rounded-full p-0 shadow-lg"
+            aria-label={isOpen ? 'Close menu' : 'Open quick actions'}
+          >
+            {isOpen ? (
+              <X className="h-4 w-4" />
+            ) : (
+              <Plus className="h-4 w-4" />
+            )}
+          </Button>
+        </div>
       </div>
 
       {/* Desktop FAB - Bottom Right */}

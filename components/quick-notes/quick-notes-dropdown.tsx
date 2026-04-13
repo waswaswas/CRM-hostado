@@ -159,12 +159,14 @@ function QuickNotesPanel() {
                   </div>
                 ) : (
                   <>
-                    <p className="whitespace-pre-wrap text-sm leading-relaxed">{note.content}</p>
-                    <div className="mt-2 flex items-center justify-between gap-2">
-                      <span className="text-[10px] text-muted-foreground">
+                    <p className="min-w-0 max-w-full break-words whitespace-pre-wrap text-sm leading-relaxed sm:max-w-none">
+                      {note.content}
+                    </p>
+                    <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
+                      <span className="shrink-0 text-[10px] text-muted-foreground">
                         {format(new Date(note.updated_at), 'MMM d, yyyy HH:mm')}
                       </span>
-                      <div className="flex shrink-0 gap-0.5">
+                      <div className="flex shrink-0 gap-0.5 self-end sm:self-auto">
                         <Button
                           type="button"
                           variant="ghost"

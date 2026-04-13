@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
@@ -66,6 +66,16 @@ export function RemindersCard({
     due_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 16),
     description: '',
   })
+
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 639px)')
+    const snap = () => {
+      if (mq.matches && viewMode !== 'list') setViewMode('list')
+    }
+    snap()
+    mq.addEventListener('change', snap)
+    return () => mq.removeEventListener('change', snap)
+  }, [viewMode])
 
   // Calendar view helpers
   const monthStart = startOfMonth(currentMonth)
@@ -303,8 +313,8 @@ export function RemindersCard({
               <span className="hidden sm:inline">Quick Add</span>
               <span className="sm:hidden">Add</span>
             </Button>
-            {/* Mobile: single row, equal-width segments. Desktop: unchanged. */}
-            <div className="flex flex-nowrap items-center gap-0 sm:gap-2 w-full sm:w-auto border rounded-lg p-1 bg-muted min-w-0">
+            {/* List / calendar / completed — hidden below sm (mobile); unchanged from sm up */}
+            <div className="hidden w-full min-w-0 flex-nowrap items-center gap-0 rounded-lg border bg-muted p-1 sm:flex sm:w-auto sm:gap-2">
             <Button
               variant={viewMode === 'list' ? 'default' : 'ghost'}
               size="sm"
@@ -367,7 +377,7 @@ export function RemindersCard({
                         <p className="text-sm text-muted-foreground truncate">{getClientName(reminder)}</p>
                         <p className="text-xs text-destructive font-medium mt-0.5 truncate">{formatDateTime(reminder.due_at)}</p>
                       </Link>
-                      <div className="flex items-center gap-2 flex-shrink-0">
+                      <div className="hidden flex-shrink-0 items-center gap-2 sm:flex">
                         <Button variant="ghost" size="icon" onClick={(e) => { e.preventDefault(); openQuickDialog(undefined, reminder) }} disabled={loading} className="h-10 w-10 sm:h-9 sm:w-9 rounded-lg min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0" aria-label="Edit"><Edit className="h-4 w-4 sm:h-4 sm:w-4" /></Button>
                         <Button variant="ghost" size="icon" onClick={(e) => { e.preventDefault(); handleDelete(reminder) }} disabled={loading} className="h-10 w-10 sm:h-9 sm:w-9 rounded-lg text-destructive hover:text-destructive hover:bg-destructive/10 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0" aria-label="Delete"><Trash2 className="h-4 w-4 sm:h-4 sm:w-4" /></Button>
                       </div>
@@ -401,7 +411,7 @@ export function RemindersCard({
                         <p className="text-sm sm:text-xs text-muted-foreground truncate mt-1">{getClientName(reminder)}</p>
                         <p className="text-xs text-muted-foreground mt-1 truncate">{formatDateTime(reminder.due_at)}</p>
                       </Link>
-                      <div className="flex items-center gap-2 flex-shrink-0">
+                      <div className="hidden flex-shrink-0 items-center gap-2 sm:flex">
                         <Button variant="ghost" size="icon" onClick={(e) => { e.preventDefault(); openQuickDialog(undefined, reminder) }} disabled={loading} className="h-10 w-10 sm:h-9 sm:w-9 rounded-lg min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0" aria-label="Edit"><Edit className="h-4 w-4 sm:h-4 sm:w-4" /></Button>
                         <Button variant="ghost" size="icon" onClick={(e) => { e.preventDefault(); handleDelete(reminder) }} disabled={loading} className="h-10 w-10 sm:h-9 sm:w-9 rounded-lg text-destructive hover:text-destructive hover:bg-destructive/10 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0" aria-label="Delete"><Trash2 className="h-4 w-4 sm:h-4 sm:w-4" /></Button>
                       </div>
@@ -435,7 +445,7 @@ export function RemindersCard({
                         <p className="text-sm sm:text-xs text-muted-foreground truncate mt-1">{getClientName(reminder)}</p>
                         <p className="text-xs text-muted-foreground mt-1 truncate">{formatDateTime(reminder.due_at)}</p>
                       </Link>
-                      <div className="flex items-center gap-2 flex-shrink-0">
+                      <div className="hidden flex-shrink-0 items-center gap-2 sm:flex">
                         <Button variant="ghost" size="icon" onClick={(e) => { e.preventDefault(); openQuickDialog(undefined, reminder) }} disabled={loading} className="h-10 w-10 sm:h-9 sm:w-9 rounded-lg min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0" aria-label="Edit"><Edit className="h-4 w-4 sm:h-4 sm:w-4" /></Button>
                         <Button variant="ghost" size="icon" onClick={(e) => { e.preventDefault(); handleDelete(reminder) }} disabled={loading} className="h-10 w-10 sm:h-9 sm:w-9 rounded-lg text-destructive hover:text-destructive hover:bg-destructive/10 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0" aria-label="Delete"><Trash2 className="h-4 w-4 sm:h-4 sm:w-4" /></Button>
                       </div>
@@ -476,7 +486,7 @@ export function RemindersCard({
                     <p className="text-sm sm:text-xs text-muted-foreground truncate mt-1">{getClientName(reminder)}</p>
                     <p className="text-xs text-muted-foreground mt-1">{formatDateTime(reminder.due_at)}</p>
                   </Link>
-                  <div className="flex items-center gap-2 sm:gap-1 flex-shrink-0">
+                  <div className="hidden flex-shrink-0 items-center gap-2 sm:flex sm:gap-1">
                     <Button variant="ghost" size="icon" onClick={(e) => { e.preventDefault(); openQuickDialog(undefined, reminder) }} disabled={loading} className="h-10 w-10 sm:h-9 sm:w-9 rounded-lg min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0" aria-label="Edit"><Edit className="h-5 w-5 sm:h-4 sm:w-4" /></Button>
                     <Button variant="ghost" size="icon" onClick={(e) => { e.preventDefault(); handleDelete(reminder) }} disabled={loading} className="h-10 w-10 sm:h-9 sm:w-9 rounded-lg text-destructive hover:text-destructive hover:bg-destructive/10 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0" aria-label="Delete"><Trash2 className="h-5 w-5 sm:h-4 sm:w-4" /></Button>
                   </div>
@@ -561,7 +571,7 @@ export function RemindersCard({
                             >
                               {reminder.title}
                             </Link>
-                            <div className="absolute right-0 top-0 hidden group-hover:flex gap-0.5 bg-background/90 rounded shadow-sm">
+                            <div className="absolute right-0 top-0 max-sm:hidden sm:hidden sm:group-hover:flex gap-0.5 rounded bg-background/90 shadow-sm">
                               <Button
                                 variant="ghost"
                                 size="sm"

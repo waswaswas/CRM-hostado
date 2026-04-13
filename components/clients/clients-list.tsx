@@ -404,8 +404,8 @@ export function ClientsList({
           />
         </div>
 
-        <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-          <div className="space-y-2">
+        <div className="grid grid-cols-1 gap-4 max-sm:grid-cols-2 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="min-w-0 space-y-2">
             <label className="text-sm font-medium">Client Type</label>
             <Select
               value={typeFilter}
@@ -417,7 +417,7 @@ export function ClientsList({
             </Select>
           </div>
 
-          <div className="space-y-2">
+          <div className="min-w-0 space-y-2">
             <label className="text-sm font-medium">Lead Status</label>
             <Select
               value={statusFilter}
@@ -441,7 +441,7 @@ export function ClientsList({
               </label>
           </div>
 
-          <div className="space-y-2">
+          <div className="space-y-2 max-sm:col-span-2 lg:col-span-1">
             <label className="text-sm font-medium">Time Filter</label>
             <div className="space-y-2">
               <div className="flex items-center gap-2">

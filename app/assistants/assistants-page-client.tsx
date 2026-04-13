@@ -171,7 +171,7 @@ export function AssistantsPageClient({ allowedBotIds, canManage, mentionClients 
             want to help you from the menu above the chat.
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2 shrink-0">
+        <div className="hidden shrink-0 flex-wrap items-center gap-2 sm:flex">
           {canManage && (
             <Button variant="outline" size="sm" className="min-h-[44px] gap-2" asChild>
               <Link href="/assistants/manage">
@@ -199,7 +199,7 @@ export function AssistantsPageClient({ allowedBotIds, canManage, mentionClients 
         <Card className="flex flex-col min-h-[min(70vh,640px)] overflow-hidden border-border/80 shadow-sm">
           <CardHeader className="border-b bg-muted/20 py-3 px-4 sm:px-5 space-y-0 gap-3">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex flex-wrap items-center gap-3">
+              <div className="flex w-full min-w-0 flex-wrap items-center gap-2 sm:max-w-none sm:gap-3">
                 <label htmlFor="assistant-bot-select" className="sr-only">
                   Assistant
                 </label>
@@ -209,12 +209,12 @@ export function AssistantsPageClient({ allowedBotIds, canManage, mentionClients 
                   onChange={(e) => onBotSelectChange(e.target.value)}
                   aria-label="Choose assistant"
                   className={cn(
-                    'h-10 min-h-[44px] w-[min(100%,220px)] sm:w-auto sm:min-w-[140px] max-w-full',
-                    'rounded-lg border border-zinc-700/90 bg-zinc-900 text-zinc-100',
+                    'h-10 min-h-[44px] w-full min-w-0 max-w-full flex-1 rounded-lg border border-zinc-700/90 bg-zinc-900 text-zinc-100',
                     'shadow-sm pr-10 text-sm font-normal',
                     'focus:ring-2 focus:ring-zinc-500 focus:ring-offset-2 focus:ring-offset-background',
                     'dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100',
-                    '[&>option]:bg-zinc-900 [&>option]:text-zinc-100 dark:[&>option]:bg-zinc-950'
+                    '[&>option]:bg-zinc-900 [&>option]:text-zinc-100 dark:[&>option]:bg-zinc-950',
+                    'sm:w-auto sm:min-w-[140px] sm:max-w-[min(100%,220px)] sm:flex-none'
                   )}
                 >
                   <option value="auto">Auto</option>
@@ -224,6 +224,19 @@ export function AssistantsPageClient({ allowedBotIds, canManage, mentionClients 
                     </option>
                   ))}
                 </Select>
+                {canManage && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-10 min-h-[44px] shrink-0 gap-2 sm:hidden"
+                    asChild
+                  >
+                    <Link href="/assistants/manage" aria-label="Manage assistants">
+                      <Settings2 className="h-4 w-4" />
+                      <span>Manage</span>
+                    </Link>
+                  </Button>
+                )}
                 <span className="text-xs text-muted-foreground hidden sm:inline">
                   {selection === 'auto'
                     ? `Using ${selectedMeta?.name ?? 'first available'}`

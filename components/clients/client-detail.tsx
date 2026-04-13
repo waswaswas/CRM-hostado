@@ -56,6 +56,7 @@ import {
 
 import { AccountingCustomerWithRelations } from '@/types/database'
 import { LinkAccountingCustomerDialog } from './link-accounting-customer-dialog'
+import { cn } from '@/lib/utils'
 
 const SOURCE_OPTIONS = ['Phone Inbound', 'Phone Outbound', 'Chat', 'Email']
 const CUSTOM_SOURCE_VALUE = '__custom__'
@@ -600,11 +601,11 @@ export function ClientDetail({
             </Badge>
           )}
           {editingStatus ? (
-            <div className="space-y-1">
+            <div className="flex flex-col space-y-1 max-sm:flex-row max-sm:flex-wrap max-sm:items-center max-sm:gap-2 max-sm:space-y-0">
               <Select
                 value={client.status}
                 onChange={(e) => handleStatusChange(e.target.value as ClientStatus)}
-                className="w-56"
+                className="w-56 max-sm:min-w-0 max-sm:flex-1 max-sm:max-w-[min(100%,14rem)] sm:w-56"
               >
                 {getStatusesForType(client.client_type, customStatuses).map((status) => (
                   <option key={status} value={status} title={STATUS_DESCRIPTIONS[status as keyof typeof STATUS_DESCRIPTIONS] || ''}>
@@ -612,7 +613,7 @@ export function ClientDetail({
                   </option>
                 ))}
               </Select>
-              <p className="text-xs text-muted-foreground">
+              <p className="hidden text-xs text-muted-foreground sm:block">
                 {STATUS_DESCRIPTIONS[client.status as keyof typeof STATUS_DESCRIPTIONS] || 'Custom status'}
               </p>
             </div>
@@ -667,12 +668,12 @@ export function ClientDetail({
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-1">
           <Card>
-            <CardHeader>
-              <CardTitle>Contact Information</CardTitle>
+            <CardHeader className="p-4 sm:p-6">
+              <CardTitle className="text-lg sm:text-2xl">Contact Information</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-2 p-4 pt-0 sm:space-y-4 sm:p-6 sm:pt-0">
               <div>
-                <p className="text-sm font-medium text-muted-foreground mb-1">Email</p>
+                <p className="mb-1 text-sm font-medium text-muted-foreground max-sm:mb-0 max-sm:text-xs">Email</p>
                 {editingField === 'email' ? (
                   <div className="flex items-center gap-2">
                     <Input
@@ -712,7 +713,7 @@ export function ClientDetail({
                 )}
               </div>
               <div>
-                <p className="text-sm font-medium text-muted-foreground mb-1">Phone</p>
+                <p className="mb-1 text-sm font-medium text-muted-foreground max-sm:mb-0 max-sm:text-xs">Phone</p>
                 {editingField === 'phone' ? (
                   <div className="flex items-center gap-2">
                     <Input
@@ -752,7 +753,7 @@ export function ClientDetail({
                 )}
               </div>
               <div>
-                <p className="text-sm font-medium text-muted-foreground mb-1">Source</p>
+                <p className="mb-1 text-sm font-medium text-muted-foreground max-sm:mb-0 max-sm:text-xs">Source</p>
                 {editingField === 'source' ? (
                   <div className="flex flex-col gap-2">
                     <div className="flex items-center gap-2">
@@ -800,7 +801,7 @@ export function ClientDetail({
                 )}
               </div>
               <div>
-                <p className="text-sm font-medium text-muted-foreground mb-1">Summary</p>
+                <p className="mb-1 text-sm font-medium text-muted-foreground max-sm:mb-0 max-sm:text-xs">Summary</p>
                 {editingField === 'notes_summary' ? (
                   <div className="space-y-2">
                     <Textarea
@@ -823,8 +824,8 @@ export function ClientDetail({
                   </p>
                 )}
               </div>
-              <div className="pt-2 border-t">
-                <h3 className="text-sm font-medium text-muted-foreground mb-2">Accounting Link</h3>
+              <div className="border-t pt-2 max-sm:pt-1.5 sm:pt-2">
+                <h3 className="mb-2 text-sm font-medium text-muted-foreground max-sm:mb-1 sm:mb-2">Accounting Link</h3>
                 {linkedAccountingCustomers.length > 0 ? (
                   <div className="space-y-2">
                     {linkedAccountingCustomers.map((customer) => (
@@ -894,7 +895,13 @@ export function ClientDetail({
                   </Button>
                 </Link>
                 {detailTab !== 'notes' && (
-                  <Button onClick={() => setShowInteractionDialog(true)} className="min-h-[40px]">
+                  <Button
+                    onClick={() => setShowInteractionDialog(true)}
+                    className={cn(
+                      'min-h-[40px]',
+                      (detailTab === 'offers' || detailTab === 'reminders') && 'max-sm:hidden'
+                    )}
+                  >
                     <Plus className="mr-2 h-4 w-4" />
                     Add Interaction
                   </Button>
@@ -1003,8 +1010,8 @@ export function ClientDetail({
                   {noteCards.map((note) => (
                     <Card key={note.id} className={note.pinned ? 'border-primary' : ''}>
                       <CardContent className="p-4">
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-0">
+                          <div className="min-w-0 flex-1">
                             {note.pinned && (
                               <Badge variant="outline" className="mb-2">
                                 Pinned
@@ -1057,7 +1064,7 @@ export function ClientDetail({
                               </div>
                             ) : (
                               <>
-                                <p className="whitespace-pre-wrap">{note.content}</p>
+                                <p className="break-words whitespace-pre-wrap">{note.content}</p>
                                 <p className="mt-2 text-xs text-muted-foreground">
                                   {note.displayDate}
                                 </p>
@@ -1065,7 +1072,7 @@ export function ClientDetail({
                             )}
                           </div>
                           {editingNoteId !== note.id && (
-                            <div className="flex gap-2">
+                            <div className="flex shrink-0 justify-end gap-2 sm:justify-start">
                               <Button
                                 variant="ghost"
                                 size="icon"
