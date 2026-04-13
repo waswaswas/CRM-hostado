@@ -55,6 +55,15 @@ export interface ClientNote {
   pinned: boolean
 }
 
+/** Personal scratch notes in the top bar; RLS restricts rows to creator (user_id). */
+export interface UserQuickNote {
+  id: string
+  user_id: string
+  content: string
+  created_at: string
+  updated_at: string
+}
+
 export interface ClientWithRelations extends Client {
   interactions?: Interaction[]
   reminders?: Reminder[]

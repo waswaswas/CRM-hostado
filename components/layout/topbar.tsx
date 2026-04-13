@@ -9,6 +9,7 @@ import { ThemeToggle } from '@/components/theme-toggle'
 import { TimezoneSelector } from '@/components/timezone-selector'
 import { FeedbackDialog } from '@/components/feedback/feedback-dialog'
 import { NotificationBadge } from '@/components/notifications/notification-badge'
+import { QuickNotesDropdown } from '@/components/quick-notes/quick-notes-dropdown'
 import { FloatingActionButton } from '@/components/ui/floating-action-button'
 import { OrganizationSelector } from '@/components/organizations/organization-selector'
 import { usePathname } from 'next/navigation'
@@ -43,6 +44,9 @@ export function Topbar({ userName, sidebarCollapsed }: { userName?: string; side
           <ThemeToggle />
           <div className="min-h-[44px] min-w-[44px] flex items-center justify-center">
             <NotificationBadge />
+          </div>
+          <div className="min-h-[44px] min-w-[44px] flex items-center justify-center">
+            <QuickNotesDropdown />
           </div>
           <div className="md:hidden">
             <FloatingActionButton currentPath={pathname} />
