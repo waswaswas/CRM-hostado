@@ -89,21 +89,34 @@ export function FloatingActionButton({ currentPath }: FloatingActionButtonProps)
           document.body
         )}
 
-        {/* Main FAB — smaller circle on mobile; outer box keeps ~44px tap target */}
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center touch-manipulation">
-          <Button
-            onClick={() => setIsOpen(!isOpen)}
-            size="lg"
-            className="h-9 w-9 min-h-0 min-w-0 rounded-full p-0 shadow-lg"
-            aria-label={isOpen ? 'Close menu' : 'Open quick actions'}
-          >
-            {isOpen ? (
-              <X className="h-4 w-4" />
-            ) : (
-              <Plus className="h-4 w-4" />
-            )}
-          </Button>
-        </div>
+        {/* Native <button>: shadcn Button defaults (h-10, padding) were overriding small FAB classes */}
+        <button
+          type="button"
+          onClick={() => setIsOpen(!isOpen)}
+          style={{
+            width: 24,
+            height: 24,
+            minWidth: 24,
+            minHeight: 24,
+            maxWidth: 24,
+            maxHeight: 24,
+            padding: 0,
+          }}
+          className={cn(
+            'no-touch-target inline-flex shrink-0 items-center justify-center rounded-full border-0 bg-primary p-0',
+            /* primary-foreground is dark in .dark — force readable glyph on blue */
+            'text-white shadow-sm transition-colors hover:bg-primary/90',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+            'touch-manipulation active:scale-95'
+          )}
+          aria-label={isOpen ? 'Close menu' : 'Open quick actions'}
+        >
+          {isOpen ? (
+            <X className="size-4 shrink-0 text-white" strokeWidth={2.75} aria-hidden />
+          ) : (
+            <Plus className="size-4 shrink-0 text-white" strokeWidth={2.75} aria-hidden />
+          )}
+        </button>
       </div>
 
       {/* Desktop FAB - Bottom Right */}

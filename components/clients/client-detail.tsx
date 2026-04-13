@@ -887,13 +887,51 @@ export function ClientDetail({
                   <TabsTrigger value="reminders" className="shrink-0">Reminders</TabsTrigger>
                 </TabsList>
               </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <Link href={`/emails/compose?client_id=${client.id}`}>
-                  <Button variant="outline" className="min-h-[40px]">
+              <div
+                className={cn(
+                  'flex w-full flex-wrap items-center gap-2',
+                  (detailTab === 'offers' || detailTab === 'reminders') &&
+                    'max-sm:flex-nowrap max-sm:gap-2'
+                )}
+              >
+                <Link
+                  href={`/emails/compose?client_id=${client.id}`}
+                  className={cn(
+                    (detailTab === 'offers' || detailTab === 'reminders') && 'max-sm:min-w-0 max-sm:flex-1'
+                  )}
+                >
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      'min-h-[40px] sm:w-auto',
+                      (detailTab === 'offers' || detailTab === 'reminders') && 'w-full max-sm:w-full'
+                    )}
+                  >
                     <Mail className="mr-2 h-4 w-4" />
                     Send Email
                   </Button>
                 </Link>
+                {detailTab === 'offers' && (
+                  <Link
+                    href={`/offers/new?client_id=${client.id}`}
+                    className="max-sm:min-w-0 max-sm:flex-1 sm:hidden"
+                  >
+                    <Button size="sm" className="min-h-[40px] w-full">
+                      <Plus className="mr-2 h-4 w-4" />
+                      New Offer
+                    </Button>
+                  </Link>
+                )}
+                {detailTab === 'reminders' && (
+                  <Button
+                    type="button"
+                    onClick={() => setShowReminderDialog(true)}
+                    className="min-h-[40px] w-full max-sm:flex-1 sm:hidden"
+                  >
+                    <Plus className="mr-2 h-4 w-4" />
+                    New Reminder
+                  </Button>
+                )}
                 {detailTab !== 'notes' && (
                   <Button
                     onClick={() => setShowInteractionDialog(true)}
@@ -1155,9 +1193,9 @@ export function ClientDetail({
             </TabsContent>
 
             <TabsContent value="offers" className="space-y-4">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2">
                 <h3 className="text-lg font-semibold">Offers</h3>
-                <Link href={`/offers/new?client_id=${client.id}`}>
+                <Link href={`/offers/new?client_id=${client.id}`} className="max-sm:hidden">
                   <Button size="sm">
                     <Plus className="mr-2 h-4 w-4" />
                     New Offer
@@ -1221,7 +1259,7 @@ export function ClientDetail({
             </TabsContent>
 
             <TabsContent value="reminders" className="space-y-4">
-              <div className="flex justify-end">
+              <div className="flex justify-end max-sm:hidden">
                 <Button onClick={() => setShowReminderDialog(true)}>
                   <Plus className="mr-2 h-4 w-4" />
                   New Reminder

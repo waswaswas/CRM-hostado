@@ -83,14 +83,14 @@ export function NotificationBadge() {
         <Button
           variant="ghost"
           size="icon"
-          className="h-10 w-10 rounded-lg relative text-muted-foreground hover:text-foreground hover:bg-muted/50"
+          className="no-touch-target relative h-8 w-8 rounded-lg text-muted-foreground hover:bg-muted/50 hover:text-foreground sm:h-10 sm:w-10"
           title="Notifications"
           aria-label={`${unreadCount > 0 ? `${unreadCount} unread notifications` : 'Notifications'}`}
         >
-          <Bell className="h-5 w-5" />
+          <Bell className="h-[1.05rem] w-[1.05rem] shrink-0 sm:h-5 sm:w-5" />
           {unreadCount > 0 && (
             <span
-              className="absolute top-1.5 right-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1.5 text-[11px] font-semibold text-destructive-foreground ring-2 ring-background"
+              className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 translate-x-px translate-y-px items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-semibold leading-none text-destructive-foreground ring-2 ring-background sm:right-0.5 sm:top-0.5 sm:h-5 sm:min-w-5 sm:translate-x-0 sm:translate-y-0 sm:px-1.5 sm:text-[11px]"
               aria-hidden
             >
               {displayCount}

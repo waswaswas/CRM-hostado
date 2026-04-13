@@ -28,9 +28,10 @@ export function Topbar({ userName, sidebarCollapsed }: { userName?: string; side
   return (
     <>
       <div
+        data-header-compact
         className={cn(
-          'relative z-10 flex h-14 sm:h-16 items-center justify-between gap-4 border-b border-border/80 bg-background px-4 pr-4 transition-[padding] duration-300',
-          'pl-16 md:pl-5 md:pr-5 lg:px-6', // mobile: space for hamburger; tablet+: comfortable padding
+          'relative z-10 flex h-14 sm:h-16 items-center justify-between gap-2 border-b border-border/80 bg-background px-3 pr-2 transition-[padding] duration-300 sm:gap-4 sm:px-4 sm:pr-4',
+          'pl-14 md:pl-5 md:pr-5 lg:px-6', // mobile: space for hamburger; tablet+: comfortable padding
           sidebarCollapsed && 'md:pl-4'
         )}
       >
@@ -39,16 +40,18 @@ export function Topbar({ userName, sidebarCollapsed }: { userName?: string; side
           <OrganizationSelector />
         </div>
 
-        {/* Right: actions — grouped and spaced for clarity; pointer-events-auto so nothing blocks clicks */}
-        <div className="relative z-0 flex flex-shrink-0 items-center gap-2 sm:gap-3 pointer-events-auto">
-          <ThemeToggle />
-          <div className="min-h-[44px] min-w-[44px] flex items-center justify-center">
+        {/* Right: even gap + fixed rail so icons and FAB share one visual baseline (mobile) */}
+        <div className="pointer-events-auto relative z-0 flex shrink-0 items-center gap-2 sm:gap-3">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center sm:h-10 sm:w-10">
+            <ThemeToggle />
+          </div>
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center sm:h-10 sm:w-10">
             <NotificationBadge />
           </div>
-          <div className="min-h-[44px] min-w-[44px] flex items-center justify-center">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center sm:h-10 sm:w-10">
             <QuickNotesDropdown />
           </div>
-          <div className="md:hidden">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center md:hidden">
             <FloatingActionButton currentPath={pathname} />
           </div>
           <div className="hidden md:flex items-center gap-2 lg:gap-3">
@@ -79,8 +82,13 @@ export function Topbar({ userName, sidebarCollapsed }: { userName?: string; side
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-11 w-11 md:hidden rounded-lg min-h-[44px] min-w-[44px]" aria-label="More options">
-                <MoreVertical className="h-5 w-5" />
+              <Button
+                variant="ghost"
+                size="icon"
+                className="no-touch-target h-8 w-8 shrink-0 rounded-lg md:hidden sm:h-10 sm:w-10"
+                aria-label="More options"
+              >
+                <MoreVertical className="h-4 w-4 sm:h-5 sm:w-5" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56 rounded-lg">

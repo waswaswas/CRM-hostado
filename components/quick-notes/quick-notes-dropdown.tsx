@@ -224,11 +224,11 @@ export function QuickNotesDropdown() {
         <Button
           variant="ghost"
           size="icon"
-          className="h-10 w-10 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50"
+          className="no-touch-target h-8 w-8 rounded-lg text-muted-foreground hover:bg-muted/50 hover:text-foreground sm:h-10 sm:w-10"
           title="Quick notes"
           aria-label="Quick notes"
         >
-          <StickyNote className="h-5 w-5" />
+          <StickyNote className="h-[1.05rem] w-[1.05rem] sm:h-5 sm:w-5" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent

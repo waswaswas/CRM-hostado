@@ -271,5 +271,16 @@
   background: transparent !important;
 }
 
+/* Top bar: mobile base rule uses 44×44 min on all buttons; compact header controls need real h-8/w-6 etc.
+   Utilities layer + attribute scope wins over @layer base in practice for shipped CSS order. */
+@layer utilities {
+  @media (max-width: 768px) {
+    [data-header-compact] button {
+      min-height: 0 !important;
+      min-width: 0 !important;
+    }
+  }
+}
+
 
 
