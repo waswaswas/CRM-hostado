@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
@@ -169,7 +169,7 @@ export function DashboardPageClient({
     setCustomStatuses(entry.customStatuses)
   }, [])
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     if (!orgId) return
 
     const fromSession = readDashboardCacheFromSession(orgId)

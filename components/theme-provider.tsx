@@ -44,9 +44,11 @@ export function ThemeProvider({
   storageKey = 'vite-ui-theme',
   ...props
 }: ThemeProviderProps) {
-  const [theme, setTheme] = useState<Theme>(() =>
-    readInitialTheme(storageKey, defaultTheme)
-  )
+  const [theme, setTheme] = useState<Theme>(defaultTheme)
+
+  useEffect(() => {
+    setTheme(readInitialTheme(storageKey, defaultTheme))
+  }, [defaultTheme, storageKey])
 
   useEffect(() => {
     const root = window.document.documentElement

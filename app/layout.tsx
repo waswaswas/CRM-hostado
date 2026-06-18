@@ -38,6 +38,13 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var k='crm-theme',s=localStorage.getItem(k),t=s==='light'||s==='dark'||s==='gradient'?s:'dark';document.documentElement.classList.add(t)}catch(e){document.documentElement.classList.add('dark')}})();`,
+          }}
+        />
+      </head>
       <body className={inter.className}>
         <ThemeProvider defaultTheme="dark" storageKey="crm-theme">
           <ToasterProvider>

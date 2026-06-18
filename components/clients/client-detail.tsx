@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useLayoutEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Client, Interaction, Reminder, ClientNote, ClientStatus, ClientType, Offer } from '@/types/database'
 import {
   getStatusesForType,
@@ -118,7 +118,7 @@ export function ClientDetail({
   const { toast } = useToast()
   const [client, setClient] = useState(initialClient)
   // IMPORTANT: Keep initial render identical on server + client to avoid hydration mismatch.
-  // We'll hydrate from sessionStorage in `useLayoutEffect` (client-only) before paint.
+  // Session cache is applied in useEffect after mount to avoid hydration mismatches.
   const [interactions, setInteractions] = useState<Interaction[]>([])
   const [reminders, setReminders] = useState<Reminder[]>([])
   const [notes, setNotes] = useState<ClientNote[]>([])
@@ -219,12 +219,10 @@ export function ClientDetail({
     }
   }, [currentOrganization?.id])
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     const clientId = client.id
 
-    // Hydrate synchronously from sessionStorage (client-only) before paint.
-    // This keeps the first client render aligned with the server HTML (no cache-dependent render),
-    // then swaps to cached data immediately.
+    // Hydrate from sessionStorage after mount so SSR HTML matches the first client render.
     const cachedFromSession = readClientDetailCacheFromSession(clientId)
     if (cachedFromSession) {
       clientDetailCache.set(clientId, cachedFromSession)
@@ -752,20 +750,23 @@ export function ClientDetail({
         <div className="lg:col-span-1">
           <Card>
             <CardHeader className="p-4 sm:p-6">
-              <button
-                type="button"
-                className="flex w-full items-center justify-between gap-2 text-left lg:pointer-events-none"
-                onClick={() => setContactInfoExpanded((prev) => !prev)}
-                aria-expanded={contactInfoExpanded}
-              >
+              <div className="flex w-full items-center justify-between gap-2">
                 <CardTitle className="text-lg sm:text-2xl">Contact Information</CardTitle>
-                <ChevronDown
-                  className={cn(
-                    'h-5 w-5 shrink-0 text-muted-foreground transition-transform lg:hidden',
-                    contactInfoExpanded && 'rotate-180'
-                  )}
-                />
-              </button>
+                <button
+                  type="button"
+                  className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent lg:hidden"
+                  onClick={() => setContactInfoExpanded((prev) => !prev)}
+                  aria-expanded={contactInfoExpanded}
+                  aria-label={contactInfoExpanded ? 'Collapse contact information' : 'Expand contact information'}
+                >
+                  <ChevronDown
+                    className={cn(
+                      'h-5 w-5 transition-transform',
+                      contactInfoExpanded && 'rotate-180'
+                    )}
+                  />
+                </button>
+              </div>
               {!contactInfoExpanded && (
                 <div className="mt-2 space-y-1 lg:hidden">
                   {client.email && (

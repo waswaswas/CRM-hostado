@@ -230,7 +230,7 @@ export default function NewClientPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4 pb-24 md:pb-0">
+            <form id="new-client-form" onSubmit={handleSubmit} className="space-y-4 pb-24 md:pb-0">
               {!isPresales && (
                 <div className="space-y-2">
                   <label htmlFor="name" className="text-sm font-medium">
@@ -398,24 +398,24 @@ export default function NewClientPage() {
                   Cancel
                 </Button>
               </div>
-
-              <MobileFormActions className="-mx-6">
-                <MobileFormActionsBar>
-                  <Button type="submit" disabled={loading} className="w-full">
-                    {loading ? 'Creating...' : `Create ${isPresales ? 'Presales' : 'Customer'} Client`}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => router.back()}
-                    disabled={loading}
-                    className="w-full"
-                  >
-                    Cancel
-                  </Button>
-                </MobileFormActionsBar>
-              </MobileFormActions>
             </form>
+
+            <MobileFormActions className="-mx-6">
+              <MobileFormActionsBar>
+                <Button type="submit" form="new-client-form" disabled={loading} className="w-full">
+                  {loading ? 'Creating...' : `Create ${isPresales ? 'Presales' : 'Customer'} Client`}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => router.back()}
+                  disabled={loading}
+                  className="w-full"
+                >
+                  Cancel
+                </Button>
+              </MobileFormActionsBar>
+            </MobileFormActions>
           </CardContent>
         </Card>
       </div>

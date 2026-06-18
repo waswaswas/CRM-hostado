@@ -325,15 +325,16 @@ export function TodoPageClient({
   const [newAttachmentUrl, setNewAttachmentUrl] = useState('')
   const [editingAttachmentId, setEditingAttachmentId] = useState<string | null>(null)
   const [editAttachmentUrl, setEditAttachmentUrl] = useState('')
-  const [showSubtasks, setShowSubtasks] = useState(() => {
-    if (typeof window === 'undefined') return true
+  const [showSubtasks, setShowSubtasks] = useState(true)
+
+  useEffect(() => {
     try {
       const stored = localStorage.getItem('hostado-todo-show-subtasks')
-      return stored !== 'false'
+      if (stored === 'false') setShowSubtasks(false)
     } catch {
-      return true
+      // ignore
     }
-  })
+  }, [])
   const [loadingLists, setLoadingLists] = useState(() => (initialLists?.length ?? 0) === 0)
   const hadInitialLists = useRef((initialLists?.length ?? 0) > 0)
   const [loadingTasks, setLoadingTasks] = useState(false)

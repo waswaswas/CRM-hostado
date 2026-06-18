@@ -23,9 +23,13 @@ export function DropdownMenu({ children }: { children: React.ReactNode }) {
   )
 }
 
-const THEME_DEBUG =
-  typeof window !== 'undefined' &&
-  (window.location.search.includes('theme_debug=1') || (window as any).__CRM_THEME_DEBUG__ === true)
+function isThemeDebugEnabled(): boolean {
+  if (typeof window === 'undefined') return false
+  return (
+    window.location.search.includes('theme_debug=1') ||
+    (window as unknown as { __CRM_THEME_DEBUG__?: boolean }).__CRM_THEME_DEBUG__ === true
+  )
+}
 
 export function DropdownMenuTrigger({
   asChild,
@@ -41,13 +45,13 @@ export function DropdownMenuTrigger({
   if (!context) throw new Error('DropdownMenuTrigger must be used within DropdownMenu')
 
   const toggle = () => {
-    if (THEME_DEBUG) console.log('[DropdownMenu] toggle, open was', context.open)
+    if (isThemeDebugEnabled()) console.log('[DropdownMenu] toggle, open was', context.open)
     context.setOpen(!context.open)
   }
 
   // Use pointerdown so the menu opens even if something captures or blocks the click event
   const handlePointerDown = (e: React.PointerEvent) => {
-    if (THEME_DEBUG) console.log('[DropdownMenu] trigger pointerdown', e.target, e.currentTarget)
+    if (isThemeDebugEnabled()) console.log('[DropdownMenu] trigger pointerdown', e.target, e.currentTarget)
     e.preventDefault()
     e.stopPropagation()
     toggle()
@@ -139,7 +143,7 @@ export function DropdownMenuContent({
 
   if (!context.open || !positionReady) return null
 
-  if (THEME_DEBUG && typeof document !== 'undefined') {
+  if (isThemeDebugEnabled() && typeof document !== 'undefined') {
     const rect = context.triggerRef.current?.getBoundingClientRect()
     console.log('[DropdownMenu] content rendering, trigger rect', rect, 'position', position)
   }
