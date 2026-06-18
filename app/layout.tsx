@@ -1,4 +1,4 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
 import { ToasterProvider } from '@/components/ui/toaster'
@@ -9,6 +9,12 @@ const inter = Inter({ subsets: ['latin'] })
 
 // Use cookies/session in app - avoid static generation errors at build
 export const dynamic = 'force-dynamic'
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
+}
 
 export const metadata: Metadata = {
   title: 'Pre-Sales CRM',

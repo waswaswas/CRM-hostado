@@ -15,6 +15,7 @@ import { getStatusesForType, formatStatus, STATUS_DESCRIPTIONS } from '@/lib/sta
 import { getSettings } from '@/app/actions/settings'
 import type { StatusConfig } from '@/types/settings'
 import { ArrowLeft, User, Building2 } from 'lucide-react'
+import { MobileFormActions, MobileFormActionsBar } from '@/components/ui/mobile-form-actions'
 
 type ClientType = 'presales' | 'customer' | null
 const SOURCE_OPTIONS = ['Phone Inbound', 'Phone Outbound', 'Chat', 'Email']
@@ -229,7 +230,7 @@ export default function NewClientPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-4 pb-24 md:pb-0">
               {!isPresales && (
                 <div className="space-y-2">
                   <label htmlFor="name" className="text-sm font-medium">
@@ -384,7 +385,7 @@ export default function NewClientPage() {
                 />
               </div>
 
-              <div className="flex gap-4">
+              <div className="hidden md:flex gap-4">
                 <Button type="submit" disabled={loading}>
                   {loading ? 'Creating...' : `Create ${isPresales ? 'Presales' : 'Customer'} Client`}
                 </Button>
@@ -397,6 +398,23 @@ export default function NewClientPage() {
                   Cancel
                 </Button>
               </div>
+
+              <MobileFormActions className="-mx-6">
+                <MobileFormActionsBar>
+                  <Button type="submit" disabled={loading} className="w-full">
+                    {loading ? 'Creating...' : `Create ${isPresales ? 'Presales' : 'Customer'} Client`}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => router.back()}
+                    disabled={loading}
+                    className="w-full"
+                  >
+                    Cancel
+                  </Button>
+                </MobileFormActionsBar>
+              </MobileFormActions>
             </form>
           </CardContent>
         </Card>

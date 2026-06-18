@@ -52,11 +52,13 @@ import {
   Link as LinkIcon,
   Unlink,
   Copy,
+  ChevronDown,
 } from 'lucide-react'
 
 import { AccountingCustomerWithRelations } from '@/types/database'
 import { LinkAccountingCustomerDialog } from './link-accounting-customer-dialog'
 import { cn } from '@/lib/utils'
+import { MobileFormActions, MobileFormActionsBar } from '@/components/ui/mobile-form-actions'
 
 const SOURCE_OPTIONS = ['Phone Inbound', 'Phone Outbound', 'Chat', 'Email']
 const CUSTOM_SOURCE_VALUE = '__custom__'
@@ -128,6 +130,7 @@ export function ClientDetail({
   const [editingReminder, setEditingReminder] = useState<Reminder | null>(null)
   const [showNoteDialog, setShowNoteDialog] = useState(false)
   const [detailTab, setDetailTab] = useState('timeline')
+  const [contactInfoExpanded, setContactInfoExpanded] = useState(false)
   const [editingStatus, setEditingStatus] = useState(false)
   const [editingType, setEditingType] = useState(false)
   const [editingField, setEditingField] = useState<string | null>(null)
@@ -144,6 +147,12 @@ export function ClientDetail({
   const [showLinkMenu, setShowLinkMenu] = useState(false)
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null)
   const [editingNoteContent, setEditingNoteContent] = useState('')
+
+  useEffect(() => {
+    if (editingField) {
+      setContactInfoExpanded(true)
+    }
+  }, [editingField])
 
   // customStatuses is provided by the server to avoid an initial "partial statuses" render.
 
@@ -527,6 +536,80 @@ export function ClientDetail({
     }))
   }, [reminders])
 
+  const renderTabActions = (options?: { mobile?: boolean }) => (
+    <MobileFormActionsBar
+      className={cn(
+        options?.mobile &&
+          (detailTab === 'offers' || detailTab === 'reminders') &&
+          'max-sm:flex-nowrap max-sm:gap-2'
+      )}
+    >
+      <Link
+        href={`/emails/compose?client_id=${client.id}`}
+        className={cn(
+          'min-w-0',
+          options?.mobile &&
+            (detailTab === 'offers' || detailTab === 'reminders') &&
+            'max-sm:flex-1'
+        )}
+      >
+        <Button
+          variant="outline"
+          className={cn(
+            'min-h-[40px] w-full sm:w-auto',
+            options?.mobile &&
+              (detailTab === 'offers' || detailTab === 'reminders') &&
+              'max-sm:w-full'
+          )}
+        >
+          <Mail className="mr-2 h-4 w-4" />
+          Send Email
+        </Button>
+      </Link>
+      {detailTab === 'offers' && options?.mobile && (
+        <Link href={`/offers/new?client_id=${client.id}`} className="max-sm:min-w-0 max-sm:flex-1">
+          <Button size="sm" className="min-h-[40px] w-full">
+            <Plus className="mr-2 h-4 w-4" />
+            New Offer
+          </Button>
+        </Link>
+      )}
+      {detailTab === 'reminders' && options?.mobile && (
+        <Button
+          type="button"
+          onClick={() => setShowReminderDialog(true)}
+          className="min-h-[40px] w-full max-sm:flex-1"
+        >
+          <Plus className="mr-2 h-4 w-4" />
+          New Reminder
+        </Button>
+      )}
+      {detailTab !== 'notes' && (
+        <Button
+          onClick={() => setShowInteractionDialog(true)}
+          className={cn(
+            'min-h-[40px] w-full sm:w-auto',
+            options?.mobile &&
+              (detailTab === 'offers' || detailTab === 'reminders') &&
+              'max-sm:hidden'
+          )}
+        >
+          <Plus className="mr-2 h-4 w-4" />
+          Add Interaction
+        </Button>
+      )}
+      {detailTab === 'notes' && (
+        <Button
+          onClick={() => setShowNoteDialog(true)}
+          className="min-h-[40px] w-full sm:w-auto"
+        >
+          <Plus className="mr-2 h-4 w-4" />
+          Add Note
+        </Button>
+      )}
+    </MobileFormActionsBar>
+  )
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -669,9 +752,40 @@ export function ClientDetail({
         <div className="lg:col-span-1">
           <Card>
             <CardHeader className="p-4 sm:p-6">
-              <CardTitle className="text-lg sm:text-2xl">Contact Information</CardTitle>
+              <button
+                type="button"
+                className="flex w-full items-center justify-between gap-2 text-left lg:pointer-events-none"
+                onClick={() => setContactInfoExpanded((prev) => !prev)}
+                aria-expanded={contactInfoExpanded}
+              >
+                <CardTitle className="text-lg sm:text-2xl">Contact Information</CardTitle>
+                <ChevronDown
+                  className={cn(
+                    'h-5 w-5 shrink-0 text-muted-foreground transition-transform lg:hidden',
+                    contactInfoExpanded && 'rotate-180'
+                  )}
+                />
+              </button>
+              {!contactInfoExpanded && (
+                <div className="mt-2 space-y-1 lg:hidden">
+                  {client.email && (
+                    <p className="truncate text-sm text-muted-foreground">{client.email}</p>
+                  )}
+                  {client.phone && (
+                    <p className="truncate text-sm text-muted-foreground">{client.phone}</p>
+                  )}
+                  {!client.email && !client.phone && (
+                    <p className="text-sm text-muted-foreground">Tap to view contact details</p>
+                  )}
+                </div>
+              )}
             </CardHeader>
-            <CardContent className="space-y-2 p-4 pt-0 sm:space-y-4 sm:p-6 sm:pt-0">
+            <CardContent
+              className={cn(
+                'space-y-2 p-4 pt-0 sm:space-y-4 sm:p-6 sm:pt-0',
+                !contactInfoExpanded && 'hidden lg:block'
+              )}
+            >
               <div>
                 <p className="mb-1 text-sm font-medium text-muted-foreground max-sm:mb-0 max-sm:text-xs">Email</p>
                 {editingField === 'email' ? (
@@ -887,73 +1001,12 @@ export function ClientDetail({
                   <TabsTrigger value="reminders" className="shrink-0">Reminders</TabsTrigger>
                 </TabsList>
               </div>
-              <div
-                className={cn(
-                  'flex w-full flex-wrap items-center gap-2',
-                  (detailTab === 'offers' || detailTab === 'reminders') &&
-                    'max-sm:flex-nowrap max-sm:gap-2'
-                )}
-              >
-                <Link
-                  href={`/emails/compose?client_id=${client.id}`}
-                  className={cn(
-                    (detailTab === 'offers' || detailTab === 'reminders') && 'max-sm:min-w-0 max-sm:flex-1'
-                  )}
-                >
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      'min-h-[40px] sm:w-auto',
-                      (detailTab === 'offers' || detailTab === 'reminders') && 'w-full max-sm:w-full'
-                    )}
-                  >
-                    <Mail className="mr-2 h-4 w-4" />
-                    Send Email
-                  </Button>
-                </Link>
-                {detailTab === 'offers' && (
-                  <Link
-                    href={`/offers/new?client_id=${client.id}`}
-                    className="max-sm:min-w-0 max-sm:flex-1 sm:hidden"
-                  >
-                    <Button size="sm" className="min-h-[40px] w-full">
-                      <Plus className="mr-2 h-4 w-4" />
-                      New Offer
-                    </Button>
-                  </Link>
-                )}
-                {detailTab === 'reminders' && (
-                  <Button
-                    type="button"
-                    onClick={() => setShowReminderDialog(true)}
-                    className="min-h-[40px] w-full max-sm:flex-1 sm:hidden"
-                  >
-                    <Plus className="mr-2 h-4 w-4" />
-                    New Reminder
-                  </Button>
-                )}
-                {detailTab !== 'notes' && (
-                  <Button
-                    onClick={() => setShowInteractionDialog(true)}
-                    className={cn(
-                      'min-h-[40px]',
-                      (detailTab === 'offers' || detailTab === 'reminders') && 'max-sm:hidden'
-                    )}
-                  >
-                    <Plus className="mr-2 h-4 w-4" />
-                    Add Interaction
-                  </Button>
-                )}
-                {detailTab === 'notes' && (
-                  <Button onClick={() => setShowNoteDialog(true)} className="min-h-[40px]">
-                    <Plus className="mr-2 h-4 w-4" />
-                    Add Note
-                  </Button>
-                )}
+              <div className="hidden lg:flex w-full flex-wrap items-center gap-2 lg:w-auto">
+                {renderTabActions()}
               </div>
             </div>
 
-            <TabsContent value="timeline" className="space-y-4">
+            <TabsContent value="timeline" className="space-y-4 pb-4 lg:pb-0">
               {loading ? (
                 <p className="text-muted-foreground">Loading...</p>
               ) : timelineInteractions.length > 0 ? (
@@ -1040,7 +1093,7 @@ export function ClientDetail({
               )}
             </TabsContent>
 
-            <TabsContent value="notes" className="space-y-4">
+            <TabsContent value="notes" className="space-y-4 pb-4 lg:pb-0">
               {loading ? (
                 <p className="text-muted-foreground">Loading...</p>
               ) : noteCards.length > 0 ? (
@@ -1192,7 +1245,7 @@ export function ClientDetail({
               )}
             </TabsContent>
 
-            <TabsContent value="offers" className="space-y-4">
+            <TabsContent value="offers" className="space-y-4 pb-4 lg:pb-0">
               <div className="flex items-center justify-between gap-2">
                 <h3 className="text-lg font-semibold">Offers</h3>
                 <Link href={`/offers/new?client_id=${client.id}`} className="max-sm:hidden">
@@ -1258,7 +1311,7 @@ export function ClientDetail({
               )}
             </TabsContent>
 
-            <TabsContent value="reminders" className="space-y-4">
+            <TabsContent value="reminders" className="space-y-4 pb-4 lg:pb-0">
               <div className="flex justify-end max-sm:hidden">
                 <Button onClick={() => setShowReminderDialog(true)}>
                   <Plus className="mr-2 h-4 w-4" />
@@ -1379,6 +1432,10 @@ export function ClientDetail({
                 </Card>
               )}
             </TabsContent>
+
+            <MobileFormActions showBelow="lg">
+              {renderTabActions({ mobile: true })}
+            </MobileFormActions>
           </Tabs>
         </div>
       </div>
