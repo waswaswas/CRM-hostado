@@ -4,7 +4,9 @@
   "private": true,
   "scripts": {
     "import:transactions:hostado": "node scripts/import_transactions_hostado.js",
-    "dev": "next dev",
+    "dev": "next dev --turbo",
+    "dev:webpack": "next dev",
+    "dev:clean": "rm -rf .next && next dev --turbo",
     "build": "next build",
     "start": "node scripts/start-server.js",
     "lint": "next lint",

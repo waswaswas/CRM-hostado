@@ -30,6 +30,14 @@ const nextConfig = {
   typescript: {
     ignoreBuildErrors: false, // Keep this false to catch type errors, but skip ESLint
   },
+
+  // Webpack disk cache breaks on paths with spaces (ENOENT rename errors) and slows cold starts.
+  webpack: (config, { dev }) => {
+    if (dev) {
+      config.cache = false
+    }
+    return config
+  },
 }
 
 module.exports = nextConfig
