@@ -1,11 +1,15 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { headers } from 'next/headers'
 import { revalidatePath } from 'next/cache'
 import type { Offer, OfferMetadata, OfferStatus, PaymentProvider } from '@/types/database'
 import { randomBytes } from 'crypto'
 import { getCurrentOrganizationId } from './organizations'
+import { normalizeOfferRow } from '@/lib/offers/normalize'
+import { getOfferByPaymentToken } from '@/lib/offers/token-access'
+import { enrollOfferInEmailSequence, stopOfferEmailSequence } from './offer-email-sequences'
 
 /** Get the app base URL for links. Uses request origin when available; localhost locally, gms.hostado.net in production. */
 async function getAppBaseUrl(): Promise<string> {
@@ -23,28 +27,8 @@ async function getAppBaseUrl(): Promise<string> {
   return process.env.NODE_ENV === 'production' ? 'https://gms.hostado.net' : 'http://localhost:3000'
 }
 
-/** Flatten metadata onto offer for app use. Handles missing metadata column. */
 function normalizeOffer(row: Record<string, unknown> | null | undefined): Offer {
-  if (!row || typeof row !== 'object') {
-    throw new Error('Invalid offer row')
-  }
-  const meta = (row.metadata as OfferMetadata | null) || {}
-  const openedHistory = Array.isArray(meta.opened_history) ? meta.opened_history : (meta.opened_at ? [meta.opened_at] : [])
-  const openedAt = openedHistory.length > 0 ? openedHistory[openedHistory.length - 1] : null
-  return {
-    ...row,
-    metadata: meta,
-    is_public: meta.is_public ?? false,
-    is_published: meta.is_published ?? false,
-    published_at: meta.published_at ?? null,
-    unpublish_after_days: meta.unpublish_after_days ?? null,
-    is_archived: meta.is_archived ?? false,
-    opened_at: openedAt,
-    opened_history: openedHistory,
-    line_items: meta.line_items ?? [],
-    recipient_snapshot: meta.recipient_snapshot ?? null,
-    correction_requests: meta.correction_requests ?? [],
-  } as Offer
+  return normalizeOfferRow(row)
 }
 
 export async function getOffers(options?: { includeArchived?: boolean }) {
@@ -122,59 +106,34 @@ export async function getOffer(id: string) {
 }
 
 export async function getOfferByToken(token: string) {
-  const supabase = await createClient()
-
-  const { data, error } = await supabase
-    .from('offers')
-    .select('*')
-    .eq('payment_token', token)
-    .single()
-
-  if (error || !data) {
-    if (error?.code === 'PGRST116') {
-      throw new Error('Offer not found')
-    }
-    throw new Error(error?.message ?? 'Offer not found')
-  }
-
-  const offer = normalizeOffer(data) as Offer
-  if (!offer.is_public || !offer.is_published) {
-    throw new Error('Offer not found')
-  }
-  const publishedAt = offer.published_at
-  const days = Number(offer.unpublish_after_days ?? 14)
-  if (publishedAt && days > 0) {
-    const unpublishAt = new Date(publishedAt)
-    unpublishAt.setDate(unpublishAt.getDate() + days)
-    if (unpublishAt <= new Date()) {
-      throw new Error('Offer not found')
-    }
-  }
-  return offer
+  return getOfferByPaymentToken(token)
 }
 
 /** Mark offer as opened when an external customer opens the link. Appends to opened_history. Call from public page on mount. No auth. */
 export async function markOfferOpened(offerId: string, token: string): Promise<{ ok: boolean }> {
-  const supabase = await createClient()
-  const { data: row, error: fetchErr } = await supabase
-    .from('offers')
-    .select('id, metadata')
-    .eq('id', offerId)
-    .eq('payment_token', token)
-    .single()
-  if (fetchErr || !row) return { ok: false }
-  const meta = (row.metadata as OfferMetadata) || {}
-  const history = Array.isArray(meta.opened_history) ? [...meta.opened_history] : (meta.opened_at ? [meta.opened_at] : [])
-  const now = new Date().toISOString()
-  history.push(now)
-  const nextMeta: OfferMetadata = { ...meta, opened_history: history, opened_at: now }
-  const { error: updateErr } = await supabase
-    .from('offers')
-    .update({ metadata: nextMeta })
-    .eq('id', offerId)
-    .eq('payment_token', token)
-  if (updateErr) return { ok: false }
-  return { ok: true }
+  try {
+    const offer = await getOfferByPaymentToken(token, offerId)
+    const admin = createAdminClient()
+    if (!admin) return { ok: false }
+    const meta = (offer.metadata as OfferMetadata) || {}
+    const history = Array.isArray(meta.opened_history)
+      ? [...meta.opened_history]
+      : meta.opened_at
+        ? [meta.opened_at]
+        : []
+    const now = new Date().toISOString()
+    history.push(now)
+    const nextMeta: OfferMetadata = { ...meta, opened_history: history, opened_at: now }
+    const { error: updateErr } = await admin
+      .from('offers')
+      .update({ metadata: nextMeta })
+      .eq('id', offerId)
+      .eq('payment_token', token)
+    if (updateErr) return { ok: false }
+    return { ok: true }
+  } catch {
+    return { ok: false }
+  }
 }
 
 /** Reset offer opened history. Auth required. */
@@ -212,44 +171,77 @@ export async function resetOfferOpenedHistory(offerId: string): Promise<Offer> {
 
 /** Accept offer by token (external customer). No auth. */
 export async function acceptOfferByToken(token: string): Promise<Offer> {
-  const supabase = await createClient()
-  const { data: row, error: fetchErr } = await supabase
-    .from('offers')
-    .select('*')
-    .eq('payment_token', token)
-    .single()
-  if (fetchErr || !row) throw new Error('Offer not found')
-  const offer = normalizeOffer(row) as Offer
-  if (!offer.is_public || !offer.is_published) throw new Error('Offer not found')
-  const { error: updateErr } = await supabase
+  const offer = await getOfferByPaymentToken(token)
+  const admin = createAdminClient()
+  if (!admin) throw new Error('Admin client unavailable')
+  const { error: updateErr } = await admin
     .from('offers')
     .update({ status: 'accepted' })
     .eq('id', offer.id)
     .eq('payment_token', token)
   if (updateErr) throw new Error(updateErr.message)
+  const { stopOfferEmailSequence } = await import('./offer-email-sequences')
+  await stopOfferEmailSequence(offer.id, 'accepted').catch(() => {})
   return { ...offer, status: 'accepted' }
 }
 
 /** Request correction for an offer (message + contact email). No auth. */
 export async function requestOfferCorrection(token: string, message: string, email: string): Promise<{ ok: boolean }> {
-  const supabase = await createClient()
-  const { data: row, error: fetchErr } = await supabase
-    .from('offers')
-    .select('id, metadata')
-    .eq('payment_token', token)
-    .single()
-  if (fetchErr || !row) return { ok: false }
-  const meta = (row.metadata as OfferMetadata) || {}
-  const requests = Array.isArray((meta as any).correction_requests) ? (meta as any).correction_requests : []
-  requests.push({ message, email, at: new Date().toISOString() })
-  const nextMeta = { ...meta, correction_requests: requests }
-  const { error: updateErr } = await supabase
-    .from('offers')
-    .update({ metadata: nextMeta })
-    .eq('id', row.id)
-    .eq('payment_token', token)
-  if (updateErr) return { ok: false }
-  return { ok: true }
+  try {
+    const offer = await getOfferByPaymentToken(token)
+    const admin = createAdminClient()
+    if (!admin) return { ok: false }
+    const meta = (offer.metadata as OfferMetadata) || {}
+    const requests = Array.isArray(meta.correction_requests) ? [...meta.correction_requests] : []
+    requests.push({ message, email, at: new Date().toISOString() })
+    const nextMeta = { ...meta, correction_requests: requests }
+    const { error: updateErr } = await admin
+      .from('offers')
+      .update({ metadata: nextMeta })
+      .eq('id', offer.id)
+      .eq('payment_token', token)
+    if (updateErr) return { ok: false }
+    return { ok: true }
+  } catch {
+    return { ok: false }
+  }
+}
+
+/** Register bank transfer intent from public checkout. No payment record created. */
+export async function registerBankTransferIntent(
+  token: string,
+  invoice?: {
+    company: string
+    tax_number: string
+    mol: string
+    address: string
+    city: string
+  } | null
+): Promise<{ ok: boolean }> {
+  try {
+    const offer = await getOfferByPaymentToken(token)
+    const admin = createAdminClient()
+    if (!admin) return { ok: false }
+    const meta = (offer.metadata as OfferMetadata) || {}
+    const nextMeta: OfferMetadata = {
+      ...meta,
+      bank_transfer_intent_at: new Date().toISOString(),
+      bank_transfer_invoice: invoice ?? null,
+    }
+    const { error } = await admin
+      .from('offers')
+      .update({
+        status: 'pending_payment',
+        metadata: nextMeta,
+      })
+      .eq('id', offer.id)
+      .eq('payment_token', token)
+    if (error) return { ok: false }
+    revalidatePath(`/offers/${offer.id}`)
+    return { ok: true }
+  } catch {
+    return { ok: false }
+  }
 }
 
 export async function getOffersForClient(clientId: string) {
@@ -417,11 +409,21 @@ export async function updateOffer(
     if (data.unpublish_after_days !== undefined) meta.unpublish_after_days = data.unpublish_after_days
     if (data.line_items !== undefined) meta.line_items = data.line_items
     if (data.recipient_snapshot !== undefined) meta.recipient_snapshot = data.recipient_snapshot
-    if (data.amount !== undefined) {
+    if (data.line_items !== undefined) {
+      const sum = data.line_items.reduce(
+        (s, i) => s + (i.quantity || 1) * (i.unit_price || 0),
+        0
+      )
+      updatePayload.amount = sum
+    } else if (data.amount !== undefined) {
       const newAmount = data.amount
       const lineItems = meta.line_items || []
-      const currentSum = lineItems.reduce((s: number, i: { quantity?: number; unit_price?: number }) => s + (i.quantity || 1) * (i.unit_price || 0), 0)
-      if (Math.abs(currentSum - newAmount) > 0.01) {
+      const currentSum = lineItems.reduce(
+        (s: number, i: { quantity?: number; unit_price?: number }) =>
+          s + (i.quantity || 1) * (i.unit_price || 0),
+        0
+      )
+      if (lineItems.length === 0 || Math.abs(currentSum - newAmount) > 0.01) {
         meta.line_items = [{ name: 'Item', quantity: 1, unit_price: newAmount }]
       }
     }
@@ -488,7 +490,13 @@ export async function toggleOfferPublished(id: string): Promise<Offer> {
   if (error) throw new Error(error.message)
   revalidatePath('/offers')
   revalidatePath(`/offers/${id}`)
-  return normalizeOffer(offer) as Offer
+  const normalized = normalizeOffer(offer) as Offer
+  if (nextPublished && meta.email_sequence_enabled !== false) {
+    await enrollOfferInEmailSequence(normalized).catch((e) =>
+      console.warn('Failed to enroll offer email sequence:', e)
+    )
+  }
+  return normalized
 }
 
 export async function archiveOffer(id: string): Promise<Offer> {
@@ -773,6 +781,7 @@ export async function markOfferAsPaid(offerId: string, paymentData?: {
   if (offer) {
     revalidatePath(`/clients/${offer.client_id}`)
   }
+  await stopOfferEmailSequence(offerId, 'paid').catch(() => {})
   return offer as Offer
 }
 

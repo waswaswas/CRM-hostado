@@ -10,14 +10,18 @@ import { Select } from '@/components/ui/select'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { createOffer } from '@/app/actions/offers'
 import { useToast } from '@/components/ui/toaster'
-import { OfferStatus, PaymentProvider } from '@/types/database'
-import type { OfferLineItem } from '@/types/database'
+import { OfferStatus, PaymentProvider, type OfferLineItem } from '@/types/database'
 import { getClients, getClient } from '@/app/actions/clients'
 import type { Client } from '@/types/database'
-import { ArrowLeft, Plus, Trash2 } from 'lucide-react'
-
 const UNPUBLISH_DAYS_OPTIONS = [3, 7, 14, 30] as const
-const emptyLineItem: OfferLineItem = { name: '', quantity: 1, unit_price: 0 }
+import { ArrowLeft } from 'lucide-react'
+import {
+  OfferLineItemsEditor,
+  emptyLineItem,
+  computeLineItemsTotal,
+  hasUsableLineItems,
+  filterValidLineItems,
+} from '@/components/offers/offer-line-items-editor'
 
 function NewOfferContent() {
   const router = useRouter()
@@ -53,23 +57,9 @@ function NewOfferContent() {
     loadClients()
   }, [])
 
-  const totalFromLines = lineItems.reduce((s, i) => s + i.quantity * i.unit_price, 0)
-  const useLineItems = lineItems.some((i) => i.name.trim() && (i.quantity * i.unit_price) > 0)
+  const totalFromLines = computeLineItemsTotal(lineItems)
+  const useLineItems = hasUsableLineItems(lineItems)
   const amount = useLineItems ? totalFromLines : parseFloat(formData.amount) || 0
-
-  function updateLineItem(index: number, patch: Partial<OfferLineItem>) {
-    setLineItems((prev) => {
-      const next = [...prev]
-      next[index] = { ...next[index], ...patch }
-      return next
-    })
-  }
-  function addLineItem() {
-    setLineItems((prev) => [...prev, { ...emptyLineItem }])
-  }
-  function removeLineItem(index: number) {
-    setLineItems((prev) => prev.filter((_, i) => i !== index))
-  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -142,7 +132,7 @@ function NewOfferContent() {
         payment_provider: formData.payment_enabled ? formData.payment_provider : undefined,
         is_public: formData.is_public,
         unpublish_after_days: formData.is_public ? formData.unpublish_after_days : undefined,
-        line_items: useLineItems ? lineItems.filter((i) => i.name.trim() && (i.quantity * i.unit_price) > 0) : undefined,
+        line_items: useLineItems ? filterValidLineItems(lineItems) : undefined,
         recipient_snapshot: recipientSnapshot?.name ? recipientSnapshot : undefined,
       })
 
@@ -242,26 +232,12 @@ function NewOfferContent() {
                 )}
               </div>
 
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Line items (Артикул, Количество, Цена без ДДС)</label>
-                {lineItems.map((item, i) => (
-                  <div key={i} className="flex flex-wrap gap-2 items-end border p-2 rounded-md">
-                    <Input placeholder="Артикул / Name" value={item.name} onChange={(e) => updateLineItem(i, { name: e.target.value })} disabled={loading} className="min-w-[140px]" />
-                    <Input placeholder="Каталожен №" value={item.catalog_no || ''} onChange={(e) => updateLineItem(i, { catalog_no: e.target.value || undefined })} disabled={loading} className="w-24" />
-                    <Input type="number" min={0.01} step={0.01} placeholder="Количество" value={item.quantity || ''} onChange={(e) => updateLineItem(i, { quantity: Number(e.target.value) || 0 })} disabled={loading} className="w-24" />
-                    <Input type="number" min={0} step={0.01} placeholder="Цена без ДДС" value={item.unit_price || ''} onChange={(e) => updateLineItem(i, { unit_price: Number(e.target.value) || 0 })} disabled={loading} className="w-28" />
-                    <span className="text-sm text-muted-foreground w-20">= {(item.quantity * item.unit_price).toFixed(2)}</span>
-                    <Button type="button" variant="ghost" size="sm" onClick={() => removeLineItem(i)} disabled={loading || lineItems.length <= 1}>
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ))}
-                <Button type="button" variant="outline" size="sm" onClick={addLineItem} disabled={loading}>
-                  <Plus className="h-4 w-4 mr-1" />
-                  Add line
-                </Button>
-                {useLineItems && <p className="text-sm font-medium">Total: {totalFromLines.toFixed(2)} {formData.currency}</p>}
-              </div>
+              <OfferLineItemsEditor
+                lineItems={lineItems}
+                onChange={setLineItems}
+                currency={formData.currency}
+                disabled={loading}
+              />
 
               <div className="space-y-2">
                 <label htmlFor="title" className="text-sm font-medium">

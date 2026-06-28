@@ -80,7 +80,11 @@ export async function updateSession(request: NextRequest) {
   }
 
   const publicPaths = ['/login', '/signup', '/setup', '/join-organization', '/site', '/admincenter', '/auth/callback', '/auth/reset-password']
-  const isPublicPath = publicPaths.some(p => request.nextUrl.pathname === p || request.nextUrl.pathname.startsWith(p + '/'))
+  const isOfferPayPath = /^\/offers\/[^/]+\/pay$/.test(request.nextUrl.pathname)
+  const isPublicPath = publicPaths.some(p => request.nextUrl.pathname === p || request.nextUrl.pathname.startsWith(p + '/')) || isOfferPayPath
+  if (isOfferPayPath) {
+    supabaseResponse.headers.set('x-offer-public-pay', '1')
+  }
   if (!user && !isPublicPath && !request.nextUrl.pathname.startsWith('/_next')) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'

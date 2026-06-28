@@ -1,9 +1,12 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 import type { Payment, PaymentStatus, PaymentProvider } from '@/types/database'
 import { getCurrentOrganizationId } from './organizations'
+import { getOfferByPaymentToken } from '@/lib/offers/token-access'
+import { stopOfferEmailSequence } from './offer-email-sequences'
 
 export async function getPaymentHistory(offerId: string) {
   const supabase = await createClient()
@@ -143,32 +146,28 @@ export async function createPaymentRecordByToken(
     metadata?: Record<string, any>
   }
 ) {
-  const supabase = await createClient()
-  const { data: offer, error: offerErr } = await supabase
-    .from('offers')
-    .select('id, organization_id, payment_token')
-    .eq('id', data.offer_id)
-    .eq('payment_token', token)
-    .single()
-  if (offerErr || !offer || (offer as any).payment_token !== token) {
-    throw new Error('Offer not found')
-  }
-  const organizationId = (offer as any).organization_id
-  const insertData: any = {
+  const offer = await getOfferByPaymentToken(token, data.offer_id)
+  const admin = createAdminClient()
+  if (!admin) throw new Error('Admin client unavailable')
+
+  const organizationId = (offer as unknown as { organization_id?: string }).organization_id
+  if (!organizationId) throw new Error('Offer organization not found')
+
+  const insertData: Record<string, unknown> = {
     ...data,
     organization_id: organizationId,
   }
   if (data.status === 'completed') {
     insertData.paid_at = new Date().toISOString()
   }
-  const { data: payment, error } = await supabase
+  const { data: payment, error } = await admin
     .from('payments')
     .insert(insertData)
     .select()
     .single()
   if (error) throw new Error(error.message)
   if (data.status === 'completed') {
-    await supabase
+    await admin
       .from('offers')
       .update({
         status: 'paid',
@@ -179,6 +178,7 @@ export async function createPaymentRecordByToken(
       })
       .eq('id', data.offer_id)
       .eq('payment_token', token)
+    await stopOfferEmailSequence(data.offer_id, 'paid').catch(() => {})
   }
   revalidatePath(`/offers/${data.offer_id}`)
   revalidatePath('/offers')

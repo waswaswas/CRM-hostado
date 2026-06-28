@@ -109,6 +109,15 @@ export interface OfferMetadata {
   line_items?: OfferLineItem[]
   recipient_snapshot?: OfferRecipientSnapshot | null
   correction_requests?: { message: string; email: string; at: string }[]
+  email_sequence_enabled?: boolean
+  bank_transfer_intent_at?: string | null
+  bank_transfer_invoice?: {
+    company: string
+    tax_number: string
+    mol: string
+    address: string
+    city: string
+  } | null
 }
 
 export interface Offer {
@@ -145,6 +154,9 @@ export interface Offer {
   line_items?: OfferLineItem[]
   recipient_snapshot?: OfferRecipientSnapshot | null
   correction_requests?: { message: string; email: string; at: string }[]
+  email_sequence_enabled?: boolean
+  bank_transfer_intent_at?: string | null
+  bank_transfer_invoice?: OfferMetadata['bank_transfer_invoice']
 }
 
 export interface Payment {

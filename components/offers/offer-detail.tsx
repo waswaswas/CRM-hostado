@@ -21,6 +21,21 @@ import type { Payment } from '@/types/database'
 import { getClient } from '@/app/actions/clients'
 import type { Client } from '@/types/database'
 import { copyToClipboard } from '@/lib/utils'
+import {
+  OfferLineItemsEditor,
+  emptyLineItem,
+  computeLineItemsTotal,
+  hasUsableLineItems,
+  filterValidLineItems,
+} from '@/components/offers/offer-line-items-editor'
+import type { OfferLineItem } from '@/types/database'
+import {
+  getOfferEmailSequenceStatus,
+  toggleOfferEmailSequence,
+  sendOfferEmailNow,
+  startOfferEmailSequenceManual,
+  type OfferEmailEnrollment,
+} from '@/app/actions/offer-email-sequences'
 
 interface OfferDetailProps {
   initialOffer: Offer
@@ -36,7 +51,14 @@ export function OfferDetail({ initialOffer }: OfferDetailProps) {
   const [loading, setLoading] = useState(false)
   const [copyingLink, setCopyingLink] = useState(false)
   const [copyFailedLink, setCopyFailedLink] = useState<string | null>(null)
+  const [editLineItems, setEditLineItems] = useState<OfferLineItem[]>(
+    offer.line_items?.length ? [...offer.line_items] : [{ ...emptyLineItem }]
+  )
+  const [emailSequence, setEmailSequence] = useState<OfferEmailEnrollment | null>(null)
+  const [emailSeqLoading, setEmailSeqLoading] = useState(false)
   const copyFailedInputRef = useRef<HTMLInputElement>(null)
+  const editUseLineItems = hasUsableLineItems(editLineItems)
+  const editLineItemsTotal = computeLineItemsTotal(editLineItems)
   const [editValues, setEditValues] = useState({
     title: offer.title,
     description: offer.description || '',
@@ -63,6 +85,7 @@ export function OfferDetail({ initialOffer }: OfferDetailProps) {
       }
     }
     loadData()
+    getOfferEmailSequenceStatus(offer.id).then(setEmailSequence).catch(() => {})
   }, [offer.id, offer.client_id])
 
   useEffect(() => {
@@ -75,16 +98,20 @@ export function OfferDetail({ initialOffer }: OfferDetailProps) {
   async function handleSave() {
     setLoading(true)
     try {
+      const useLines = editUseLineItems
+      const validLines = filterValidLineItems(editLineItems)
+      const amount = useLines ? editLineItemsTotal : parseFloat(editValues.amount)
       const updated = await updateOffer(offer.id, {
         title: editValues.title,
         description: editValues.description || undefined,
-        amount: parseFloat(editValues.amount),
+        amount,
         currency: editValues.currency,
-        status: editValues.status as any,
+        status: editValues.status as Offer['status'],
         valid_until: editValues.valid_until || undefined,
         notes: editValues.notes || undefined,
         payment_enabled: editValues.payment_enabled,
         unpublish_after_days: editValues.unpublish_after_days,
+        line_items: useLines ? validLines : undefined,
       })
       setOffer(updated)
       setEditing(false)
@@ -402,6 +429,9 @@ export function OfferDetail({ initialOffer }: OfferDetailProps) {
             <>
               <Button variant="outline" onClick={() => {
                 setEditing(false)
+                setEditLineItems(
+                  offer.line_items?.length ? [...offer.line_items] : [{ ...emptyLineItem }]
+                )
                 setEditValues({
                   title: offer.title,
                   description: offer.description || '',
@@ -446,6 +476,12 @@ export function OfferDetail({ initialOffer }: OfferDetailProps) {
 
               {editing ? (
                 <>
+                  <OfferLineItemsEditor
+                    lineItems={editLineItems}
+                    onChange={setEditLineItems}
+                    currency={editValues.currency}
+                    disabled={loading}
+                  />
                   <div>
                     <label className="text-sm font-medium">Description</label>
                     <Textarea
@@ -461,10 +497,15 @@ export function OfferDetail({ initialOffer }: OfferDetailProps) {
                       <Input
                         type="number"
                         step="0.01"
-                        value={editValues.amount}
+                        value={editUseLineItems ? editLineItemsTotal.toFixed(2) : editValues.amount}
                         onChange={(e) => setEditValues({ ...editValues, amount: e.target.value })}
                         className="mt-1"
+                        readOnly={editUseLineItems}
+                        disabled={editUseLineItems}
                       />
+                      {editUseLineItems && (
+                        <p className="text-xs text-muted-foreground mt-1">Calculated from line items</p>
+                      )}
                     </div>
                     <div>
                       <label className="text-sm font-medium">Currency</label>
@@ -757,12 +798,101 @@ export function OfferDetail({ initialOffer }: OfferDetailProps) {
                       <p className="mt-1 text-sm">{format(new Date(offer.paid_at), 'MMM d, yyyy HH:mm')}</p>
                     </div>
                   )}
+                  {offer.bank_transfer_intent_at && (
+                    <div>
+                      <label className="text-sm font-medium text-muted-foreground">Bank transfer intent</label>
+                      <p className="mt-1 text-sm">{format(new Date(offer.bank_transfer_intent_at), 'MMM d, yyyy HH:mm')}</p>
+                    </div>
+                  )}
                 </>
               ) : (
                 <p className="text-sm text-muted-foreground">Payment is disabled for this offer</p>
               )}
             </CardContent>
           </Card>
+
+          {offer.is_public && offer.recipient_snapshot?.email && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Email reminders</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3 text-sm">
+                <div className="flex items-center justify-between gap-2">
+                  <span>Auto reminders on publish</span>
+                  <Badge variant="outline">
+                    {offer.email_sequence_enabled !== false ? 'Enabled' : 'Disabled'}
+                  </Badge>
+                </div>
+                {emailSequence && (
+                  <p className="text-muted-foreground">
+                    Step {emailSequence.current_step} of 4
+                    {emailSequence.next_send_at && emailSequence.status === 'active' && (
+                      <> · Next: {format(new Date(emailSequence.next_send_at), 'MMM d, yyyy')}</>
+                    )}
+                    {emailSequence.status !== 'active' && <> · {emailSequence.status}</>}
+                  </p>
+                )}
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={emailSeqLoading}
+                    onClick={async () => {
+                      setEmailSeqLoading(true)
+                      try {
+                        const enabled = offer.email_sequence_enabled === false
+                        const updated = await toggleOfferEmailSequence(offer.id, enabled)
+                        setOffer(updated)
+                        toast({ title: 'Updated', description: enabled ? 'Reminders enabled' : 'Reminders disabled' })
+                      } catch (e) {
+                        toast({ title: 'Error', description: e instanceof Error ? e.message : 'Failed', variant: 'destructive' })
+                      } finally {
+                        setEmailSeqLoading(false)
+                      }
+                    }}
+                  >
+                    {offer.email_sequence_enabled === false ? 'Enable reminders' : 'Disable reminders'}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={emailSeqLoading}
+                    onClick={async () => {
+                      setEmailSeqLoading(true)
+                      try {
+                        const { ok } = await sendOfferEmailNow(offer.id)
+                        toast(ok ? { title: 'Sent', description: 'Offer email sent' } : { title: 'Failed', description: 'Could not send email', variant: 'destructive' })
+                      } finally {
+                        setEmailSeqLoading(false)
+                      }
+                    }}
+                  >
+                    Send now
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={emailSeqLoading}
+                    onClick={async () => {
+                      setEmailSeqLoading(true)
+                      try {
+                        const { ok } = await startOfferEmailSequenceManual(offer.id)
+                        if (ok) {
+                          const status = await getOfferEmailSequenceStatus(offer.id)
+                          setEmailSequence(status)
+                          toast({ title: 'Started', description: 'Email sequence started' })
+                        }
+                      } finally {
+                        setEmailSeqLoading(false)
+                      }
+                    }}
+                  >
+                    Start sequence
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           <Card>
             <CardHeader>
