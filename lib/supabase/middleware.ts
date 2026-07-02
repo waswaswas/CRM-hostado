@@ -81,11 +81,12 @@ export async function updateSession(request: NextRequest) {
 
   const publicPaths = ['/login', '/signup', '/setup', '/join-organization', '/site', '/admincenter', '/auth/callback', '/auth/reset-password']
   const isOfferPayPath = /^\/offers\/[^/]+\/pay$/.test(request.nextUrl.pathname)
+  const isApiRoute = request.nextUrl.pathname.startsWith('/api/')
   const isPublicPath = publicPaths.some(p => request.nextUrl.pathname === p || request.nextUrl.pathname.startsWith(p + '/')) || isOfferPayPath
   if (isOfferPayPath) {
     supabaseResponse.headers.set('x-offer-public-pay', '1')
   }
-  if (!user && !isPublicPath && !request.nextUrl.pathname.startsWith('/_next')) {
+  if (!user && !isPublicPath && !isApiRoute && !request.nextUrl.pathname.startsWith('/_next')) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)
@@ -152,7 +153,6 @@ export async function updateSession(request: NextRequest) {
   const isPublicRoute = publicRoutes.some(route => 
     request.nextUrl.pathname === route || request.nextUrl.pathname.startsWith(route + '/')
   )
-  const isApiRoute = request.nextUrl.pathname.startsWith('/api/')
   const isStaticFile = request.nextUrl.pathname.startsWith('/_next/') || 
                        request.nextUrl.pathname.startsWith('/favicon') ||
                        /\.(ico|png|jpg|jpeg|svg|gif|webp)$/.test(request.nextUrl.pathname)

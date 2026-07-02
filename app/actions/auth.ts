@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { getOrganizations, getCurrentOrganizationId, setCurrentOrganizationId } from './organizations'
 
-export async function signIn(email: string, password: string) {
+export async function signIn(email: string, password: string): Promise<{ redirectTo: string }> {
   try {
     const supabase = await createClient()
 
@@ -17,7 +17,6 @@ export async function signIn(email: string, password: string) {
       throw new Error(error.message)
     }
 
-    // Check if user has organizations after successful login
     const {
       data: { user },
     } = await supabase.auth.getUser()
@@ -30,14 +29,10 @@ export async function signIn(email: string, password: string) {
         .eq('is_active', true)
         .limit(1)
 
-      // If user has no organizations, redirect to join/create page
       if (!members || members.length === 0) {
-        redirect('/join-organization')
-        return
+        return { redirectTo: '/join-organization' }
       }
 
-      // Ensure a current organization is set before redirecting to dashboard
-      // This is critical to prevent the "hard refresh" issue
       const currentOrgId = await getCurrentOrganizationId()
       if (!currentOrgId) {
         const organizations = await getOrganizations()
@@ -47,7 +42,7 @@ export async function signIn(email: string, password: string) {
       }
     }
 
-    redirect('/dashboard')
+    return { redirectTo: '/dashboard' }
   } catch (error) {
     if (error instanceof Error && error.message.includes('Supabase is not configured')) {
       throw new Error('Please configure Supabase in your .env.local file. See README.md for instructions.')

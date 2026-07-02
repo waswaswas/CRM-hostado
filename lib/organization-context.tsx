@@ -1,7 +1,7 @@
 'use client'
 
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react'
-import { useRouter } from 'next/navigation'
+import { createClient } from '@/lib/supabase/client'
 import type { Organization } from '@/types/database'
 
 interface OrganizationContextType {
@@ -21,7 +21,68 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
   const [organizations, setOrganizations] = useState<Organization[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isSwitching, setIsSwitching] = useState(false)
-  const router = useRouter()
+
+  const fetchOrganizations = useCallback(async (retryCount = 0) => {
+    try {
+      setIsLoading(true)
+      const response = await fetch(`/api/organizations?t=${Date.now()}`, {
+        cache: 'no-store',
+        credentials: 'include',
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          Pragma: 'no-cache',
+        },
+      })
+      if (!response.ok) {
+        throw new Error('Failed to fetch organizations')
+      }
+      const contentType = response.headers.get('content-type') ?? ''
+      if (!contentType.includes('application/json')) {
+        throw new Error('Unexpected response format')
+      }
+      const data = await response.json()
+      setOrganizations(data.organizations || [])
+      setCurrentOrganizationState(data.currentOrganization || null)
+
+      if (!data.currentOrganization && data.organizations && data.organizations.length > 0) {
+        const firstOrg = data.organizations[0]
+        try {
+          const setResponse = await fetch('/api/organizations/current', {
+            method: 'POST',
+            cache: 'no-store',
+            credentials: 'include',
+            headers: {
+              'Content-Type': 'application/json',
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+            },
+            body: JSON.stringify({ organizationId: firstOrg.id }),
+          })
+          if (setResponse.ok) {
+            const setData = await setResponse.json()
+            setCurrentOrganizationState(setData.organization ?? firstOrg)
+          } else {
+            setCurrentOrganizationState(firstOrg)
+          }
+        } catch {
+          setCurrentOrganizationState(firstOrg)
+        }
+        if (retryCount < 1) {
+          setTimeout(() => fetchOrganizations(1), 100)
+          return
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching organizations:', error)
+      if (retryCount < 1) {
+        setTimeout(() => fetchOrganizations(1), 500)
+        return
+      }
+      setOrganizations([])
+      setCurrentOrganizationState(null)
+    } finally {
+      setIsLoading(false)
+    }
+  }, [])
 
   const setCurrentOrganization = useCallback(async (org: Organization | null) => {
     if (!org) {
@@ -47,12 +108,10 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
 
       const data = await response.json()
       setCurrentOrganizationState(data.organization)
-      // Refresh the page to ensure all server components get updated data
-      router.refresh()
     } catch (error) {
       console.error('Error setting current organization:', error)
     }
-  }, [router])
+  }, [])
 
   const switchOrganization = useCallback(async (org: Organization) => {
     if (currentOrganization?.id === org.id) return
@@ -76,63 +135,38 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
     }
   }, [currentOrganization?.id])
 
-  const fetchOrganizations = useCallback(async (retryCount = 0) => {
-    try {
-      setIsLoading(true)
-      // Use cache: 'no-store' to prevent browser caching
-      // Add timestamp to prevent any caching
-      const response = await fetch(`/api/organizations?t=${Date.now()}`, {
-        cache: 'no-store',
-        credentials: 'include',
-        headers: {
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-        },
-      })
-      if (!response.ok) {
-        throw new Error('Failed to fetch organizations')
-      }
-      const data = await response.json()
-      setOrganizations(data.organizations || [])
-      setCurrentOrganizationState(data.currentOrganization || null)
-      
-      // Auto-select first organization if none selected and organizations exist
-      if (!data.currentOrganization && data.organizations && data.organizations.length > 0) {
-        await setCurrentOrganization(data.organizations[0])
-        // After setting, fetch again to ensure we have the updated organization
-        if (retryCount < 1) {
-          setTimeout(() => fetchOrganizations(1), 100)
-          return
-        }
-      }
-    } catch (error) {
-      console.error('Error fetching organizations:', error)
-      // Retry once after a short delay if first attempt fails
-      if (retryCount < 1) {
-        setTimeout(() => fetchOrganizations(1), 500)
-        return
-      }
-      setOrganizations([])
-      setCurrentOrganizationState(null)
-    } finally {
-      setIsLoading(false)
-    }
-  }, [setCurrentOrganization])
-
   const refreshOrganizations = useCallback(async () => {
     await fetchOrganizations()
   }, [fetchOrganizations])
 
   useEffect(() => {
-    // Fetch immediately
-    fetchOrganizations()
-    // Also set up a listener for focus events to refresh when user comes back to tab
-    const handleFocus = () => {
-      fetchOrganizations()
+    let cancelled = false
+    const supabase = createClient()
+
+    const syncOrganizations = () => {
+      if (!cancelled) void fetchOrganizations()
     }
-    window.addEventListener('focus', handleFocus)
+
+    syncOrganizations()
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (cancelled) return
+      if (event === 'SIGNED_OUT' || !session?.user) {
+        setOrganizations([])
+        setCurrentOrganizationState(null)
+        setIsLoading(false)
+        return
+      }
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
+        syncOrganizations()
+      }
+    })
+
     return () => {
-      window.removeEventListener('focus', handleFocus)
+      cancelled = true
+      subscription.unsubscribe()
     }
   }, [fetchOrganizations])
 
@@ -168,4 +202,3 @@ export function useOrganization() {
   }
   return context
 }
-

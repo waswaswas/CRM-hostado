@@ -326,15 +326,6 @@ export function TodoPageClient({
   const [editingAttachmentId, setEditingAttachmentId] = useState<string | null>(null)
   const [editAttachmentUrl, setEditAttachmentUrl] = useState('')
   const [showSubtasks, setShowSubtasks] = useState(true)
-
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem('hostado-todo-show-subtasks')
-      if (stored === 'false') setShowSubtasks(false)
-    } catch {
-      // ignore
-    }
-  }, [])
   const [loadingLists, setLoadingLists] = useState(() => (initialLists?.length ?? 0) === 0)
   const hadInitialLists = useRef((initialLists?.length ?? 0) > 0)
   const [loadingTasks, setLoadingTasks] = useState(false)
@@ -349,6 +340,14 @@ export function TodoPageClient({
   const [timerLoading, setTimerLoading] = useState(false)
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
 
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('hostado-todo-show-subtasks')
+      if (stored === 'false') setShowSubtasks(false)
+    } catch {
+      // ignore
+    }
+  }, [])
   useEffect(() => {
     async function loadUserContext() {
       const supabase = createClient()

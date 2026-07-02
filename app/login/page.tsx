@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -12,7 +11,6 @@ import { JoinOrganizationDialog } from '@/components/organizations/join-organiza
 import { Users } from 'lucide-react'
 
 export default function LoginPage() {
-  const router = useRouter()
   const { toast } = useToast()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -24,8 +22,8 @@ export default function LoginPage() {
     setLoading(true)
 
     try {
-      await signIn(email, password)
-      // signIn will redirect, so we don't need to push
+      const { redirectTo } = await signIn(email, password)
+      window.location.href = redirectTo
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to sign in'
       toast({

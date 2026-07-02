@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Sidebar } from './sidebar'
 import { Topbar } from './topbar'
+import { OrganizationProvider } from '@/lib/organization-context'
 
 const SIDEBAR_COLLAPSED_KEY = 'hostado-sidebar-collapsed'
 
@@ -56,18 +57,20 @@ export function LayoutShell({
   }, [])
 
   return (
-    <div className="fixed inset-0 flex h-[100dvh] overflow-hidden">
-      <Sidebar
-        userName={userName}
-        collapsed={collapsed}
-        onToggleCollapse={onToggleCollapse}
-      />
-      <div className="flex flex-1 flex-col min-h-0 min-w-0 overflow-hidden">
-        <Topbar userName={userName} sidebarCollapsed={collapsed} />
-        <main className="app-main-scroll flex-1 min-h-0 overflow-y-auto overscroll-y-contain overflow-x-hidden md:overflow-x-auto bg-muted/50 p-4 sm:p-4 md:p-5 lg:p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] min-w-0">
-          {children}
-        </main>
+    <OrganizationProvider>
+      <div className="fixed inset-0 flex h-[100dvh] overflow-hidden">
+        <Sidebar
+          userName={userName}
+          collapsed={collapsed}
+          onToggleCollapse={onToggleCollapse}
+        />
+        <div className="flex flex-1 flex-col min-h-0 min-w-0 overflow-hidden">
+          <Topbar userName={userName} sidebarCollapsed={collapsed} />
+          <main className="app-main-scroll flex-1 min-h-0 overflow-y-auto overscroll-y-contain overflow-x-hidden md:overflow-x-auto bg-muted/50 p-4 sm:p-4 md:p-5 lg:p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] min-w-0">
+            {children}
+          </main>
+        </div>
       </div>
-    </div>
+    </OrganizationProvider>
   )
 }

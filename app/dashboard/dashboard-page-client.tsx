@@ -169,6 +169,42 @@ export function DashboardPageClient({
     setCustomStatuses(entry.customStatuses)
   }, [])
 
+  const scheduleRefresh = useCallback(() => {
+    if (!orgId) return
+    if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current)
+    refreshTimerRef.current = setTimeout(async () => {
+      refreshTimerRef.current = null
+      const fresh = await fetchFresh()
+      if (fresh) {
+        applyEntry(fresh)
+        persist(fresh)
+      }
+    }, 350)
+  }, [orgId, fetchFresh, applyEntry, persist])
+
+  const { overdueReminders, todayReminders, upcomingReminders } = useMemo(() => {
+    const now = new Date()
+    const today = new Date(now)
+    today.setHours(0, 0, 0, 0)
+    const tomorrow = new Date(today)
+    tomorrow.setDate(tomorrow.getDate() + 1)
+
+    const overdue = reminders.filter((r: any) => {
+      const dueDate = new Date(r.due_at)
+      return dueDate < today && !r.done
+    })
+    const todayR = reminders.filter((r: any) => {
+      const dueDate = new Date(r.due_at)
+      dueDate.setHours(0, 0, 0, 0)
+      return dueDate.getTime() === today.getTime() && !r.done
+    })
+    const upcoming = reminders.filter((r: any) => {
+      const dueDate = new Date(r.due_at)
+      return dueDate >= tomorrow && !r.done
+    })
+    return { overdueReminders: overdue, todayReminders: todayR, upcomingReminders: upcoming }
+  }, [reminders])
+
   useEffect(() => {
     if (!orgId) return
 
@@ -200,19 +236,6 @@ export function DashboardPageClient({
     return () => {
       cancelled = true
     }
-  }, [orgId, fetchFresh, applyEntry, persist])
-
-  const scheduleRefresh = useCallback(() => {
-    if (!orgId) return
-    if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current)
-    refreshTimerRef.current = setTimeout(async () => {
-      refreshTimerRef.current = null
-      const fresh = await fetchFresh()
-      if (fresh) {
-        applyEntry(fresh)
-        persist(fresh)
-      }
-    }, 350)
   }, [orgId, fetchFresh, applyEntry, persist])
 
   useEffect(() => {
@@ -248,29 +271,6 @@ export function DashboardPageClient({
       supabase.removeChannel(channel)
     }
   }, [orgId, scheduleRefresh])
-
-  const { overdueReminders, todayReminders, upcomingReminders } = useMemo(() => {
-    const now = new Date()
-    const today = new Date(now)
-    today.setHours(0, 0, 0, 0)
-    const tomorrow = new Date(today)
-    tomorrow.setDate(tomorrow.getDate() + 1)
-
-    const overdue = reminders.filter((r: any) => {
-      const dueDate = new Date(r.due_at)
-      return dueDate < today && !r.done
-    })
-    const todayR = reminders.filter((r: any) => {
-      const dueDate = new Date(r.due_at)
-      dueDate.setHours(0, 0, 0, 0)
-      return dueDate.getTime() === today.getTime() && !r.done
-    })
-    const upcoming = reminders.filter((r: any) => {
-      const dueDate = new Date(r.due_at)
-      return dueDate >= tomorrow && !r.done
-    })
-    return { overdueReminders: overdue, todayReminders: todayR, upcomingReminders: upcoming }
-  }, [reminders])
 
   const showCardSkeletons =
     orgContextLoading || (Boolean(orgId) && !cardsReady)

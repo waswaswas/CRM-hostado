@@ -14,6 +14,9 @@ export function createClient() {
         auth: {
           getUser: async () => ({ data: { user: null }, error: null }),
           signOut: async () => ({ error: null }),
+          onAuthStateChange: () => ({
+            data: { subscription: { unsubscribe: () => {} } },
+          }),
         },
       } as any
     }
