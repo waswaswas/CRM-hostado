@@ -4,7 +4,15 @@ import { useState, useEffect } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/components/ui/toaster'
-import { getNotificationPreferences, updateNotificationPreferences, type NotificationPreferences } from '@/app/actions/notifications'
+import {
+  getNotificationPreferences,
+  updateNotificationPreferences,
+} from '@/app/actions/notifications'
+import {
+  DEFAULT_NOTIFICATION_PREFERENCES,
+  type NotificationPreferences,
+} from '@/lib/notification-preferences'
+import { ReminderEmailPreferencesToggles } from '@/components/notifications/reminder-email-preferences-toggles'
 import { Settings } from 'lucide-react'
 
 interface NotificationPreferencesDialogProps {
@@ -21,14 +29,7 @@ export function NotificationPreferencesDialog({ open, onOpenChange }: Notificati
     if (open) {
       getNotificationPreferences()
         .then(setPrefs)
-        .catch(() =>
-          setPrefs({
-            reminders_enabled: true,
-            reminders_include_completed: true,
-            contacts_enabled: true,
-            tasks_enabled: true,
-          })
-        )
+        .catch(() => setPrefs({ ...DEFAULT_NOTIFICATION_PREFERENCES }))
     }
   }, [open])
 
@@ -63,7 +64,7 @@ export function NotificationPreferencesDialog({ open, onOpenChange }: Notificati
         </DialogHeader>
         <div className="space-y-6">
           <div>
-            <h4 className="font-medium mb-2">Reminders</h4>
+            <h4 className="font-medium mb-2">Reminders (in-app)</h4>
             <div className="space-y-3">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
@@ -83,6 +84,10 @@ export function NotificationPreferencesDialog({ open, onOpenChange }: Notificati
                 <span className="text-sm">Reminder completed</span>
               </label>
             </div>
+          </div>
+          <div>
+            <h4 className="font-medium mb-2">Reminder emails</h4>
+            <ReminderEmailPreferencesToggles prefs={prefs} onChange={setPrefs} />
           </div>
           <div>
             <h4 className="font-medium mb-2">Contacts</h4>

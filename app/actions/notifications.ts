@@ -3,15 +3,13 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { getCurrentOrganizationId } from './organizations'
+import {
+  DEFAULT_NOTIFICATION_PREFERENCES,
+  normalizeNotificationPreferences,
+  type NotificationPreferences,
+} from '@/lib/notification-preferences'
 
 export type NotificationType = 'email' | 'reminder' | 'tag_removed' | 'other' | 'task_assigned' | 'task_mention'
-
-export interface NotificationPreferences {
-  reminders_enabled: boolean
-  reminders_include_completed: boolean
-  contacts_enabled: boolean
-  tasks_enabled: boolean
-}
 
 export interface Notification {
   id: string
@@ -34,7 +32,7 @@ async function getPreferencesForUser(userId: string): Promise<NotificationPrefer
     .select('*')
     .eq('user_id', userId)
     .maybeSingle()
-  if (data) return data as NotificationPreferences
+  if (data) return normalizeNotificationPreferences(data as Record<string, unknown>)
   return null
 }
 
@@ -42,25 +40,15 @@ export async function getNotificationPreferences(): Promise<NotificationPreferen
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) {
-    return {
-      reminders_enabled: true,
-      reminders_include_completed: true,
-      contacts_enabled: true,
-      tasks_enabled: true,
-    }
+    return { ...DEFAULT_NOTIFICATION_PREFERENCES }
   }
   const { data } = await supabase
     .from('notification_preferences')
     .select('*')
     .eq('user_id', user.id)
     .maybeSingle()
-  if (data) return data as NotificationPreferences
-  return {
-    reminders_enabled: true,
-    reminders_include_completed: true,
-    contacts_enabled: true,
-    tasks_enabled: true,
-  }
+  if (data) return normalizeNotificationPreferences(data as Record<string, unknown>)
+  return { ...DEFAULT_NOTIFICATION_PREFERENCES }
 }
 
 export async function updateNotificationPreferences(prefs: Partial<NotificationPreferences>): Promise<void> {
@@ -83,6 +71,7 @@ export async function updateNotificationPreferences(prefs: Partial<NotificationP
   if (error) throw new Error(error.message)
   revalidatePath('/notifications')
   revalidatePath('/dashboard')
+  revalidatePath('/settings')
 }
 
 export async function createNotification(data: {

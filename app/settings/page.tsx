@@ -11,11 +11,20 @@ import { updateAccountPassword, sendPasswordResetEmailForCurrentUser } from '@/a
 import type { ClientStatus } from '@/types/database'
 import type { StatusConfig } from '@/types/settings'
 import { useToast } from '@/components/ui/toaster'
-import { GripVertical, Plus, Trash2, Save, Key, Lock, Mail } from 'lucide-react'
+import { GripVertical, Plus, Trash2, Save, Key, Lock, Mail, Bell } from 'lucide-react'
 import { format } from 'date-fns'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog'
 import { formatStatus, getClientStatusBadgeProps, getDefaultClientStatusColorHex, getStatusColor } from '@/lib/status-utils'
+import {
+  getNotificationPreferences,
+  updateNotificationPreferences,
+} from '@/app/actions/notifications'
+import {
+  DEFAULT_NOTIFICATION_PREFERENCES,
+  type NotificationPreferences,
+} from '@/lib/notification-preferences'
+import { ReminderEmailPreferencesToggles } from '@/components/notifications/reminder-email-preferences-toggles'
 
 const DEFAULT_PRESALES_STATUS_KEYS: ClientStatus[] = [
   'contacted',
@@ -92,11 +101,18 @@ export default function SettingsPage() {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [passwordSaving, setPasswordSaving] = useState(false)
   const [resetEmailSending, setResetEmailSending] = useState(false)
+  const [reminderEmailPrefs, setReminderEmailPrefs] = useState<NotificationPreferences>({
+    ...DEFAULT_NOTIFICATION_PREFERENCES,
+  })
+  const [reminderEmailSaving, setReminderEmailSaving] = useState(false)
 
   useEffect(() => {
     loadSettings()
     loadStatusHistory()
     getCurrentUserEmail().then(setCurrentUserEmail)
+    getNotificationPreferences()
+      .then(setReminderEmailPrefs)
+      .catch(() => setReminderEmailPrefs({ ...DEFAULT_NOTIFICATION_PREFERENCES }))
   }, [])
 
   useEffect(() => {
@@ -362,6 +378,54 @@ export default function SettingsPage() {
             )}
           </DialogContent>
         </Dialog>
+
+        {/* Account password */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Bell className="h-5 w-5" />
+              Reminder emails
+            </CardTitle>
+            <CardDescription>
+              Get emailed when your own client reminders stay overdue. Each email includes a button to open the related client.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <ReminderEmailPreferencesToggles
+              prefs={reminderEmailPrefs}
+              onChange={setReminderEmailPrefs}
+              disabled={reminderEmailSaving}
+            />
+            <Button
+              type="button"
+              disabled={reminderEmailSaving}
+              onClick={async () => {
+                try {
+                  setReminderEmailSaving(true)
+                  await updateNotificationPreferences({
+                    reminder_emails_enabled: reminderEmailPrefs.reminder_emails_enabled,
+                    reminder_emails_3_days: reminderEmailPrefs.reminder_emails_3_days,
+                    reminder_emails_7_days: reminderEmailPrefs.reminder_emails_7_days,
+                  })
+                  toast({
+                    title: 'Saved',
+                    description: 'Reminder email preferences updated',
+                  })
+                } catch (err) {
+                  toast({
+                    title: 'Error',
+                    description: err instanceof Error ? err.message : 'Failed to save',
+                    variant: 'destructive',
+                  })
+                } finally {
+                  setReminderEmailSaving(false)
+                }
+              }}
+            >
+              {reminderEmailSaving ? 'Saving...' : 'Save reminder emails'}
+            </Button>
+          </CardContent>
+        </Card>
 
         {/* Account password */}
         <Card>
