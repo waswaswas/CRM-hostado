@@ -8,7 +8,7 @@ interface ReminderEmailPreferencesTogglesProps {
   disabled?: boolean
 }
 
-/** Three toggles: master on/off, 3 days after due, 7 days after due */
+/** Master on/off + at due time + 3 days + 7 days */
 export function ReminderEmailPreferencesToggles({
   prefs,
   onChange,
@@ -31,7 +31,23 @@ export function ReminderEmailPreferencesToggles({
         <span>
           <span className="text-sm font-medium block">Email notifications for my reminders</span>
           <span className="text-xs text-muted-foreground">
-            Receive emails when your client reminders are still open past the due date
+            Receive emails for your client reminders (at due time and/or when overdue)
+          </span>
+        </span>
+      </label>
+      <label className={`flex items-center gap-3 cursor-pointer pl-6 ${!emailsOn ? 'opacity-50' : ''}`}>
+        <input
+          type="checkbox"
+          checked={prefs.reminder_emails_at_due}
+          disabled={disabled || !emailsOn}
+          onChange={(e) =>
+            onChange({ ...prefs, reminder_emails_at_due: e.target.checked })
+          }
+        />
+        <span className="text-sm">
+          At due date &amp; time
+          <span className="block text-xs text-muted-foreground font-normal">
+            When the reminder’s hour and minute are reached
           </span>
         </span>
       </label>

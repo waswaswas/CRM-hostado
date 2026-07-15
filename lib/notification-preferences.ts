@@ -5,6 +5,8 @@ export interface NotificationPreferences {
   tasks_enabled: boolean
   /** Master switch for overdue reminder emails to the user */
   reminder_emails_enabled: boolean
+  /** Email at the reminder due date/time (hour & minute) */
+  reminder_emails_at_due: boolean
   /** Email when reminder is 3+ days overdue */
   reminder_emails_3_days: boolean
   /** Email when reminder is 7+ days overdue */
@@ -17,6 +19,7 @@ export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
   contacts_enabled: true,
   tasks_enabled: true,
   reminder_emails_enabled: false,
+  reminder_emails_at_due: true,
   reminder_emails_3_days: true,
   reminder_emails_7_days: true,
 }
@@ -28,6 +31,7 @@ export function normalizeNotificationPreferences(
     ...DEFAULT_NOTIFICATION_PREFERENCES,
     ...(data || {}),
     reminder_emails_enabled: Boolean(data?.reminder_emails_enabled ?? false),
+    reminder_emails_at_due: data?.reminder_emails_at_due !== false,
     reminder_emails_3_days: data?.reminder_emails_3_days !== false,
     reminder_emails_7_days: data?.reminder_emails_7_days !== false,
   }

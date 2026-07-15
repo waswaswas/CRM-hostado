@@ -404,6 +404,7 @@ export default function SettingsPage() {
                   setReminderEmailSaving(true)
                   await updateNotificationPreferences({
                     reminder_emails_enabled: reminderEmailPrefs.reminder_emails_enabled,
+                    reminder_emails_at_due: reminderEmailPrefs.reminder_emails_at_due,
                     reminder_emails_3_days: reminderEmailPrefs.reminder_emails_3_days,
                     reminder_emails_7_days: reminderEmailPrefs.reminder_emails_7_days,
                   })

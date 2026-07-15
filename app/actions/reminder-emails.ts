@@ -37,6 +37,7 @@ function buildReminderEmailHtml(opts: {
   clientName: string
   daysOverdue: number
   clientUrl: string
+  milestone: number
 }): string {
   const dueFormatted = new Date(opts.dueAt).toLocaleString('en-GB', {
     dateStyle: 'medium',
@@ -46,14 +47,21 @@ function buildReminderEmailHtml(opts: {
     ? `<p style="color:#64748b;margin:8px 0 16px;">${escapeHtml(opts.reminderDescription)}</p>`
     : ''
 
+  const statusLine =
+    opts.milestone === 0
+      ? `This reminder is <strong style="color:#fbbf24;">due now</strong> (${dueFormatted}).`
+      : `This reminder is <strong style="color:#fbbf24;">${opts.daysOverdue} day${opts.daysOverdue === 1 ? '' : 's'}</strong> past due.`
+
+  const heading = opts.milestone === 0 ? 'Reminder due' : 'Overdue reminder'
+
   return `
 <!DOCTYPE html>
 <html>
 <body style="font-family:system-ui,-apple-system,sans-serif;background:#0f172a;color:#e2e8f0;padding:24px;">
   <div style="max-width:520px;margin:0 auto;background:#1e293b;border-radius:12px;padding:28px;border:1px solid #334155;">
-    <h1 style="margin:0 0 8px;font-size:20px;color:#f8fafc;">Overdue reminder</h1>
+    <h1 style="margin:0 0 8px;font-size:20px;color:#f8fafc;">${heading}</h1>
     <p style="margin:0 0 16px;color:#94a3b8;font-size:14px;">
-      This reminder is <strong style="color:#fbbf24;">${opts.daysOverdue} day${opts.daysOverdue === 1 ? '' : 's'}</strong> past due.
+      ${statusLine}
     </p>
     <h2 style="margin:0 0 4px;font-size:16px;color:#f8fafc;">${escapeHtml(opts.reminderTitle)}</h2>
     ${desc}
@@ -88,7 +96,8 @@ function normalizePrefs(row: Record<string, unknown> | null): NotificationPrefer
 }
 
 /**
- * Cron: send reminder emails for users who opted in, at 3 and/or 7 days after due date.
+ * Cron: send reminder emails for users who opted in — at due time, and/or 3/7 days after.
+ * Schedule this frequently (e.g. every 5–15 min) so "at due time" matches hour/minute closely.
  * Uses service role so it works without a logged-in session.
  */
 export async function processReminderEmails(): Promise<{
@@ -105,6 +114,8 @@ export async function processReminderEmails(): Promise<{
 
   const baseUrl = await getAppBaseUrl()
   const now = new Date()
+  // At-due emails: only for reminders that became due in the last 24h (avoids blasting old overdue)
+  const atDueWindowStart = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString()
 
   const { data: prefRows, error: prefErr } = await admin
     .from('notification_preferences')
@@ -125,7 +136,13 @@ export async function processReminderEmails(): Promise<{
     const prefs = normalizePrefs(prefRow as Record<string, unknown>)
     const userId = prefRow.user_id as string
     if (!prefs.reminder_emails_enabled) continue
-    if (!prefs.reminder_emails_3_days && !prefs.reminder_emails_7_days) continue
+    if (
+      !prefs.reminder_emails_at_due &&
+      !prefs.reminder_emails_3_days &&
+      !prefs.reminder_emails_7_days
+    ) {
+      continue
+    }
 
     const { data: clients } = await admin
       .from('clients')
@@ -138,14 +155,14 @@ export async function processReminderEmails(): Promise<{
     const clientIds = clients.map((c) => c.id)
     const clientsMap = new Map(clients.map((c) => [c.id, c]))
 
-    const { data: overdueReminders } = await admin
+    const { data: dueReminders } = await admin
       .from('reminders')
       .select('id, title, description, due_at, client_id, organization_id')
       .in('client_id', clientIds)
       .eq('done', false)
-      .lt('due_at', now.toISOString())
+      .lte('due_at', now.toISOString())
 
-    if (!overdueReminders?.length) continue
+    if (!dueReminders?.length) continue
 
     let userEmail: string | null = null
     const { data: profile } = await admin
@@ -168,10 +185,19 @@ export async function processReminderEmails(): Promise<{
       continue
     }
 
-    for (const reminder of overdueReminders) {
+    for (const reminder of dueReminders) {
       if (!reminder.client_id) continue
       const overdue = daysOverdue(reminder.due_at, now)
       const milestones: number[] = []
+
+      // At due time (or shortly after via cron catch-up within 24h)
+      if (
+        prefs.reminder_emails_at_due &&
+        reminder.due_at <= now.toISOString() &&
+        reminder.due_at >= atDueWindowStart
+      ) {
+        milestones.push(0)
+      }
       if (prefs.reminder_emails_3_days && overdue >= 3) milestones.push(3)
       if (prefs.reminder_emails_7_days && overdue >= 7) milestones.push(7)
 
@@ -194,9 +220,11 @@ export async function processReminderEmails(): Promise<{
         const clientName = client?.name || client?.company || 'Client'
         const clientUrl = `${baseUrl}/clients/${reminder.client_id}`
         const subject =
-          milestone === 7
-            ? `Reminder 7 days overdue: ${reminder.title}`
-            : `Reminder 3 days overdue: ${reminder.title}`
+          milestone === 0
+            ? `Reminder due now: ${reminder.title}`
+            : milestone === 7
+              ? `Reminder 7 days overdue: ${reminder.title}`
+              : `Reminder 3 days overdue: ${reminder.title}`
 
         const html = buildReminderEmailHtml({
           reminderTitle: reminder.title,
@@ -205,6 +233,7 @@ export async function processReminderEmails(): Promise<{
           clientName,
           daysOverdue: overdue,
           clientUrl,
+          milestone,
         })
 
         let orgConfig = null
@@ -222,7 +251,10 @@ export async function processReminderEmails(): Promise<{
             to: userEmail,
             subject,
             html,
-            text: `Overdue reminder: ${reminder.title}\nClient: ${clientName}\nOpen: ${clientUrl}`,
+            text:
+              milestone === 0
+                ? `Reminder due now: ${reminder.title}\nClient: ${clientName}\nOpen: ${clientUrl}`
+                : `Overdue reminder: ${reminder.title}\nClient: ${clientName}\nOpen: ${clientUrl}`,
           },
           smtpConfig
         )
