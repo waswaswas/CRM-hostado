@@ -108,22 +108,28 @@ interface ClientDetailProps {
   client: Client
   linkedAccountingCustomers?: AccountingCustomerWithRelations[]
   initialCustomStatuses?: StatusConfig[]
+  initialInteractions?: Interaction[]
+  initialReminders?: Reminder[]
+  initialNotes?: ClientNote[]
+  initialOffers?: Offer[]
 }
 
 export function ClientDetail({
   client: initialClient,
   linkedAccountingCustomers = [],
   initialCustomStatuses = [],
+  initialInteractions = [],
+  initialReminders = [],
+  initialNotes = [],
+  initialOffers = [],
 }: ClientDetailProps) {
   const { toast } = useToast()
   const [client, setClient] = useState(initialClient)
-  // IMPORTANT: Keep initial render identical on server + client to avoid hydration mismatch.
-  // Session cache is applied in useEffect after mount to avoid hydration mismatches.
-  const [interactions, setInteractions] = useState<Interaction[]>([])
-  const [reminders, setReminders] = useState<Reminder[]>([])
-  const [notes, setNotes] = useState<ClientNote[]>([])
-  const [offers, setOffers] = useState<Offer[]>([])
-  const [loading, setLoading] = useState(true)
+  // Tab data is loaded on the server and passed in — keep first paint identical for hydration.
+  const [interactions, setInteractions] = useState<Interaction[]>(initialInteractions)
+  const [reminders, setReminders] = useState<Reminder[]>(initialReminders)
+  const [notes, setNotes] = useState<ClientNote[]>(initialNotes)
+  const [offers, setOffers] = useState<Offer[]>(initialOffers)
   const [showInteractionDialog, setShowInteractionDialog] = useState(false)
   const [showReminderDialog, setShowReminderDialog] = useState(false)
   const [showReminderEditDialog, setShowReminderEditDialog] = useState(false)
@@ -222,36 +228,35 @@ export function ClientDetail({
   useEffect(() => {
     const clientId = client.id
 
-    // Hydrate from sessionStorage after mount so SSR HTML matches the first client render.
-    const cachedFromSession = readClientDetailCacheFromSession(clientId)
-    if (cachedFromSession) {
-      clientDetailCache.set(clientId, cachedFromSession)
-      setInteractions(cachedFromSession.interactions)
-      setReminders(cachedFromSession.reminders)
-      setNotes(cachedFromSession.notes)
-      setOffers(cachedFromSession.offers)
-      setLoading(false)
-      // Stale-while-revalidate: keep instant cached render, then refresh from DB in background.
-      void loadData({ forceNetwork: true, background: true })
-      return
-    }
+    setInteractions(initialInteractions)
+    setReminders(initialReminders)
+    setNotes(initialNotes)
+    setOffers(initialOffers)
 
-    loadData()
+    // Seed caches from SSR so back/forward stays instant.
+    const ssrEntry: ClientDetailCacheEntry = {
+      fetchedAt: Date.now(),
+      interactions: initialInteractions,
+      reminders: initialReminders,
+      notes: initialNotes,
+      offers: initialOffers,
+    }
+    clientDetailCache.set(clientId, ssrEntry)
+    writeClientDetailCacheToSession(clientId, ssrEntry)
+
+    // Stale-while-revalidate in background — never block tabs with Loading...
+    void loadData({ forceNetwork: true, background: true })
   }, [client.id])
 
   async function loadData(options?: { forceNetwork?: boolean; background?: boolean }) {
     const clientId = client.id
 
     const forceNetwork = options?.forceNetwork === true
-    const background = options?.background === true
 
     // When forcing network, bypass both sessionStorage hydration and in-memory cache.
     // This is important after mutations (notes/reminders/interactions) where the cached entry
     // may still be stale.
     if (forceNetwork) {
-      if (!background) {
-        setLoading(true)
-      }
       try {
         const [interactionsData, remindersData, notesData, offersData] = await Promise.allSettled([
           getInteractionsForClient(clientId),
@@ -290,10 +295,6 @@ export function ClientDetail({
           description: 'Failed to load some client data. Please check the browser console.',
           variant: 'destructive',
         })
-      } finally {
-        if (!background) {
-          setLoading(false)
-        }
       }
 
       return
@@ -307,7 +308,6 @@ export function ClientDetail({
       setReminders(cachedFromSession.reminders)
       setNotes(cachedFromSession.notes)
       setOffers(cachedFromSession.offers)
-      setLoading(false)
       // Keep data fresh even when cache hits.
       void loadData({ forceNetwork: true, background: true })
       return
@@ -321,11 +321,9 @@ export function ClientDetail({
       setReminders(cached.reminders)
       setNotes(cached.notes)
       setOffers(cached.offers)
-      setLoading(false)
       return
     }
 
-    setLoading(true)
     try {
       const [interactionsData, remindersData, notesData, offersData] = await Promise.allSettled([
         getInteractionsForClient(clientId),
@@ -378,8 +376,6 @@ export function ClientDetail({
         description: 'Failed to load some client data. Please check the browser console.',
         variant: 'destructive',
       })
-    } finally {
-      setLoading(false)
     }
   }
 
@@ -1008,9 +1004,7 @@ export function ClientDetail({
             </div>
 
             <TabsContent value="timeline" className="space-y-4 pb-4 lg:pb-0">
-              {loading ? (
-                <p className="text-muted-foreground">Loading...</p>
-              ) : timelineInteractions.length > 0 ? (
+              {timelineInteractions.length > 0 ? (
                 <div className="space-y-4">
                   {timelineInteractions.map((interaction) => (
                     <Card key={interaction.id}>
@@ -1095,9 +1089,7 @@ export function ClientDetail({
             </TabsContent>
 
             <TabsContent value="notes" className="space-y-4 pb-4 lg:pb-0">
-              {loading ? (
-                <p className="text-muted-foreground">Loading...</p>
-              ) : noteCards.length > 0 ? (
+              {noteCards.length > 0 ? (
                 <div className="space-y-4">
                   {noteCards.map((note) => (
                     <Card key={note.id} className={note.pinned ? 'border-primary' : ''}>
@@ -1256,13 +1248,7 @@ export function ClientDetail({
                   </Button>
                 </Link>
               </div>
-              {loading && offers.length === 0 ? (
-                <Card>
-                  <CardContent className="p-8 text-center">
-                    <p className="text-muted-foreground">Loading...</p>
-                  </CardContent>
-                </Card>
-              ) : offers.length > 0 ? (
+              {offers.length > 0 ? (
                 <div className="space-y-4">
                   {offers.map((offer) => (
                     <Card key={offer.id}>
@@ -1320,9 +1306,7 @@ export function ClientDetail({
                 </Button>
               </div>
 
-              {loading ? (
-                <p className="text-muted-foreground">Loading...</p>
-              ) : reminderCards.length > 0 ? (
+              {reminderCards.length > 0 ? (
                 <div className="space-y-4">
                   {reminderCards.map((reminder) => (
                     <Card
@@ -1475,7 +1459,7 @@ export function ClientDetail({
             clientId={client.id}
             onSuccess={() => {
               setShowReminderDialog(false)
-              loadData({ forceNetwork: true })
+              loadData({ forceNetwork: true, background: true })
             }}
           />
         </DialogContent>
@@ -1527,7 +1511,7 @@ export function ClientDetail({
             clientId={client.id}
             onSuccess={() => {
               setShowNoteDialog(false)
-              loadData({ forceNetwork: true })
+              loadData({ forceNetwork: true, background: true })
             }}
           />
         </DialogContent>

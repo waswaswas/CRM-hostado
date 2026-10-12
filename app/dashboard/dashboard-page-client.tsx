@@ -11,14 +11,14 @@ import type { StatusConfig } from '@/types/settings'
 import { RemindersCard } from '@/components/dashboard/reminders-card'
 import { RecentClients } from '@/components/dashboard/recent-clients'
 import { getUpcomingReminders, getCompletedReminders } from '@/app/actions/reminders'
-import { getClients } from '@/app/actions/clients'
+import { getRecentClients } from '@/app/actions/clients'
 import { getDashboardStats } from '@/app/actions/stats'
 import { getSettings } from '@/app/actions/settings'
 import { createClient } from '@/lib/supabase/client'
 import { useOrganization } from '@/lib/organization-context'
 
 const DASHBOARD_CACHE_TTL_MS = 30 * 60 * 1000
-const DASHBOARD_CACHE_STORAGE_PREFIX = 'hostado:dashboard-cache:v1:'
+const DASHBOARD_CACHE_STORAGE_PREFIX = 'hostado:dashboard-cache:v2:'
 
 type DashboardStats = {
   newLeadsWeek: number
@@ -121,40 +121,30 @@ export function DashboardPageClient({
   const fetchFresh = useCallback(async (): Promise<DashboardCacheEntry | null> => {
     if (!orgId) return null
 
-    let nextReminders: any[] = []
-    let nextCompleted: any[] = []
-    let nextClients: Client[] = []
-    let nextStats: DashboardStats = {
-      newLeadsWeek: 0,
-      newLeadsMonth: 0,
-      newTagLeads: 0,
-      waitingForOffer: 0,
-    }
-    let nextCustomStatuses: StatusConfig[] = []
-
     try {
-      if (permContext.hasReminders) {
-        const [up, done] = await Promise.all([getUpcomingReminders(), getCompletedReminders()])
-        nextReminders = up || []
-        nextCompleted = done || []
+      const emptyStats: DashboardStats = {
+        newLeadsWeek: 0,
+        newLeadsMonth: 0,
+        newTagLeads: 0,
+        waitingForOffer: 0,
       }
-      if (permContext.hasClients) {
-        const [c, s, settings] = await Promise.all([
-          getClients(),
-          getDashboardStats(),
-          getSettings().catch(() => ({ custom_statuses: [] as StatusConfig[] })),
-        ])
-        nextClients = c || []
-        nextStats = s || nextStats
-        nextCustomStatuses = settings.custom_statuses || []
-      }
+
+      const [up, done, recentClients, statsResult, settings] = await Promise.all([
+        permContext.hasReminders ? getUpcomingReminders() : Promise.resolve([]),
+        permContext.hasReminders ? getCompletedReminders(20) : Promise.resolve([]),
+        permContext.hasClients ? getRecentClients(7) : Promise.resolve([] as Client[]),
+        permContext.hasClients ? getDashboardStats() : Promise.resolve(emptyStats),
+        permContext.hasClients
+          ? getSettings().catch(() => ({ custom_statuses: [] as StatusConfig[] }))
+          : Promise.resolve({ custom_statuses: [] as StatusConfig[] }),
+      ])
 
       return buildCacheEntry({
-        reminders: nextReminders,
-        completedReminders: nextCompleted,
-        clients: nextClients,
-        stats: nextStats,
-        customStatuses: nextCustomStatuses,
+        reminders: up || [],
+        completedReminders: done || [],
+        clients: recentClients || [],
+        stats: statsResult || emptyStats,
+        customStatuses: settings.custom_statuses || [],
       })
     } catch {
       return null

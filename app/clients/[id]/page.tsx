@@ -4,6 +4,10 @@ import { getClient } from '@/app/actions/clients'
 import { getAccountingCustomersByClientId } from '@/app/actions/accounting-customers'
 import { ClientDetail } from '@/components/clients/client-detail'
 import { getSettings } from '@/app/actions/settings'
+import { getInteractionsForClient } from '@/app/actions/interactions'
+import { getRemindersForClient } from '@/app/actions/reminders'
+import { getNotesForClient } from '@/app/actions/notes'
+import { getOffersForClient } from '@/app/actions/offers'
 
 export default async function ClientDetailPage({
   params,
@@ -14,24 +18,37 @@ export default async function ClientDetailPage({
   let client
   try {
     client = await getClient(id)
-  } catch (error) {
+  } catch {
     notFound()
   }
 
-  // Get linked accounting customers
-  const linkedAccountingCustomers = await getAccountingCustomersByClientId(id).catch(() => [])
-  const settings = await getSettings().catch(() => ({ custom_statuses: [] }))
+  const [
+    linkedAccountingCustomers,
+    settings,
+    interactions,
+    reminders,
+    notes,
+    offers,
+  ] = await Promise.all([
+    getAccountingCustomersByClientId(id).catch(() => []),
+    getSettings().catch(() => ({ custom_statuses: [] })),
+    getInteractionsForClient(id).catch(() => []),
+    getRemindersForClient(id).catch(() => []),
+    getNotesForClient(id).catch(() => []),
+    getOffersForClient(id).catch(() => []),
+  ])
 
   return (
     <AppLayout>
-      <ClientDetail 
-        client={client} 
+      <ClientDetail
+        client={client}
         linkedAccountingCustomers={linkedAccountingCustomers}
         initialCustomStatuses={settings.custom_statuses || []}
+        initialInteractions={interactions}
+        initialReminders={reminders}
+        initialNotes={notes}
+        initialOffers={offers}
       />
     </AppLayout>
   )
 }
-
-
-

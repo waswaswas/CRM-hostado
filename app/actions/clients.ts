@@ -225,6 +225,83 @@ export async function getClients() {
   }
 }
 
+/** Lightweight client list for dropdowns (id/name/company only). */
+export async function getClientsForSelect(): Promise<
+  Pick<Client, 'id' | 'name' | 'company'>[]
+> {
+  try {
+    const supabase = await createClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    if (!user) return []
+
+    const organizationId = await getCurrentOrganizationId()
+    if (!organizationId) return []
+
+    const { data, error } = await supabase
+      .from('clients')
+      .select('id, name, company')
+      .eq('organization_id', organizationId)
+      .eq('is_deleted', false)
+      .order('name', { ascending: true })
+
+    if (error) {
+      if (
+        error.message.includes('Could not find the table') ||
+        error.message.includes('relation') ||
+        error.message.includes('does not exist')
+      ) {
+        return []
+      }
+      throw new Error(error.message)
+    }
+
+    return (data || []) as Pick<Client, 'id' | 'name' | 'company'>[]
+  } catch {
+    return []
+  }
+}
+
+/** Lightweight recent clients for dashboard (avoids full-table getClients). */
+export async function getRecentClients(limit: number = 7) {
+  try {
+    const supabase = await createClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    if (!user) return []
+
+    const organizationId = await getCurrentOrganizationId()
+    if (!organizationId) return []
+
+    const { data, error } = await supabase
+      .from('clients')
+      .select('id, name, company, status, client_type, created_at, email, phone')
+      .eq('organization_id', organizationId)
+      .eq('is_deleted', false)
+      .order('created_at', { ascending: false })
+      .limit(limit)
+
+    if (error) {
+      if (
+        error.message.includes('Could not find the table') ||
+        error.message.includes('relation') ||
+        error.message.includes('does not exist')
+      ) {
+        return []
+      }
+      throw new Error(error.message)
+    }
+
+    return (data || []) as Client[]
+  } catch {
+    return []
+  }
+}
+
 export async function getClient(id: string) {
   const supabase = await createClient()
   const {

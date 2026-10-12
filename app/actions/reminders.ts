@@ -5,6 +5,29 @@ import { Reminder } from '@/types/database'
 import { revalidatePath } from 'next/cache'
 import { getCurrentOrganizationId } from './organizations'
 
+async function attachClientInfo(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  organizationId: string,
+  reminders: any[]
+) {
+  const reminderClientIds = reminders.filter((r) => r.client_id).map((r) => r.client_id as string)
+  let clientsMap = new Map<string, { id: string; name?: string | null; company?: string | null }>()
+  if (reminderClientIds.length > 0) {
+    const { data: allClients } = await supabase
+      .from('clients')
+      .select('id, name, company')
+      .in('id', reminderClientIds)
+      .eq('organization_id', organizationId)
+    clientsMap = new Map(
+      (allClients || []).map((c: { id: string; name?: string | null; company?: string | null }) => [c.id, c])
+    )
+  }
+  return reminders.map((reminder) => ({
+    ...reminder,
+    clients: reminder.client_id ? clientsMap.get(reminder.client_id) || null : null,
+  }))
+}
+
 export async function createReminder(data: {
   client_id: string | null
   due_at: string
@@ -143,98 +166,39 @@ export async function getUpcomingReminders() {
       return []
     }
 
-    const now = new Date().toISOString()
-
-    // First get all reminders for user's clients
-    const { data: clients, error: clientsError } = await supabase
-      .from('clients')
-      .select('id')
+    const { data: reminders, error } = await supabase
+      .from('reminders')
+      .select('*, clients:client_id(id, name, company)')
       .eq('organization_id', organizationId)
+      .eq('done', false)
+      .order('due_at', { ascending: true })
+      .limit(20)
 
-    if (clientsError) {
-      // Check if it's a table not found error
-      if (clientsError.message.includes('Could not find the table') || clientsError.message.includes('relation') || clientsError.message.includes('does not exist')) {
-        return [] // Return empty array instead of throwing for reminders
+    if (error) {
+      if (
+        error.message.includes('Could not find the table') ||
+        error.message.includes('relation') ||
+        error.message.includes('does not exist')
+      ) {
+        return []
       }
-      throw new Error(clientsError.message)
-    }
-
-    const clientIds = clients ? clients.map((c: { id: string }) => c.id) : []
-
-    // Get reminders for user's clients AND general reminders (where client_id is null)
-    // We'll fetch both types and combine them
-    const remindersPromises = []
-    
-    // Get reminders for user's clients
-    if (clientIds.length > 0) {
-      remindersPromises.push(
-        supabase
-          .from('reminders')
-          .select('*')
-          .in('client_id', clientIds)
-          .eq('organization_id', organizationId)
-          .eq('done', false)
-          .order('due_at', { ascending: true })
-      )
-    }
-    
-    // Get general reminders (where client_id is null)
-    remindersPromises.push(
-      supabase
+      // Fallback without join if FK embed fails
+      const { data: plain, error: plainErr } = await supabase
         .from('reminders')
         .select('*')
-        .is('client_id', null)
         .eq('organization_id', organizationId)
         .eq('done', false)
         .order('due_at', { ascending: true })
-    )
-
-    const results = await Promise.all(remindersPromises)
-    
-    // Combine all reminders and remove duplicates
-    const allReminders = results.flatMap(result => result.data || [])
-    const uniqueReminders = Array.from(
-      new Map(allReminders.map(r => [r.id, r])).values()
-    )
-    
-    // Sort by due_at and limit to 20
-    const reminders = uniqueReminders
-      .sort((a, b) => new Date(a.due_at).getTime() - new Date(b.due_at).getTime())
-      .slice(0, 20)
-    
-    const error = results.find(r => r.error)?.error
-
-    if (error) {
-      // If reminders table doesn't exist, just return empty array
-      if (error.message.includes('Could not find the table') || error.message.includes('relation') || error.message.includes('does not exist')) {
-        return []
-      }
-      throw new Error(error.message)
+        .limit(20)
+      if (plainErr) return []
+      return await attachClientInfo(supabase, organizationId, plain || [])
     }
 
-    // Fetch client info for each reminder (only for reminders with client_id)
-    const reminderClientIds = reminders?.filter(r => r.client_id).map(r => r.client_id) || []
-    
-    let clientsMap = new Map()
-    if (reminderClientIds.length > 0) {
-      const { data: allClients } = await supabase
-        .from('clients')
-        .select('id, name, company')
-        .in('id', reminderClientIds)
-        .eq('organization_id', organizationId)
-
-      clientsMap = new Map(allClients?.map((c: { id: string; name?: string | null; company?: string | null }) => [c.id, c]) || [])
-    }
-
-    // Attach client info to reminders
-    const data = reminders?.map(reminder => ({
-      ...reminder,
-      clients: reminder.client_id ? (clientsMap.get(reminder.client_id) || null) : null
-    })) || []
-
-    return data
-  } catch (error) {
-    // Return empty array on error to prevent breaking the dashboard
+    return (reminders || []).map((r: any) => ({
+      ...r,
+      clients: r.clients || null,
+    }))
+  } catch {
     return []
   }
 }
@@ -334,7 +298,7 @@ export async function unmarkReminderDone(id: string, clientId: string | null) {
   revalidatePath('/dashboard')
 }
 
-export async function getCompletedReminders() {
+export async function getCompletedReminders(limit: number = 20) {
   try {
     const supabase = await createClient()
     const {
@@ -350,91 +314,38 @@ export async function getCompletedReminders() {
       return []
     }
 
-    // First get all reminders for user's clients
-    const { data: clients, error: clientsError } = await supabase
-      .from('clients')
-      .select('id')
+    const { data: reminders, error } = await supabase
+      .from('reminders')
+      .select('*, clients:client_id(id, name, company)')
       .eq('organization_id', organizationId)
+      .eq('done', true)
+      .order('due_at', { ascending: false })
+      .limit(limit)
 
-    if (clientsError) {
-      if (clientsError.message.includes('Could not find the table') || clientsError.message.includes('relation') || clientsError.message.includes('does not exist')) {
+    if (error) {
+      if (
+        error.message.includes('Could not find the table') ||
+        error.message.includes('relation') ||
+        error.message.includes('does not exist')
+      ) {
         return []
       }
-      throw new Error(clientsError.message)
-    }
-
-    const clientIds = clients ? clients.map((c: { id: string }) => c.id) : []
-
-    // Get completed reminders for user's clients AND general reminders (where client_id is null)
-    const remindersPromises = []
-    
-    // Get completed reminders for user's clients
-    if (clientIds.length > 0) {
-      remindersPromises.push(
-        supabase
-          .from('reminders')
-          .select('*')
-          .in('client_id', clientIds)
-          .eq('organization_id', organizationId)
-          .eq('done', true)
-          .order('due_at', { ascending: false })
-      )
-    }
-    
-    // Get completed general reminders (where client_id is null)
-    remindersPromises.push(
-      supabase
+      const { data: plain, error: plainErr } = await supabase
         .from('reminders')
         .select('*')
-        .is('client_id', null)
         .eq('organization_id', organizationId)
         .eq('done', true)
         .order('due_at', { ascending: false })
-    )
-
-    const results = await Promise.all(remindersPromises)
-    
-    // Combine all reminders and remove duplicates
-    const allReminders = results.flatMap(result => result.data || [])
-    const uniqueReminders = Array.from(
-      new Map(allReminders.map(r => [r.id, r])).values()
-    )
-    
-    // Sort by due_at descending (most recent first)
-    const reminders = uniqueReminders
-      .sort((a, b) => new Date(b.due_at).getTime() - new Date(a.due_at).getTime())
-    
-    const error = results.find(r => r.error)?.error
-
-    if (error) {
-      if (error.message.includes('Could not find the table') || error.message.includes('relation') || error.message.includes('does not exist')) {
-        return []
-      }
-      throw new Error(error.message)
+        .limit(limit)
+      if (plainErr) return []
+      return await attachClientInfo(supabase, organizationId, plain || [])
     }
 
-    // Fetch client info for each reminder (only for reminders with client_id)
-    const reminderClientIds = reminders?.filter(r => r.client_id).map(r => r.client_id) || []
-    
-    let clientsMap = new Map()
-    if (reminderClientIds.length > 0) {
-      const { data: allClients } = await supabase
-        .from('clients')
-        .select('id, name, company')
-        .in('id', reminderClientIds)
-        .eq('organization_id', organizationId)
-
-      clientsMap = new Map(allClients?.map((c: { id: string; name?: string | null; company?: string | null }) => [c.id, c]) || [])
-    }
-
-    // Attach client info to reminders
-    const data = reminders?.map(reminder => ({
-      ...reminder,
-      clients: reminder.client_id ? (clientsMap.get(reminder.client_id) || null) : null
-    })) || []
-
-    return data
-  } catch (error) {
+    return (reminders || []).map((r: any) => ({
+      ...r,
+      clients: r.clients || null,
+    }))
+  } catch {
     return []
   }
 }
