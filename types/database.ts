@@ -118,6 +118,13 @@ export interface OfferMetadata {
     address: string
     city: string
   } | null
+  /** Synced inv.bg proforma (type=prof) after create from CRM */
+  inv_bg_proforma?: {
+    id: number
+    number: string
+    url?: string | null
+    created_at: string
+  } | null
 }
 
 export interface Offer {
@@ -157,6 +164,7 @@ export interface Offer {
   email_sequence_enabled?: boolean
   bank_transfer_intent_at?: string | null
   bank_transfer_invoice?: OfferMetadata['bank_transfer_invoice']
+  inv_bg_proforma?: OfferMetadata['inv_bg_proforma']
 }
 
 export interface Payment {

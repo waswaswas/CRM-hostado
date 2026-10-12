@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { Offer } from '@/types/database'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -36,6 +36,11 @@ import {
   startOfferEmailSequenceManual,
   type OfferEmailEnrollment,
 } from '@/app/actions/offer-email-sequences'
+import {
+  CreateProformaDialog,
+  InvBgProformaBadge,
+} from '@/components/inv-bg/create-proforma-dialog'
+import { buildDefaultProformaPayloadFromOffer } from '@/lib/inv-bg/map'
 
 interface OfferDetailProps {
   initialOffer: Offer
@@ -49,6 +54,8 @@ export function OfferDetail({ initialOffer }: OfferDetailProps) {
   const [payments, setPayments] = useState<Payment[]>([])
   const [editing, setEditing] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [proformaOpen, setProformaOpen] = useState(false)
+  const proformaInitial = useMemo(() => buildDefaultProformaPayloadFromOffer(offer), [offer])
   const [copyingLink, setCopyingLink] = useState(false)
   const [copyFailedLink, setCopyFailedLink] = useState<string | null>(null)
   const [editLineItems, setEditLineItems] = useState<OfferLineItem[]>(
@@ -370,12 +377,22 @@ export function OfferDetail({ initialOffer }: OfferDetailProps) {
                   Opened {offer.opened_history?.length ?? 1}x
                 </Badge>
               )}
+              {offer.inv_bg_proforma?.number && (
+                <InvBgProformaBadge
+                  number={offer.inv_bg_proforma.number}
+                  url={offer.inv_bg_proforma.url}
+                />
+              )}
             </div>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {!editing ? (
             <>
+              <Button variant="outline" onClick={() => setProformaOpen(true)}>
+                <FileText className="h-4 w-4 mr-2" />
+                {offer.inv_bg_proforma?.number ? 'New proforma (inv.bg)' : 'Create proforma (inv.bg)'}
+              </Button>
               <Button variant="outline" onClick={() => setEditing(true)}>
                 <Edit className="h-4 w-4 mr-2" />
                 Edit
@@ -975,6 +992,16 @@ export function OfferDetail({ initialOffer }: OfferDetailProps) {
           </div>
         </DialogContent>
       </Dialog>
+
+      <CreateProformaDialog
+        open={proformaOpen}
+        onOpenChange={setProformaOpen}
+        mode={{ kind: 'offer', offerId: offer.id }}
+        initial={proformaInitial}
+        onCreated={({ offer: updated }) => {
+          if (updated) setOffer(updated)
+        }}
+      />
     </div>
   )
 }

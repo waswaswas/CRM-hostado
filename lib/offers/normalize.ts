@@ -27,5 +27,7 @@ export function normalizeOfferRow(row: Record<string, unknown> | null | undefine
     correction_requests: meta.correction_requests ?? [],
     email_sequence_enabled: meta.email_sequence_enabled ?? true,
     bank_transfer_intent_at: meta.bank_transfer_intent_at ?? null,
+    bank_transfer_invoice: meta.bank_transfer_invoice ?? null,
+    inv_bg_proforma: meta.inv_bg_proforma ?? null,
   } as Offer
 }

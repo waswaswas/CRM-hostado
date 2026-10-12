@@ -53,12 +53,18 @@ import {
   Unlink,
   Copy,
   ChevronDown,
+  FileText,
 } from 'lucide-react'
 
 import { AccountingCustomerWithRelations } from '@/types/database'
 import { LinkAccountingCustomerDialog } from './link-accounting-customer-dialog'
 import { cn } from '@/lib/utils'
 import { MobileFormActions, MobileFormActionsBar } from '@/components/ui/mobile-form-actions'
+import {
+  CreateProformaDialog,
+  InvBgProformaBadge,
+} from '@/components/inv-bg/create-proforma-dialog'
+import { buildDefaultProformaPayloadFromClient } from '@/lib/inv-bg/map'
 
 const SOURCE_OPTIONS = ['Phone Inbound', 'Phone Outbound', 'Chat', 'Email']
 const CUSTOM_SOURCE_VALUE = '__custom__'
@@ -135,6 +141,7 @@ export function ClientDetail({
   const [showReminderEditDialog, setShowReminderEditDialog] = useState(false)
   const [editingReminder, setEditingReminder] = useState<Reminder | null>(null)
   const [showNoteDialog, setShowNoteDialog] = useState(false)
+  const [proformaOpen, setProformaOpen] = useState(false)
   const [detailTab, setDetailTab] = useState('timeline')
   const [contactInfoExpanded, setContactInfoExpanded] = useState(false)
   const [editingStatus, setEditingStatus] = useState(false)
@@ -1241,12 +1248,18 @@ export function ClientDetail({
             <TabsContent value="offers" className="space-y-4 pb-4 lg:pb-0">
               <div className="flex items-center justify-between gap-2">
                 <h3 className="text-lg font-semibold">Offers</h3>
-                <Link href={`/offers/new?client_id=${client.id}`} className="max-sm:hidden">
-                  <Button size="sm">
-                    <Plus className="mr-2 h-4 w-4" />
-                    New Offer
+                <div className="flex items-center gap-2 max-sm:hidden">
+                  <Button size="sm" variant="outline" onClick={() => setProformaOpen(true)}>
+                    <FileText className="mr-2 h-4 w-4" />
+                    Proforma (inv.bg)
                   </Button>
-                </Link>
+                  <Link href={`/offers/new?client_id=${client.id}`}>
+                    <Button size="sm">
+                      <Plus className="mr-2 h-4 w-4" />
+                      New Offer
+                    </Button>
+                  </Link>
+                </div>
               </div>
               {offers.length > 0 ? (
                 <div className="space-y-4">
@@ -1255,13 +1268,19 @@ export function ClientDetail({
                       <CardContent className="p-4">
                         <div className="flex items-center justify-between">
                           <div className="flex-1">
-                            <div className="flex items-center gap-2">
+                            <div className="flex flex-wrap items-center gap-2">
                               <Link href={`/offers/${offer.id}`} className="font-semibold hover:underline">
                                 {offer.title}
                               </Link>
                               <Badge className={getStatusColor(offer.status as any, null)}>
                                 {offer.status}
                               </Badge>
+                              {offer.inv_bg_proforma?.number && (
+                                <InvBgProformaBadge
+                                  number={offer.inv_bg_proforma.number}
+                                  url={offer.inv_bg_proforma.url}
+                                />
+                              )}
                             </div>
                             {offer.description && (
                               <p className="mt-1 text-sm text-muted-foreground">
@@ -1516,6 +1535,20 @@ export function ClientDetail({
           />
         </DialogContent>
       </Dialog>
+
+      <CreateProformaDialog
+        open={proformaOpen}
+        onOpenChange={setProformaOpen}
+        mode={{
+          kind: 'client',
+          clientId: client.id,
+          attachOfferId: offers[0]?.id ?? null,
+        }}
+        initial={buildDefaultProformaPayloadFromClient(client)}
+        onCreated={() => {
+          void loadData({ forceNetwork: true, background: true })
+        }}
+      />
     </div>
   )
 }

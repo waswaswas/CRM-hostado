@@ -19,14 +19,14 @@ import {
   hasUsableLineItems,
   filterValidLineItems,
 } from '@/components/offers/offer-line-items-editor'
+import {
+  ClientCombobox,
+  type OfferClientOption,
+} from '@/components/offers/client-combobox'
 
 const UNPUBLISH_DAYS_OPTIONS = [3, 7, 14, 30] as const
 
-export type OfferClientOption = {
-  id: string
-  name: string
-  company: string | null
-}
+export type { OfferClientOption }
 
 export function NewOfferForm({
   initialClients,
@@ -184,22 +184,14 @@ export function NewOfferForm({
               <label htmlFor="client_id" className="text-sm font-medium">
                 Client <span className="text-destructive">*</span>
               </label>
-              <Select
+              <ClientCombobox
                 id="client_id"
+                clients={clients}
                 value={formData.client_id}
-                onChange={(e) => setFormData({ ...formData, client_id: e.target.value })}
+                onChange={(client_id) => setFormData({ ...formData, client_id })}
                 required
                 disabled={loading || clients.length === 0}
-              >
-                <option value="">
-                  {clients.length === 0 ? 'No clients available' : 'Select a client'}
-                </option>
-                {clients.map((client) => (
-                  <option key={client.id} value={client.id}>
-                    {client.name} {client.company ? `(${client.company})` : ''}
-                  </option>
-                ))}
-              </Select>
+              />
             </div>
 
             <div className="space-y-2">
