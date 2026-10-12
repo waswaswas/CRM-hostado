@@ -89,6 +89,130 @@ export function isInvBgConfigured(): boolean {
   return Boolean(process.env.INV_BG_API_TOKEN?.trim())
 }
 
+export type InvBgClient = {
+  id: number
+  name: string
+  town: string | null
+  address: string | null
+  bulstat: string | null
+  vat_number: string | null
+  mol: string | null
+  is_person: boolean
+  country: string | null
+  egn?: number | string | null
+}
+
+export type InvBgRegisterFirm = {
+  id: number
+  name: string
+  name_en?: string
+  bulstat: string | null
+  vat_number: string | null
+  mol: string | null
+  city?: string | null
+  settlement?: string | null
+  address: string | null
+  postcode?: string | null
+}
+
+export type InvBgClientCreateInput = {
+  name: string
+  town?: string | null
+  address?: string | null
+  bulstat?: string | null
+  vat_number?: string | null
+  mol?: string | null
+  is_person?: boolean
+  is_reg_vat?: boolean
+  country?: string | null
+}
+
+/** Search your inv.bg clients by name (or bulstat if query is digits). */
+export async function searchInvBgClients(query: string, perPage = 20): Promise<InvBgClient[]> {
+  const q = query.trim()
+  if (!q) return []
+  const params = new URLSearchParams({ per_page: String(perPage) })
+  if (/^\d{9,13}$/.test(q)) {
+    params.set('bulstat', q)
+  } else {
+    params.set('name', q)
+  }
+  const { data } = await invFetch<{ clients?: InvBgClient[] }>(`/clients?${params}`)
+  return data.clients || []
+}
+
+/**
+ * Search Bulgarian commercial register (Търговски регистър) via inv.bg.
+ * Use name= for name search; bulstat= when query looks like EIK.
+ */
+export async function searchCommercialRegister(
+  query: string,
+  limit = 15
+): Promise<InvBgRegisterFirm[]> {
+  const q = query.trim()
+  if (q.length < 2) return []
+  const params = new URLSearchParams()
+  if (/^\d{9,13}$/.test(q)) {
+    params.set('bulstat', q)
+  } else {
+    params.set('name', q)
+  }
+  const { data } = await invFetch<{ firms?: InvBgRegisterFirm[] }>(
+    `/utils/commercial-register?${params}`
+  )
+  return (data.firms || []).slice(0, limit)
+}
+
+/** Create a client in your inv.bg account (e.g. from ТР result). */
+export async function createInvBgClient(
+  input: InvBgClientCreateInput
+): Promise<{ id: number }> {
+  if (!input.name?.trim()) throw new Error('Client name is required')
+  const body = {
+    name: input.name.trim(),
+    town: input.town?.trim() || '',
+    address: input.address?.trim() || '',
+    bulstat: input.bulstat?.trim() || null,
+    vat_number: input.vat_number?.trim() || null,
+    mol: input.mol?.trim() || null,
+    is_person: input.is_person ?? !input.bulstat?.trim(),
+    is_reg_vat: input.is_reg_vat ?? Boolean(input.vat_number?.trim()),
+    country: input.country?.trim() || 'България',
+  }
+  const { data } = await invFetch<{ id: number }>('/clients', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+  return { id: Number(data.id) }
+}
+
+export function firmToBuyerFields(firm: InvBgRegisterFirm) {
+  const town = (firm.settlement || firm.city || '').replace(/^гр\.\s*/i, '').trim()
+  return {
+    to_name: firm.name || '',
+    to_town: town,
+    to_address: firm.address || '',
+    to_bulstat: firm.bulstat || '',
+    to_mol: firm.mol || '',
+    to_vat_number: firm.vat_number || '',
+    to_country: 'България',
+    is_to_person: !firm.bulstat,
+  }
+}
+
+export function invClientToBuyerFields(client: InvBgClient) {
+  return {
+    to_name: client.name || '',
+    to_town: client.town || '',
+    to_address: client.address || '',
+    to_bulstat: client.bulstat || '',
+    to_mol: client.mol || '',
+    to_vat_number: client.vat_number || '',
+    to_country: client.country || 'България',
+    is_to_person: client.is_person,
+  }
+}
+
 /** Create a proforma (type=prof) on inv.bg. */
 export async function createProforma(
   input: InvBgProformaCreateInput

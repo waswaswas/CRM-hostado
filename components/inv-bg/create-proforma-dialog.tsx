@@ -11,9 +11,13 @@ import type { ProformaFormPayload } from '@/lib/inv-bg/types'
 import {
   createInvBgProformaFromOffer,
   createInvBgProformaFromClient,
+  lookupInvBgBuyers,
+  addRegisterFirmToInvBg,
+  selectInvBgClientBuyer,
 } from '@/app/actions/inv-bg'
+import type { InvBgClient, InvBgRegisterFirm } from '@/lib/inv-bg/client'
 import type { Offer } from '@/types/database'
-import { Plus, Trash2, ExternalLink } from 'lucide-react'
+import { Plus, Trash2, ExternalLink, Search, UserPlus, Loader2 } from 'lucide-react'
 
 type Mode =
   | { kind: 'offer'; offerId: string }
@@ -40,10 +44,107 @@ export function CreateProformaDialog({
   const { toast } = useToast()
   const [loading, setLoading] = useState(false)
   const [form, setForm] = useState<ProformaFormPayload>(initial)
+  const [lookupOpen, setLookupOpen] = useState(false)
+  const [lookupQuery, setLookupQuery] = useState('')
+  const [lookupLoading, setLookupLoading] = useState(false)
+  const [addingFirmId, setAddingFirmId] = useState<number | null>(null)
+  const [myClients, setMyClients] = useState<InvBgClient[]>([])
+  const [registerFirms, setRegisterFirms] = useState<InvBgRegisterFirm[]>([])
 
   useEffect(() => {
-    if (open) setForm(initial)
+    if (open) {
+      setForm(initial)
+      setLookupOpen(false)
+      setLookupQuery(initial.to_name || '')
+      setMyClients([])
+      setRegisterFirms([])
+    }
   }, [open, initial])
+
+  function applyBuyer(buyer: {
+    to_name: string
+    to_town?: string
+    to_address?: string
+    to_bulstat?: string
+    to_mol?: string
+    to_vat_number?: string
+    to_country?: string
+    is_to_person?: boolean
+  }) {
+    setForm((prev) => ({
+      ...prev,
+      to_name: buyer.to_name,
+      to_town: buyer.to_town || '',
+      to_address: buyer.to_address || '',
+      to_bulstat: buyer.to_bulstat || '',
+      to_mol: buyer.to_mol || '',
+      to_vat_number: buyer.to_vat_number || '',
+      to_country: buyer.to_country || 'България',
+      is_to_person: buyer.is_to_person,
+    }))
+    setLookupOpen(false)
+  }
+
+  async function runLookup(q?: string) {
+    const query = (q ?? lookupQuery).trim()
+    if (query.length < 2) {
+      toast({
+        title: 'Type more',
+        description: 'Enter at least 2 characters (name or EIK)',
+        variant: 'destructive',
+      })
+      return
+    }
+    setLookupLoading(true)
+    setLookupOpen(true)
+    try {
+      const res = await lookupInvBgBuyers(query)
+      setMyClients(res.clients)
+      setRegisterFirms(res.firms)
+    } catch (error) {
+      toast({
+        title: 'Lookup failed',
+        description: error instanceof Error ? error.message : 'Could not search inv.bg',
+        variant: 'destructive',
+      })
+    } finally {
+      setLookupLoading(false)
+    }
+  }
+
+  async function handleSelectMyClient(client: InvBgClient) {
+    try {
+      const buyer = await selectInvBgClientBuyer(client)
+      applyBuyer(buyer)
+      toast({ title: 'Buyer filled', description: client.name })
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to select client',
+        variant: 'destructive',
+      })
+    }
+  }
+
+  async function handleAddFromRegister(firm: InvBgRegisterFirm) {
+    setAddingFirmId(firm.id)
+    try {
+      const { buyer } = await addRegisterFirmToInvBg(firm)
+      applyBuyer(buyer)
+      toast({
+        title: 'Added to inv.bg clients',
+        description: firm.name,
+      })
+    } catch (error) {
+      toast({
+        title: 'Could not add client',
+        description: error instanceof Error ? error.message : 'Failed',
+        variant: 'destructive',
+      })
+    } finally {
+      setAddingFirmId(null)
+    }
+  }
 
   function updateItem(
     index: number,
@@ -125,19 +226,122 @@ export function CreateProformaDialog({
           <DialogClose onClose={() => onOpenChange(false)} />
         </DialogHeader>
         <DialogDescription>
-          Confirm buyer and line items. Document is created in inv.bg as a proforma (проформа).
+          Search your inv.bg clients or Търговски регистър, then confirm line items.
         </DialogDescription>
 
         <form onSubmit={handleSubmit} className="space-y-4 mt-2">
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1 sm:col-span-2">
               <label className="text-sm font-medium">Company / Name *</label>
-              <Input
-                value={form.to_name}
-                onChange={(e) => setForm({ ...form, to_name: e.target.value })}
-                disabled={loading}
-                required
-              />
+              <div className="flex gap-2">
+                <Input
+                  value={form.to_name}
+                  onChange={(e) => {
+                    setForm({ ...form, to_name: e.target.value })
+                    setLookupQuery(e.target.value)
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      void runLookup()
+                    }
+                  }}
+                  disabled={loading}
+                  required
+                  placeholder="Name or EIK…"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  title="Search inv.bg clients + Търговски регистър"
+                  disabled={loading || lookupLoading}
+                  onClick={() => void runLookup()}
+                >
+                  {lookupLoading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Search className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
+
+              {lookupOpen && (
+                <div className="mt-2 max-h-64 overflow-y-auto rounded-md border bg-popover text-sm">
+                  {lookupLoading ? (
+                    <p className="px-3 py-3 text-muted-foreground">Searching…</p>
+                  ) : (
+                    <>
+                      <div className="border-b px-3 py-2 font-medium bg-muted/40">
+                        My inv.bg clients ({myClients.length})
+                      </div>
+                      {myClients.length === 0 ? (
+                        <p className="px-3 py-2 text-muted-foreground">No matches in your clients</p>
+                      ) : (
+                        myClients.map((c) => (
+                          <button
+                            key={c.id}
+                            type="button"
+                            className="flex w-full flex-col gap-0.5 px-3 py-2 text-left hover:bg-accent"
+                            onClick={() => void handleSelectMyClient(c)}
+                          >
+                            <span className="font-medium">{c.name}</span>
+                            <span className="text-xs text-muted-foreground">
+                              {[c.bulstat, c.town, c.mol].filter(Boolean).join(' · ') || '—'}
+                            </span>
+                          </button>
+                        ))
+                      )}
+
+                      <div className="border-y px-3 py-2 font-medium bg-muted/40">
+                        Търговски регистър ({registerFirms.length})
+                      </div>
+                      {registerFirms.length === 0 ? (
+                        <p className="px-3 py-2 text-muted-foreground">No register matches</p>
+                      ) : (
+                        registerFirms.map((f) => (
+                          <div
+                            key={f.id}
+                            className="flex items-start justify-between gap-2 px-3 py-2 hover:bg-accent"
+                          >
+                            <button
+                              type="button"
+                              className="min-w-0 flex-1 text-left"
+                              onClick={() => void handleAddFromRegister(f)}
+                              disabled={addingFirmId === f.id}
+                            >
+                              <span className="font-medium block truncate">{f.name}</span>
+                              <span className="text-xs text-muted-foreground">
+                                {[f.bulstat, f.settlement || f.city, f.mol]
+                                  .filter(Boolean)
+                                  .join(' · ') || '—'}
+                              </span>
+                            </button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="shrink-0"
+                              disabled={addingFirmId !== null}
+                              onClick={() => void handleAddFromRegister(f)}
+                              title="Add to my inv.bg clients and fill form"
+                            >
+                              {addingFirmId === f.id ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <>
+                                  <UserPlus className="h-3.5 w-3.5 mr-1" />
+                                  Add
+                                </>
+                              )}
+                            </Button>
+                          </div>
+                        ))
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
             </div>
             <div className="space-y-1">
               <label className="text-sm font-medium">EIK / Булстат</label>

@@ -6,8 +6,15 @@ import { revalidatePath } from 'next/cache'
 import {
   createProforma,
   isInvBgConfigured,
+  searchInvBgClients,
+  searchCommercialRegister,
+  createInvBgClient,
+  firmToBuyerFields,
+  invClientToBuyerFields,
   type InvBgProformaCreateInput,
   type InvBgProformaResult,
+  type InvBgClient,
+  type InvBgRegisterFirm,
 } from '@/lib/inv-bg/client'
 import type { Offer, OfferMetadata } from '@/types/database'
 import { normalizeOfferRow } from '@/lib/offers/normalize'
@@ -17,6 +24,61 @@ export type { ProformaFormPayload }
 
 export async function getInvBgStatus(): Promise<{ configured: boolean }> {
   return { configured: isInvBgConfigured() }
+}
+
+export async function lookupInvBgBuyers(query: string): Promise<{
+  clients: InvBgClient[]
+  firms: InvBgRegisterFirm[]
+}> {
+  await requireAuth()
+  if (!isInvBgConfigured()) {
+    throw new Error('inv.bg is not configured (missing INV_BG_API_TOKEN)')
+  }
+  const q = query.trim()
+  if (q.length < 2) return { clients: [], firms: [] }
+
+  const [clients, firms] = await Promise.all([
+    searchInvBgClients(q).catch(() => [] as InvBgClient[]),
+    searchCommercialRegister(q).catch(() => [] as InvBgRegisterFirm[]),
+  ])
+  return { clients, firms }
+}
+
+/** Add a Търговски регистър firm to your inv.bg clients and return buyer fields. */
+export async function addRegisterFirmToInvBg(firm: InvBgRegisterFirm): Promise<{
+  clientId: number
+  buyer: ReturnType<typeof firmToBuyerFields>
+}> {
+  await requireAuth()
+  if (!isInvBgConfigured()) {
+    throw new Error('inv.bg is not configured (missing INV_BG_API_TOKEN)')
+  }
+  const buyer = firmToBuyerFields(firm)
+  // Prefer existing client with same bulstat/name
+  if (buyer.to_bulstat) {
+    const existing = await searchInvBgClients(buyer.to_bulstat)
+    const match = existing.find((c) => c.bulstat === buyer.to_bulstat)
+    if (match) {
+      return { clientId: match.id, buyer: invClientToBuyerFields(match) }
+    }
+  }
+  const created = await createInvBgClient({
+    name: buyer.to_name,
+    town: buyer.to_town,
+    address: buyer.to_address,
+    bulstat: buyer.to_bulstat || null,
+    vat_number: buyer.to_vat_number || null,
+    mol: buyer.to_mol || null,
+    is_person: buyer.is_to_person,
+    is_reg_vat: Boolean(buyer.to_vat_number),
+    country: buyer.to_country,
+  })
+  return { clientId: created.id, buyer }
+}
+
+export async function selectInvBgClientBuyer(client: InvBgClient) {
+  await requireAuth()
+  return invClientToBuyerFields(client)
 }
 
 function toInvInput(payload: ProformaFormPayload): InvBgProformaCreateInput {
