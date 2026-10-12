@@ -27,7 +27,7 @@
     "imap": "^0.8.19",
     "lucide-react": "^0.562.0",
     "mailparser": "^3.9.1",
-    "next": "15.4.4",
+    "next": "^15.5.27",
     "nodemailer": "^7.0.11",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
@@ -42,7 +42,7 @@
     "@types/react-dom": "^19",
     "autoprefixer": "^10.0.1",
     "eslint": "^8",
-    "eslint-config-next": "15.4.4",
+    "eslint-config-next": "^15.5.27",
     "postcss": "^8",
     "tailwindcss": "^3.3.0",
     "typescript": "^5"
