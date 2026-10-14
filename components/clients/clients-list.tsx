@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Select } from '@/components/ui/select'
 import { Client, ClientStatus, ClientType, Interaction } from '@/types/database'
+import type { ClientListItem } from '@/app/actions/clients'
 import Link from 'next/link'
 import { Plus, Search, Trash2, Calendar, Link as LinkIcon, Mail, Phone } from 'lucide-react'
 import { format, subDays, isAfter, startOfDay, endOfDay } from 'date-fns'
@@ -19,7 +20,7 @@ import { useOrganization } from '@/lib/organization-context'
 import { createClient } from '@/lib/supabase/client'
 
 interface ClientsListProps {
-  initialClients: Client[]
+  initialClients: ClientListItem[]
   linkedClientIds?: string[]
   initialCustomStatuses?: StatusConfig[]
   /** When false (e.g. viewer), hide/disable delete actions. Defaults to true for backwards compatibility. */
@@ -33,8 +34,8 @@ export function ClientsList({
   canDelete = true,
 }: ClientsListProps) {
   const { toast } = useToast()
-  const [clients, setClients] = useState<Client[]>(initialClients)
-  const [filteredClients, setFilteredClients] = useState<Client[]>(initialClients)
+  const [clients, setClients] = useState<ClientListItem[]>(initialClients)
+  const [filteredClients, setFilteredClients] = useState<ClientListItem[]>(initialClients)
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState<ClientType | 'all'>('all')
   const [statusFilter, setStatusFilter] = useState<ClientStatus | 'all'>('all')

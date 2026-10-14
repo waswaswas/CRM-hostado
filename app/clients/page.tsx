@@ -1,6 +1,6 @@
 import { AppLayout } from '@/components/layout/app-layout'
 import { ClientsList } from '@/components/clients/clients-list'
-import { getClients } from '@/app/actions/clients'
+import { getClientsForList } from '@/app/actions/clients'
 import { getLinkedClientIds } from '@/app/actions/accounting-customers'
 import { getCurrentUserOrgRole } from '@/app/actions/organizations'
 import { getSettings } from '@/app/actions/settings'
@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic'
 
 export default async function ClientsPage() {
   const [clients, linkedClientIds, role, settings] = await Promise.all([
-    getClients(),
+    getClientsForList(),
     getLinkedClientIds().catch(() => []),
     getCurrentUserOrgRole(),
     getSettings().catch(() => ({ custom_statuses: [] })),

@@ -12,9 +12,10 @@ import { Plus, Search, Trash2, Copy, Eye } from 'lucide-react'
 import { format } from 'date-fns'
 import { deleteOffer, duplicateOffer, generatePaymentLink, markOfferAsPaid, getOffers } from '@/app/actions/offers'
 import { useToast } from '@/components/ui/toaster'
-import { getClients } from '@/app/actions/clients'
-import type { Client } from '@/types/database'
+import { getClientsForSelect } from '@/app/actions/clients'
 import { copyToClipboard } from '@/lib/utils'
+
+type OfferClientOption = { id: string; name: string; company: string | null }
 
 interface OffersListProps {
   initialOffers: Offer[]
@@ -23,7 +24,7 @@ interface OffersListProps {
 export function OffersList({ initialOffers }: OffersListProps) {
   const { toast } = useToast()
   const [offers, setOffers] = useState<Offer[]>(initialOffers)
-  const [clients, setClients] = useState<Client[]>([])
+  const [clients, setClients] = useState<OfferClientOption[]>([])
   const [filteredOffers, setFilteredOffers] = useState<Offer[]>(initialOffers)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<OfferStatus | 'all'>('all')
@@ -35,7 +36,7 @@ export function OffersList({ initialOffers }: OffersListProps) {
   useEffect(() => {
     async function loadClients() {
       try {
-        const clientsData = await getClients()
+        const clientsData = await getClientsForSelect()
         setClients(clientsData)
       } catch (error) {
         console.error('Failed to load clients:', error)

@@ -225,6 +225,66 @@ export async function getClients() {
   }
 }
 
+/** Fields required by ClientsList (verified: id, name, company, email, phone, status, client_type, created_at, is_deleted). */
+export type ClientListItem = Pick<
+  Client,
+  | 'id'
+  | 'name'
+  | 'company'
+  | 'email'
+  | 'phone'
+  | 'status'
+  | 'client_type'
+  | 'created_at'
+  | 'is_deleted'
+>
+
+/** Lean clients list for /clients page — avoids select('*') while preserving list UI fields. */
+export async function getClientsForList(): Promise<ClientListItem[]> {
+  try {
+    const supabase = await createClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    if (!user) {
+      return []
+    }
+
+    const organizationId = await getCurrentOrganizationId()
+    if (!organizationId) {
+      return []
+    }
+
+    const { data, error } = await supabase
+      .from('clients')
+      .select('id, name, company, email, phone, status, client_type, created_at, is_deleted')
+      .eq('organization_id', organizationId)
+      .eq('is_deleted', false)
+      .order('created_at', { ascending: false })
+
+    if (error) {
+      if (
+        error.message.includes('Could not find the table') ||
+        error.message.includes('relation') ||
+        error.message.includes('does not exist')
+      ) {
+        throw new Error(
+          'Database tables not found. Please run the SQL schema from supabase/schema.sql in your Supabase SQL Editor.'
+        )
+      }
+      throw new Error(error.message)
+    }
+
+    return (data || []) as ClientListItem[]
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('Database tables not found')) {
+      throw error
+    }
+    throw new Error(error instanceof Error ? error.message : 'Failed to fetch clients')
+  }
+}
+
 /** Lightweight client list for dropdowns (id/name/company only). */
 export async function getClientsForSelect(): Promise<
   Pick<Client, 'id' | 'name' | 'company'>[]

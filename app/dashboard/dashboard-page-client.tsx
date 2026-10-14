@@ -10,10 +10,7 @@ import type { Client } from '@/types/database'
 import type { StatusConfig } from '@/types/settings'
 import { RemindersCard } from '@/components/dashboard/reminders-card'
 import { RecentClients } from '@/components/dashboard/recent-clients'
-import { getUpcomingReminders, getCompletedReminders } from '@/app/actions/reminders'
-import { getRecentClients } from '@/app/actions/clients'
-import { getDashboardStats } from '@/app/actions/stats'
-import { getSettings } from '@/app/actions/settings'
+import { getDashboardPageData } from '@/app/actions/dashboard'
 import { createClient } from '@/lib/supabase/client'
 import { useOrganization } from '@/lib/organization-context'
 
@@ -122,34 +119,19 @@ export function DashboardPageClient({
     if (!orgId) return null
 
     try {
-      const emptyStats: DashboardStats = {
-        newLeadsWeek: 0,
-        newLeadsMonth: 0,
-        newTagLeads: 0,
-        waitingForOffer: 0,
-      }
-
-      const [up, done, recentClients, statsResult, settings] = await Promise.all([
-        permContext.hasReminders ? getUpcomingReminders() : Promise.resolve([]),
-        permContext.hasReminders ? getCompletedReminders(20) : Promise.resolve([]),
-        permContext.hasClients ? getRecentClients(7) : Promise.resolve([] as Client[]),
-        permContext.hasClients ? getDashboardStats() : Promise.resolve(emptyStats),
-        permContext.hasClients
-          ? getSettings().catch(() => ({ custom_statuses: [] as StatusConfig[] }))
-          : Promise.resolve({ custom_statuses: [] as StatusConfig[] }),
-      ])
+      const data = await getDashboardPageData()
 
       return buildCacheEntry({
-        reminders: up || [],
-        completedReminders: done || [],
-        clients: recentClients || [],
-        stats: statsResult || emptyStats,
-        customStatuses: settings.custom_statuses || [],
+        reminders: data.reminders,
+        completedReminders: data.completedReminders,
+        clients: data.clients,
+        stats: data.stats,
+        customStatuses: data.customStatuses,
       })
     } catch {
       return null
     }
-  }, [orgId, permContext.hasClients, permContext.hasReminders])
+  }, [orgId])
 
   const applyEntry = useCallback((entry: DashboardCacheEntry) => {
     setReminders(entry.reminders)

@@ -2,16 +2,15 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useOrganization } from '@/lib/organization-context'
-import { hasFeaturePermission } from '@/app/actions/organizations'
 import {
-  getAssistantsAccessState,
-  type AssistantsAccessState,
-} from '@/app/actions/ai-assistants'
+  getSidebarAccessBundle,
+  type SidebarFeature,
+} from '@/app/actions/sidebar-access'
 
 const CACHE_KEY_PREFIX = 'hostado-sidebar-access-v2-'
 const CACHE_EXPIRY_MS = 5 * 60 * 1000 // 5 minutes
 
-export type Feature = 'dashboard' | 'clients' | 'offers' | 'emails' | 'accounting' | 'reminders' | 'settings' | 'users' | 'todo'
+export type Feature = SidebarFeature
 
 const defaultPermissions: Record<Feature, boolean> = {
   dashboard: false,
@@ -86,6 +85,7 @@ function setCached(
 export function useFeaturePermissions() {
   const { currentOrganization } = useOrganization()
   const prevOrgIdRef = useRef<string | undefined>(undefined)
+  const requestIdRef = useRef(0)
 
   const [permissions, setPermissions] = useState<Record<Feature, boolean>>(defaultPermissions)
   const [assistantsCanOpen, setAssistantsCanOpen] = useState(false)
@@ -93,8 +93,12 @@ export function useFeaturePermissions() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    let cancelled = false
+    const requestId = ++requestIdRef.current
+
     async function loadPermissions() {
       if (!currentOrganization?.id) {
+        if (cancelled || requestId !== requestIdRef.current) return
         setPermissions(defaultPermissions)
         setAssistantsCanOpen(false)
         setAssistantsCanManage(false)
@@ -108,74 +112,50 @@ export function useFeaturePermissions() {
 
       const cached = getCached(orgId)
       if (cached) {
+        if (cancelled || requestId !== requestIdRef.current) return
         setPermissions(cached.permissions)
         setAssistantsCanOpen(cached.assistantsCanOpen)
         setAssistantsCanManage(cached.assistantsCanManage)
         setLoading(false)
       } else {
+        if (cancelled || requestId !== requestIdRef.current) return
         setLoading(true)
       }
 
       try {
-        const features: Feature[] = [
-          'dashboard',
-          'clients',
-          'offers',
-          'emails',
-          'accounting',
-          'reminders',
-          'settings',
-          'users',
-          'todo',
-        ]
+        const bundle = await getSidebarAccessBundle(orgId)
+        if (cancelled || requestId !== requestIdRef.current) return
+        if (prevOrgIdRef.current !== orgId) return
 
-        const permissionChecks = features.map(async (feature) => {
-          try {
-            const hasAccess = await hasFeaturePermission(orgId, feature)
-            return { feature, hasAccess }
-          } catch (error) {
-            console.error(`Error checking permission for ${feature}:`, error)
-            return { feature, hasAccess: false }
-          }
-        })
-
-        const fallbackAssistants: AssistantsAccessState = {
-          canUseFeature: false,
-          canManage: false,
-          allowedBotIds: [],
+        setPermissions(bundle.permissions)
+        setAssistantsCanOpen(bundle.assistantsCanOpen)
+        setAssistantsCanManage(bundle.assistantsCanManage)
+        setCached(
           orgId,
-        }
-
-        const [results, assistantsState] = await Promise.all([
-          Promise.all(permissionChecks),
-          getAssistantsAccessState().catch(() => fallbackAssistants),
-        ])
-
-        const permMap: Partial<Record<Feature, boolean>> = {}
-        results.forEach(({ feature, hasAccess }) => {
-          permMap[feature] = hasAccess
-        })
-        const next = permMap as Record<Feature, boolean>
-        const open = assistantsState.canUseFeature === true
-        const manage = assistantsState.canManage === true
-
-        setPermissions(next)
-        setAssistantsCanOpen(open)
-        setAssistantsCanManage(manage)
-        setCached(orgId, next, open, manage)
+          bundle.permissions,
+          bundle.assistantsCanOpen,
+          bundle.assistantsCanManage
+        )
       } catch (error) {
         console.error('Error loading permissions:', error)
+        if (cancelled || requestId !== requestIdRef.current) return
         if (!cached) {
           setPermissions(defaultPermissions)
           setAssistantsCanOpen(false)
           setAssistantsCanManage(false)
         }
       } finally {
-        setLoading(false)
+        if (!cancelled && requestId === requestIdRef.current) {
+          setLoading(false)
+        }
       }
     }
 
-    loadPermissions()
+    void loadPermissions()
+
+    return () => {
+      cancelled = true
+    }
   }, [currentOrganization?.id])
 
   return { permissions, loading, assistantsCanOpen, assistantsCanManage }
