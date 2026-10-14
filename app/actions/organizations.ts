@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { normalizeFeatureName } from '@/lib/feature-permission-access'
 import { revalidatePath } from 'next/cache'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
@@ -9,19 +10,8 @@ import type { Organization, OrganizationMember } from '@/types/database'
 const COOKIE_NAME = 'current_organization_id'
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 365 // 1 year
 
-// Map UI feature names to database feature names
-// The database expects 'email' (singular) but the UI uses 'emails' (plural)
-const FEATURE_NAME_MAP: Record<string, string> = {
-  'emails': 'email', // Map 'emails' (plural) to 'email' (singular) for database
-}
-
 // Valid feature names as defined in the database constraint
 const VALID_FEATURES = ['dashboard', 'clients', 'offers', 'email', 'accounting', 'reminders', 'settings', 'users', 'todo']
-
-function normalizeFeatureName(feature: string): string {
-  // Map UI feature names to database feature names
-  return FEATURE_NAME_MAP[feature] || feature
-}
 
 function isValidFeature(feature: string): boolean {
   const normalized = normalizeFeatureName(feature)
