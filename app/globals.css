@@ -32,10 +32,36 @@
       -moz-osx-font-smoothing: grayscale;
     }
     
-    /* Prevent horizontal overflow - constrain body and html */
+    /* Prevent horizontal overflow + accidental sideways “zoom” feel */
     html, body {
       overflow-x: hidden;
-      max-width: 100vw;
+      max-width: 100%;
+      width: 100%;
+      overscroll-behavior-x: none;
+    }
+
+    /* Long URLs / unbroken strings must wrap instead of expanding the page */
+    .app-main-scroll {
+      max-width: 100%;
+    }
+    .app-main-scroll p,
+    .app-main-scroll li,
+    .app-main-scroll td,
+    .app-main-scroll pre,
+    .app-main-scroll code,
+    .app-main-scroll .break-long-text {
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+
+    /*
+      iOS Safari zooms the whole page when focusing inputs < 16px.
+      Enforce 16px on all form fields (covers raw <input> not using our UI components).
+    */
+    input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']),
+    select,
+    textarea {
+      font-size: 16px !important;
     }
 
     .app-main-scroll {

@@ -12,7 +12,10 @@ export const dynamic = 'force-dynamic'
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
+  maximumScale: 5,
   viewportFit: 'cover',
+  // Keeps layout stable when the mobile keyboard opens (reduces “jump/zoom” feel).
+  interactiveWidget: 'resizes-content',
 }
 
 export const metadata: Metadata = {

@@ -66,7 +66,7 @@ export function LayoutShell({
         />
         <div className="flex flex-1 flex-col min-h-0 min-w-0 overflow-hidden">
           <Topbar userName={userName} sidebarCollapsed={collapsed} />
-          <main className="app-main-scroll flex-1 min-h-0 overflow-y-auto overscroll-y-contain overflow-x-hidden md:overflow-x-auto bg-muted/50 p-4 sm:p-4 md:p-5 lg:p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] min-w-0">
+          <main className="app-main-scroll flex-1 min-h-0 overflow-y-auto overscroll-y-contain overflow-x-hidden bg-muted/50 p-3 sm:p-4 md:p-5 lg:p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] min-w-0 w-full">
             {children}
           </main>
         </div>
