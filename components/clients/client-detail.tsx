@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, type ReactNode } from 'react'
 import { Client, Interaction, Reminder, ClientNote, ClientStatus, ClientType, Offer } from '@/types/database'
 import {
   getStatusesForType,
@@ -54,6 +54,7 @@ import {
   Copy,
   ChevronDown,
   FileText,
+  StickyNote,
 } from 'lucide-react'
 
 import { AccountingCustomerWithRelations } from '@/types/database'
@@ -70,6 +71,24 @@ const SOURCE_OPTIONS = ['Phone Inbound', 'Phone Outbound', 'Chat', 'Email']
 const CUSTOM_SOURCE_VALUE = '__custom__'
 
 const CLIENT_DETAIL_CACHE_TTL_MS = 30 * 60 * 1000 // 30 minutes
+
+type FeedFilter = 'both' | 'timeline' | 'notes'
+
+type TimelineFeedItem =
+  | {
+      kind: 'interaction'
+      id: string
+      sortAt: number
+      pinned: boolean
+      interaction: Interaction & { icon: ReactNode; displayDate: string }
+    }
+  | {
+      kind: 'note'
+      id: string
+      sortAt: number
+      pinned: boolean
+      note: ClientNote & { displayDate: string }
+    }
 
 type ClientDetailCacheEntry = {
   fetchedAt: number
@@ -143,6 +162,8 @@ export function ClientDetail({
   const [showNoteDialog, setShowNoteDialog] = useState(false)
   const [proformaOpen, setProformaOpen] = useState(false)
   const [detailTab, setDetailTab] = useState('timeline')
+  /** Feed filter inside the Timeline tab: both (default), timeline-only, or notes-only. */
+  const [feedFilter, setFeedFilter] = useState<FeedFilter>('both')
   const [contactInfoExpanded, setContactInfoExpanded] = useState(false)
   const [editingStatus, setEditingStatus] = useState(false)
   const [editingType, setEditingType] = useState(false)
@@ -515,20 +536,46 @@ export function ClientDetail({
   }
 
   // Memoized view-models so we don't re-run formatting + icon selection on every re-render.
-  const timelineInteractions = useMemo(() => {
-    return interactions.map((interaction) => ({
-      ...interaction,
-      icon: getInteractionIcon(interaction.type),
-      displayDate: format(new Date(interaction.date), 'MMM d, yyyy HH:mm'),
-    }))
-  }, [interactions])
+  const feedItems = useMemo((): TimelineFeedItem[] => {
+    const items: TimelineFeedItem[] = []
 
-  const noteCards = useMemo(() => {
-    return notes.map((note) => ({
-      ...note,
-      displayDate: format(new Date(note.created_at), 'MMM d, yyyy HH:mm'),
-    }))
-  }, [notes])
+    if (feedFilter !== 'notes') {
+      for (const interaction of interactions) {
+        items.push({
+          kind: 'interaction',
+          id: `interaction-${interaction.id}`,
+          sortAt: new Date(interaction.date).getTime(),
+          pinned: false,
+          interaction: {
+            ...interaction,
+            icon: getInteractionIcon(interaction.type),
+            displayDate: format(new Date(interaction.date), 'MMM d, yyyy HH:mm'),
+          },
+        })
+      }
+    }
+
+    if (feedFilter !== 'timeline') {
+      for (const note of notes) {
+        items.push({
+          kind: 'note',
+          id: `note-${note.id}`,
+          sortAt: new Date(note.created_at).getTime(),
+          pinned: Boolean(note.pinned),
+          note: {
+            ...note,
+            displayDate: format(new Date(note.created_at), 'MMM d, yyyy HH:mm'),
+          },
+        })
+      }
+    }
+
+    items.sort((a, b) => {
+      if (a.pinned !== b.pinned) return a.pinned ? -1 : 1
+      return b.sortAt - a.sortAt
+    })
+    return items
+  }, [interactions, notes, feedFilter])
 
   const reminderCards = useMemo(() => {
     return reminders.map((reminder) => ({
@@ -536,6 +583,13 @@ export function ClientDetail({
       displayDue: format(new Date(reminder.due_at), 'MMM d, yyyy HH:mm'),
     }))
   }, [reminders])
+
+  const feedEmptyMessage =
+    feedFilter === 'timeline'
+      ? 'No interactions yet.'
+      : feedFilter === 'notes'
+        ? 'No notes yet.'
+        : 'No interactions or notes yet.'
 
   const renderTabActions = (options?: { mobile?: boolean }) => (
     <MobileFormActionsBar
@@ -585,7 +639,7 @@ export function ClientDetail({
           New Reminder
         </Button>
       )}
-      {detailTab !== 'notes' && (
+      {(detailTab === 'timeline' || detailTab === 'offers' || detailTab === 'reminders') && (
         <Button
           onClick={() => setShowInteractionDialog(true)}
           className={cn(
@@ -599,8 +653,9 @@ export function ClientDetail({
           Add Interaction
         </Button>
       )}
-      {detailTab === 'notes' && (
+      {detailTab === 'timeline' && (
         <Button
+          variant="outline"
           onClick={() => setShowNoteDialog(true)}
           className="min-h-[40px] w-full sm:w-auto"
         >
@@ -1000,7 +1055,6 @@ export function ClientDetail({
               <div className="min-w-0 overflow-x-auto overflow-y-hidden -mx-1 px-1 md:mx-0 md:px-0 [scrollbar-width:thin]">
                 <TabsList className="flex flex-nowrap w-max">
                   <TabsTrigger value="timeline" className="shrink-0">Timeline</TabsTrigger>
-                  <TabsTrigger value="notes" className="shrink-0">Notes</TabsTrigger>
                   <TabsTrigger value="offers" className="shrink-0">Offers</TabsTrigger>
                   <TabsTrigger value="reminders" className="shrink-0">Reminders</TabsTrigger>
                 </TabsList>
@@ -1011,235 +1065,255 @@ export function ClientDetail({
             </div>
 
             <TabsContent value="timeline" className="space-y-4 pb-4 lg:pb-0">
-              {timelineInteractions.length > 0 ? (
-                <div className="space-y-4">
-                  {timelineInteractions.map((interaction) => (
-                    <Card key={interaction.id}>
-                      <CardContent className="p-4">
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2">
-                              {interaction.icon}
-                              <span className="font-medium capitalize">
-                                {interaction.type}
-                              </span>
-                              {interaction.direction && (
-                                <Badge variant="outline" className="text-xs">
-                                  {interaction.direction}
-                                </Badge>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <p className="mt-1 font-semibold">{interaction.subject}</p>
-                              {interaction.email_id && (
-                                <Link href={`/emails/${interaction.email_id}`}>
-                                  <Button variant="ghost" size="sm" className="h-6 text-xs">
-                                    View Email
-                                  </Button>
-                                </Link>
-                              )}
-                            </div>
-                            {interaction.notes && (
-                              <p className="mt-1 text-sm text-muted-foreground">
-                                {interaction.notes}
-                              </p>
-                            )}
-                            <div className="mt-2 flex gap-4 text-xs text-muted-foreground">
-                              <span>
-                                {interaction.displayDate}
-                              </span>
-                              {interaction.duration_minutes && (
-                                <span>{interaction.duration_minutes} min</span>
-                              )}
-                            </div>
-                          </div>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={async () => {
-                              if (confirm('Delete this interaction?')) {
-                                try {
-                                  await deleteInteraction(interaction.id, client.id)
-                                  setInteractions((prev) => {
-                                    const next = prev.filter((i) => i.id !== interaction.id)
-                                    syncClientDetailCacheForInteractions(next)
-                                    return next
-                                  })
-                                  toast({
-                                    title: 'Success',
-                                    description: 'Interaction deleted',
-                                  })
-                                } catch (error) {
-                                  toast({
-                                    title: 'Error',
-                                    description: 'Failed to delete interaction',
-                                    variant: 'destructive',
-                                  })
-                                }
-                              }
-                            }}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div
+                  className="inline-flex h-9 items-center rounded-md bg-muted p-1 text-muted-foreground"
+                  role="group"
+                  aria-label="Feed filter"
+                >
+                  {(
+                    [
+                      ['both', 'Both'],
+                      ['timeline', 'Timeline'],
+                      ['notes', 'Notes'],
+                    ] as const
+                  ).map(([value, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setFeedFilter(value)}
+                      className={cn(
+                        'inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1 text-sm font-medium transition-all',
+                        feedFilter === value
+                          ? 'bg-background text-foreground shadow-sm'
+                          : 'text-muted-foreground hover:bg-background/50'
+                      )}
+                    >
+                      {label}
+                    </button>
                   ))}
                 </div>
-              ) : (
-                <Card>
-                  <CardContent className="p-8 text-center">
-                    <p className="text-muted-foreground">No interactions yet.</p>
-                  </CardContent>
-                </Card>
-              )}
-            </TabsContent>
+              </div>
 
-            <TabsContent value="notes" className="space-y-4 pb-4 lg:pb-0">
-              {noteCards.length > 0 ? (
+              {feedItems.length > 0 ? (
                 <div className="space-y-4">
-                  {noteCards.map((note) => (
-                    <Card key={note.id} className={note.pinned ? 'border-primary' : ''}>
-                      <CardContent className="p-4">
-                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-0">
-                          <div className="min-w-0 flex-1">
-                            {note.pinned && (
-                              <Badge variant="outline" className="mb-2">
-                                Pinned
-                              </Badge>
-                            )}
-                            {editingNoteId === note.id ? (
-                              <div className="space-y-2">
-                                <Textarea
-                                  value={editingNoteContent}
-                                  onChange={(e) => setEditingNoteContent(e.target.value)}
-                                  rows={4}
-                                  className="min-h-[80px]"
-                                />
-                                <div className="flex gap-2">
-                                  <Button
-                                    size="sm"
-                                    onClick={async () => {
-                                      try {
-                                        await updateNote(note.id, client.id, editingNoteContent)
-                                        setNotes((prev) =>
-                                          prev.map((n) =>
-                                            n.id === note.id ? { ...n, content: editingNoteContent } : n
-                                          )
-                                        )
-                                        setEditingNoteId(null)
-                                        setEditingNoteContent('')
-                                        toast({ title: 'Success', description: 'Note updated' })
-                                      } catch (error) {
-                                        toast({
-                                          title: 'Error',
-                                          description: 'Failed to update note',
-                                          variant: 'destructive',
-                                        })
-                                      }
-                                    }}
-                                  >
-                                    <Check className="h-4 w-4 mr-1" /> Save
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => {
-                                      setEditingNoteId(null)
-                                      setEditingNoteContent('')
-                                    }}
-                                  >
-                                    <X className="h-4 w-4 mr-1" /> Cancel
-                                  </Button>
-                                </div>
+                  {feedItems.map((item) =>
+                    item.kind === 'interaction' ? (
+                      <Card key={item.id}>
+                        <CardContent className="p-4">
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2">
+                                {item.interaction.icon}
+                                <span className="font-medium capitalize">
+                                  {item.interaction.type}
+                                </span>
+                                {item.interaction.direction && (
+                                  <Badge variant="outline" className="text-xs">
+                                    {item.interaction.direction}
+                                  </Badge>
+                                )}
                               </div>
-                            ) : (
-                              <>
-                                <p className="break-words whitespace-pre-wrap">{note.content}</p>
-                                <p className="mt-2 text-xs text-muted-foreground">
-                                  {note.displayDate}
+                              <div className="flex items-center gap-2">
+                                <p className="mt-1 font-semibold">{item.interaction.subject}</p>
+                                {item.interaction.email_id && (
+                                  <Link href={`/emails/${item.interaction.email_id}`}>
+                                    <Button variant="ghost" size="sm" className="h-6 text-xs">
+                                      View Email
+                                    </Button>
+                                  </Link>
+                                )}
+                              </div>
+                              {item.interaction.notes && (
+                                <p className="mt-1 text-sm text-muted-foreground">
+                                  {item.interaction.notes}
                                 </p>
-                              </>
-                            )}
-                          </div>
-                          {editingNoteId !== note.id && (
-                            <div className="flex shrink-0 justify-end gap-2 sm:justify-start">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => {
-                                  setEditingNoteId(note.id)
-                                  setEditingNoteContent(note.content)
-                                }}
-                                title="Edit note"
-                              >
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={async () => {
+                              )}
+                              <div className="mt-2 flex gap-4 text-xs text-muted-foreground">
+                                <span>{item.interaction.displayDate}</span>
+                                {item.interaction.duration_minutes && (
+                                  <span>{item.interaction.duration_minutes} min</span>
+                                )}
+                              </div>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={async () => {
+                                if (confirm('Delete this interaction?')) {
                                   try {
-                                    await toggleNotePin(note.id, client.id, !note.pinned)
-                                    setNotes((prev) =>
-                                      prev.map((n) =>
-                                        n.id === note.id ? { ...n, pinned: !n.pinned } : n
-                                      )
-                                    )
+                                    await deleteInteraction(item.interaction.id, client.id)
+                                    setInteractions((prev) => {
+                                      const next = prev.filter((i) => i.id !== item.interaction.id)
+                                      syncClientDetailCacheForInteractions(next)
+                                      return next
+                                    })
+                                    toast({
+                                      title: 'Success',
+                                      description: 'Interaction deleted',
+                                    })
                                   } catch (error) {
                                     toast({
                                       title: 'Error',
-                                      description: 'Failed to toggle pin',
+                                      description: 'Failed to delete interaction',
                                       variant: 'destructive',
                                     })
                                   }
-                                }}
-                              >
-                                {note.pinned ? (
-                                  <PinOff className="h-4 w-4" />
-                                ) : (
-                                  <Pin className="h-4 w-4" />
+                                }
+                              }}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ) : (
+                      <Card key={item.id} className={item.note.pinned ? 'border-primary' : ''}>
+                        <CardContent className="p-4">
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-0">
+                            <div className="min-w-0 flex-1">
+                              <div className="mb-2 flex flex-wrap items-center gap-2">
+                                <StickyNote className="h-4 w-4" />
+                                <span className="font-medium">Note</span>
+                                {item.note.pinned && (
+                                  <Badge variant="outline">Pinned</Badge>
                                 )}
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={async () => {
-                                  if (confirm('Delete this note?')) {
-                                    try {
-                                      await deleteNote(note.id, client.id)
-                                      setNotes((prev) => prev.filter((n) => n.id !== note.id))
-                                      if (editingNoteId === note.id) {
+                              </div>
+                              {editingNoteId === item.note.id ? (
+                                <div className="space-y-2">
+                                  <Textarea
+                                    value={editingNoteContent}
+                                    onChange={(e) => setEditingNoteContent(e.target.value)}
+                                    rows={4}
+                                    className="min-h-[80px]"
+                                  />
+                                  <div className="flex gap-2">
+                                    <Button
+                                      size="sm"
+                                      onClick={async () => {
+                                        try {
+                                          await updateNote(item.note.id, client.id, editingNoteContent)
+                                          setNotes((prev) =>
+                                            prev.map((n) =>
+                                              n.id === item.note.id
+                                                ? { ...n, content: editingNoteContent }
+                                                : n
+                                            )
+                                          )
+                                          setEditingNoteId(null)
+                                          setEditingNoteContent('')
+                                          toast({ title: 'Success', description: 'Note updated' })
+                                        } catch (error) {
+                                          toast({
+                                            title: 'Error',
+                                            description: 'Failed to update note',
+                                            variant: 'destructive',
+                                          })
+                                        }
+                                      }}
+                                    >
+                                      <Check className="h-4 w-4 mr-1" /> Save
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => {
                                         setEditingNoteId(null)
                                         setEditingNoteContent('')
-                                      }
-                                      toast({
-                                        title: 'Success',
-                                        description: 'Note deleted',
-                                      })
+                                      }}
+                                    >
+                                      <X className="h-4 w-4 mr-1" /> Cancel
+                                    </Button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <>
+                                  <p className="break-words whitespace-pre-wrap">{item.note.content}</p>
+                                  <p className="mt-2 text-xs text-muted-foreground">
+                                    {item.note.displayDate}
+                                  </p>
+                                </>
+                              )}
+                            </div>
+                            {editingNoteId !== item.note.id && (
+                              <div className="flex shrink-0 justify-end gap-2 sm:justify-start">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => {
+                                    setEditingNoteId(item.note.id)
+                                    setEditingNoteContent(item.note.content)
+                                  }}
+                                  title="Edit note"
+                                >
+                                  <Edit className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={async () => {
+                                    try {
+                                      await toggleNotePin(item.note.id, client.id, !item.note.pinned)
+                                      setNotes((prev) =>
+                                        prev.map((n) =>
+                                          n.id === item.note.id ? { ...n, pinned: !n.pinned } : n
+                                        )
+                                      )
                                     } catch (error) {
                                       toast({
                                         title: 'Error',
-                                        description: 'Failed to delete note',
+                                        description: 'Failed to toggle pin',
                                         variant: 'destructive',
                                       })
                                     }
-                                  }
-                                }}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          )}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
+                                  }}
+                                >
+                                  {item.note.pinned ? (
+                                    <PinOff className="h-4 w-4" />
+                                  ) : (
+                                    <Pin className="h-4 w-4" />
+                                  )}
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={async () => {
+                                    if (confirm('Delete this note?')) {
+                                      try {
+                                        await deleteNote(item.note.id, client.id)
+                                        setNotes((prev) => prev.filter((n) => n.id !== item.note.id))
+                                        if (editingNoteId === item.note.id) {
+                                          setEditingNoteId(null)
+                                          setEditingNoteContent('')
+                                        }
+                                        toast({
+                                          title: 'Success',
+                                          description: 'Note deleted',
+                                        })
+                                      } catch (error) {
+                                        toast({
+                                          title: 'Error',
+                                          description: 'Failed to delete note',
+                                          variant: 'destructive',
+                                        })
+                                      }
+                                    }
+                                  }}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            )}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )
+                  )}
                 </div>
               ) : (
                 <Card>
                   <CardContent className="p-8 text-center">
-                    <p className="text-muted-foreground">No notes yet.</p>
+                    <p className="text-muted-foreground">{feedEmptyMessage}</p>
                   </CardContent>
                 </Card>
               )}
