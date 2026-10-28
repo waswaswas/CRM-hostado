@@ -170,7 +170,14 @@ export function TransactionsList({ initialTransactions, accounts }: Transactions
     setEditDialogOpen(true)
   }
 
-  const handleEditSaved = (updated: { id: string; amount: number; currency: string; account_id: string; type: string }) => {
+  const handleEditSaved = (updated: {
+    id: string
+    amount: number
+    currency: string
+    account_id: string
+    type: string
+    date: string
+  }) => {
     setTransactions((prev) =>
       prev.map((transaction) =>
         transaction.id === updated.id
@@ -180,6 +187,7 @@ export function TransactionsList({ initialTransactions, accounts }: Transactions
               currency: updated.currency,
               account_id: updated.account_id,
               type: updated.type as any,
+              date: updated.date,
               account: accounts.find((account) => account.id === updated.account_id) || transaction.account,
             }
           : transaction

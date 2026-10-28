@@ -14,7 +14,20 @@ interface EditTransactionDialogProps {
   onOpenChange: (open: boolean) => void
   transaction: TransactionWithRelations | null
   accounts: Account[]
-  onSaved?: (updated: { id: string; amount: number; currency: string; account_id: string; type: TransactionType }) => void
+  onSaved?: (updated: {
+    id: string
+    amount: number
+    currency: string
+    account_id: string
+    type: TransactionType
+    date: string
+  }) => void
+}
+
+function toDateInputValue(date: string | null | undefined): string {
+  if (!date) return ''
+  // Accept ISO timestamps or yyyy-MM-dd
+  return date.slice(0, 10)
 }
 
 export function EditTransactionDialog({
@@ -29,6 +42,7 @@ export function EditTransactionDialog({
   const [currency, setCurrency] = useState<string>('BGN')
   const [accountId, setAccountId] = useState<string>('')
   const [type, setType] = useState<TransactionType>('expense')
+  const [date, setDate] = useState<string>('')
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
@@ -37,6 +51,7 @@ export function EditTransactionDialog({
     setCurrency(transaction.currency || 'BGN')
     setAccountId(transaction.account_id || '')
     setType(transaction.type || 'expense')
+    setDate(toDateInputValue(transaction.date))
   }, [transaction])
 
   const handleSave = async () => {
@@ -49,11 +64,25 @@ export function EditTransactionDialog({
       })
       return
     }
+    if (!date) {
+      toast({
+        title: 'Error',
+        description: 'Date is required',
+        variant: 'destructive',
+      })
+      return
+    }
 
     setSaving(true)
     try {
-      await updateTransaction(transaction.id, { amount, currency, account_id: accountId, type })
-      onSaved?.({ id: transaction.id, amount, currency, account_id: accountId, type })
+      await updateTransaction(transaction.id, {
+        amount,
+        currency,
+        account_id: accountId,
+        type,
+        date,
+      })
+      onSaved?.({ id: transaction.id, amount, currency, account_id: accountId, type, date })
       toast({
         title: 'Success',
         description: 'Transaction updated',
@@ -101,6 +130,17 @@ export function EditTransactionDialog({
                 <option value="expense">Expense</option>
                 <option value="transfer">Transfer</option>
               </Select>
+            </div>
+            <div>
+              <label className="text-sm font-medium">
+                Date <span className="text-red-500">*</span>
+              </label>
+              <Input
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                required
+              />
             </div>
             <div>
               <label className="text-sm font-medium">
