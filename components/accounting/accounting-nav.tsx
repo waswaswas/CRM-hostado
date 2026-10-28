@@ -25,7 +25,7 @@ const accountingNav = [
 const modeLabels: Record<CurrencyDisplayMode, string> = {
   eur: 'EUR only',
   bgn: 'BGN only',
-  both: 'Both (BGN + EUR)',
+  both: 'Both (EUR + BGN)',
 }
 
 export function AccountingNav() {
@@ -71,7 +71,7 @@ export function AccountingNav() {
               BGN only
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => setMode('both')} className="min-h-[44px] sm:min-h-0">
-              Both (BGN + EUR)
+              Both (EUR + BGN)
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

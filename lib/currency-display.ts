@@ -60,8 +60,8 @@ export function formatForDisplay(
     return formatBGN(bgn)
   }
 
-  // mode === 'both'
+  // mode === 'both': primary EUR, secondary BGN in parentheses
   const bgn = c === 'BGN' ? amount : amount * EUR_TO_BGN
   const eur = c === 'EUR' ? amount : amount / EUR_TO_BGN
-  return `${formatBGN(bgn)} (${formatEUR(eur)})`
+  return `${formatEUR(eur)} (${formatBGN(bgn)})`
 }
