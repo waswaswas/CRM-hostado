@@ -1,7 +1,11 @@
+'use client'
+
 import * as React from "react"
 
 import { cn } from "@/lib/utils"
 import { X } from "lucide-react"
+
+const DialogTitleId = React.createContext<string | undefined>(undefined)
 
 interface DialogProps {
   open?: boolean
@@ -14,24 +18,62 @@ interface DialogContentProps extends React.HTMLAttributes<HTMLDivElement> {
 }
 
 const Dialog = ({ open, onOpenChange, children }: DialogProps) => {
+  const titleId = React.useId()
+  const rootRef = React.useRef<HTMLDivElement>(null)
+  const changeRef = React.useRef(onOpenChange)
+  changeRef.current = onOpenChange
+  React.useEffect(() => {
+    if (!open) return
+    const trigger = document.activeElement as HTMLElement | null
+    const root = rootRef.current
+    const focusable = () => Array.from(root?.querySelectorAll<HTMLElement>('button, input, textarea, select, a[href], [tabindex="0"]') || []).filter((el) => !el.hasAttribute('disabled') && el.getClientRects().length > 0)
+    const frame = requestAnimationFrame(() => (root?.querySelector<HTMLElement>('[autofocus]') || focusable()[0] || root)?.focus())
+    const keydown = (event: KeyboardEvent) => {
+      const dialogs = document.querySelectorAll('[data-dialog-root]')
+      if (dialogs[dialogs.length - 1] !== root) return
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        event.stopPropagation()
+        changeRef.current?.(false)
+      } else if (event.key === 'Tab') {
+        const elements = focusable()
+        const first = elements[0]
+        const last = elements[elements.length - 1]
+        if (!first) { event.preventDefault(); root?.focus(); return }
+        if (event.shiftKey && (document.activeElement === first || !root?.contains(document.activeElement))) { event.preventDefault(); last.focus() }
+        else if (!event.shiftKey && (document.activeElement === last || !root?.contains(document.activeElement))) { event.preventDefault(); first.focus() }
+      }
+    }
+    document.addEventListener('keydown', keydown)
+    return () => {
+      cancelAnimationFrame(frame)
+      document.removeEventListener('keydown', keydown)
+      if (trigger?.isConnected) trigger.focus()
+    }
+  }, [open])
   if (!open) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-0">
+    <div ref={rootRef} data-dialog-root tabIndex={-1} className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-0">
       <div
         className="fixed inset-0 bg-black/50"
         onClick={() => onOpenChange?.(false)}
       />
-      {children}
+      <DialogTitleId.Provider value={titleId}>{children}</DialogTitleId.Provider>
     </div>
   )
 }
 
 const DialogContent = React.forwardRef<HTMLDivElement, DialogContentProps>(
   ({ className, children, ...props }, ref) => {
+    const titleId = React.useContext(DialogTitleId)
     return (
       <div
         ref={ref}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        aria-label={typeof props['aria-label'] === 'string' ? props['aria-label'] : undefined}
         className={cn(
           "relative z-50 grid w-full max-w-[calc(100vw-2rem)] sm:max-w-lg gap-4 border bg-popover text-popover-foreground p-4 sm:p-6 shadow-lg duration-200 rounded-lg max-h-[min(90vh,90dvh)] overflow-y-auto overflow-x-hidden",
           className
@@ -65,6 +107,7 @@ const DialogTitle = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <h2
     ref={ref}
+    id={React.useContext(DialogTitleId)}
     className={cn(
       "text-lg font-semibold leading-none tracking-tight",
       className

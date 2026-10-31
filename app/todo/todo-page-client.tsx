@@ -171,6 +171,7 @@ function writeTodoRecentTasksCacheToSession(orgId: string, entry: TodoRecentTask
   }
 }
 
+const COLOR_NAMES: Record<string, string> = { '#2563eb': 'Blue', '#22c55e': 'Green', '#f97316': 'Orange', '#ef4444': 'Red', '#a855f7': 'Purple', '#0ea5e9': 'Sky blue' }
 const COLORS = ['#2563eb', '#22c55e', '#f97316', '#ef4444', '#a855f7', '#0ea5e9']
 const STATUS_LABELS: Record<TaskStatus, string> = {
   to_do: 'To Do',
@@ -292,11 +293,12 @@ export function TodoPageClient({
   initialListId?: string | null
   initialTaskId?: string | null
 }) {
-  const { currentOrganization } = useOrganization()
+  const { currentOrganization, isLoading: organizationLoading, isSwitching } = useOrganization()
   const { permissions, loading: permissionsLoading } = useFeaturePermissions()
   const { toast } = useToast()
   const [userId, setUserId] = useState<string | null>(null)
   const [userRole, setUserRole] = useState<UserRole>('viewer')
+  const [userContextLoading, setUserContextLoading] = useState(true)
   const [lists, setLists] = useState<TodoList[]>(() => (initialLists || []).map(mapListFromDb))
   const [projects, setProjects] = useState<TodoProject[]>([])
   const [tasks, setTasks] = useState<TodoTask[]>([])
@@ -305,6 +307,23 @@ export function TodoPageClient({
   const [activeListId, setActiveListId] = useState<string | null>(initialListId ?? null)
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null)
   const [activeTaskId, setActiveTaskId] = useState<string | null>(initialTaskId ?? null)
+  const detailsRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!activeTaskId) return
+    const trigger = document.activeElement as HTMLElement | null
+    detailsRef.current?.querySelector<HTMLButtonElement>('button[aria-label="Close task details"]')?.focus()
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !document.querySelector('[role="dialog"]')) {
+        event.preventDefault()
+        setActiveTaskId(null)
+      }
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('keydown', onKeyDown)
+      if (trigger?.isConnected) trigger.focus()
+    }
+  }, [activeTaskId])
   const [showCreateDialog, setShowCreateDialog] = useState(false)
   const [showCreateProjectDialog, setShowCreateProjectDialog] = useState(false)
   const [renamingProjectId, setRenamingProjectId] = useState<string | null>(null)
@@ -349,18 +368,26 @@ export function TodoPageClient({
     }
   }, [])
   useEffect(() => {
+    let cancelled = false
+    setUserContextLoading(true)
     async function loadUserContext() {
-      const supabase = createClient()
-      const { data } = await supabase.auth.getUser()
-      setUserId(data.user?.id ?? null)
-      if (currentOrganization?.id) {
-        const role = await getUserRole(currentOrganization.id)
-        if (role) {
-          setUserRole(role)
-        }
+      try {
+        const supabase = createClient()
+        const [{ data }, role] = await Promise.all([
+          supabase.auth.getUser(),
+          currentOrganization?.id ? getUserRole(currentOrganization.id) : Promise.resolve(null),
+        ])
+        if (cancelled) return
+        setUserId(data.user?.id ?? null)
+        setUserRole(role ?? 'viewer')
+      } catch {
+        if (!cancelled) { setUserId(null); setUserRole('viewer') }
+      } finally {
+        if (!cancelled) setUserContextLoading(false)
       }
     }
-    loadUserContext()
+    void loadUserContext()
+    return () => { cancelled = true }
   }, [currentOrganization?.id])
 
   // Load lists as soon as org is available; do not wait for permissions (layout already enforces todo access)
@@ -444,6 +471,7 @@ export function TodoPageClient({
       setTasks([])
       return
     }
+    let cancelled = false
     const listId = activeListId
     const projectId = activeProjectId
     async function loadTasks() {
@@ -476,6 +504,7 @@ export function TodoPageClient({
       try {
         const data = await getTodoTasks(listId, projectId ?? undefined)
         const mapped = data.map(mapTaskFromDb)
+        if (cancelled) return
         setTasks(mapped)
 
         if (cacheKey) {
@@ -483,11 +512,14 @@ export function TodoPageClient({
           todoTasksCache.set(cacheKey, entry)
           writeTodoTasksCacheToSession(cacheKey, entry)
         }
+      } catch (error) {
+        if (!cancelled) toast({ title: 'Could not load tasks', description: 'Please reopen the list to retry.', variant: 'destructive' })
       } finally {
-        setLoadingTasks(false)
+        if (!cancelled) setLoadingTasks(false)
       }
     }
-    loadTasks()
+    void loadTasks()
+    return () => { cancelled = true }
   }, [activeListId, activeProjectId, currentOrganization?.id])
 
   const visibleLists = useMemo(() => {
@@ -499,12 +531,12 @@ export function TodoPageClient({
   }, [lists, userId, userRole])
 
   useEffect(() => {
-    if (!activeListId) return
+    if (!activeListId || organizationLoading || userContextLoading || loadingLists) return
     if (!visibleLists.some((list) => list.id === activeListId)) {
       setActiveListId(null)
       setActiveTaskId(null)
     }
-  }, [activeListId, visibleLists])
+  }, [activeListId, visibleLists, organizationLoading, userContextLoading, loadingLists])
 
   const activeList = lists.find((list) => list.id === activeListId) || null
   const listTasks = tasks.filter((task) => task.listId === activeListId)
@@ -562,7 +594,7 @@ export function TodoPageClient({
         assigneeLabel: task.assigneeId
           ? task.assigneeId === userId
             ? 'ME'
-            : 'Member'
+            : listMemberDetails.find((member) => member.user_id === task.assigneeId)?.email || 'Assigned user'
           : 'Unassigned',
       } as typeof task & {
         priorityLabel: string
@@ -572,7 +604,7 @@ export function TodoPageClient({
         assigneeLabel: string
       }
     })
-  }, [filteredTasks, userId])
+  }, [filteredTasks, userId, listMemberDetails])
 
   const selectedTasks = filteredTasks.filter((task) => selectedTaskIds.has(task.id))
   const activeTask = tasks.find((task) => task.id === activeTaskId) || null
@@ -808,7 +840,16 @@ export function TodoPageClient({
     }
   }
 
-  if (!hasAccess && !permissionsLoading) {
+  if (organizationLoading || isSwitching || permissionsLoading || userContextLoading) {
+    return (
+      <div className="space-y-6" role="status" aria-live="polite" aria-busy="true">
+        <h1 className="text-3xl font-bold">To-Do List</h1>
+        <Card><CardContent className="py-12 text-center text-muted-foreground">Loading your to-do lists…</CardContent></Card>
+      </div>
+    )
+  }
+
+  if (!hasAccess) {
     return (
       <div className="space-y-6">
         <h1 className="text-3xl font-bold">To-Do List</h1>
@@ -897,7 +938,7 @@ export function TodoPageClient({
                     <Badge variant="secondary" className="whitespace-nowrap text-xs">
                       {list.members.length} members
                     </Badge>
-                    <Button variant="outline" size="sm" onClick={() => setActiveListId(list.id)}>
+                    <Button variant="outline" size="sm" onClick={() => { setLoadingTasks(true); setActiveListId(list.id) }}>
                       Open
                     </Button>
                   </div>
@@ -924,7 +965,7 @@ export function TodoPageClient({
           variant={activeProjectId === null ? 'secondary' : 'ghost'}
           size="sm"
           className="w-full justify-start"
-          onClick={() => setActiveProjectId(null)}
+          onClick={() => { if (activeProjectId !== null) setLoadingTasks(true); setActiveProjectId(null) }}
         >
           <FolderOpen className="h-4 w-4 mr-2" />
           All tasks
@@ -943,7 +984,7 @@ export function TodoPageClient({
                   className="h-8 text-sm"
                   autoFocus
                 />
-                <Button size="sm" variant="ghost" onClick={() => handleRenameProject(project.id, renamingProjectName)}>
+                <Button aria-label="Save project name" title="Save project name" size="sm" variant="ghost" onClick={() => handleRenameProject(project.id, renamingProjectName)}>
                   <Check className="h-4 w-4" />
                 </Button>
               </div>
@@ -953,14 +994,14 @@ export function TodoPageClient({
                   variant={activeProjectId === project.id ? 'secondary' : 'ghost'}
                   size="sm"
                   className="flex-1 justify-start truncate min-w-0"
-                  onClick={() => setActiveProjectId(project.id)}
+                  onClick={() => { if (activeProjectId !== project.id) setLoadingTasks(true); setActiveProjectId(project.id) }}
                 >
                   <FolderOpen className="h-4 w-4 mr-2 shrink-0" />
                   <span className="truncate">{project.name}</span>
                 </Button>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0 shrink-0">
+                    <Button aria-label={`Actions for ${project.name}`} title="Project actions" variant="ghost" size="sm" className="h-8 w-8 p-0 shrink-0">
                       <ChevronDown className="h-4 w-4" />
                     </Button>
                   </DropdownMenuTrigger>
@@ -1091,11 +1132,12 @@ export function TodoPageClient({
           </div>
         </div>
 
-        <div className="flex flex-col lg:flex-row gap-3">
-          <div className="flex-1">
+        <div className="flex flex-wrap gap-3 [&>select]:flex-1 [&>select]:basis-40 [&>select]:min-w-0">
+          <div className="w-full min-w-0">
             <div className="relative">
               <Search className="h-4 w-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
               <Input
+                aria-label="Search tasks"
                 placeholder="Search tasks..."
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
@@ -1103,7 +1145,7 @@ export function TodoPageClient({
               />
             </div>
           </div>
-          <Select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="min-w-[140px]">
+          <Select aria-label="Filter by status" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="min-w-[140px]">
             <option value="all">All status</option>
             <option value="to_do">To Do</option>
             <option value="info_needed">Info needed</option>
@@ -1111,24 +1153,24 @@ export function TodoPageClient({
             <option value="blocked">Blocked</option>
             <option value="done">Done</option>
           </Select>
-          <Select value={priorityFilter} onChange={(event) => setPriorityFilter(event.target.value)} className="min-w-[140px]">
+          <Select aria-label="Filter by priority" value={priorityFilter} onChange={(event) => setPriorityFilter(event.target.value)} className="min-w-[140px]">
             <option value="all">All priority</option>
             <option value="low">Low</option>
             <option value="medium">Medium</option>
             <option value="high">High</option>
             <option value="critical">Critical</option>
           </Select>
-          <Select value={assigneeFilter} onChange={(event) => setAssigneeFilter(event.target.value)} className="min-w-[140px]">
+          <Select aria-label="Filter by assignee" value={assigneeFilter} onChange={(event) => setAssigneeFilter(event.target.value)} className="min-w-[140px]">
             <option value="all">All assignees</option>
             <option value="me">Assigned to me</option>
             <option value="unassigned">Unassigned</option>
           </Select>
-          <Select value={dueFilter} onChange={(event) => setDueFilter(event.target.value)} className="min-w-[140px]">
+          <Select aria-label="Filter by due date" value={dueFilter} onChange={(event) => setDueFilter(event.target.value)} className="min-w-[140px]">
             <option value="all">All due dates</option>
             <option value="overdue">Overdue</option>
             <option value="next_7_days">Next 7 days</option>
           </Select>
-          <Select value={sortBy} onChange={(event) => setSortBy(event.target.value)} className="min-w-[160px]">
+          <Select aria-label="Sort tasks" value={sortBy} onChange={(event) => setSortBy(event.target.value)} className="min-w-[160px]">
             <option value="due_date">Sort: Due date</option>
             <option value="priority">Sort: Priority</option>
             <option value="updated">Sort: Last updated</option>
@@ -1293,16 +1335,16 @@ export function TodoPageClient({
                   </div>
                   {/* Desktop: separate action buttons */}
                   <div className="hidden md:flex items-center gap-1 shrink-0">
-                    <Button variant="ghost" size="sm" onClick={() => setEditingTaskId(task.id)} className="h-8 w-8 p-0">
+                    <Button aria-label="Edit task" title="Edit task" variant="ghost" size="sm" onClick={() => setEditingTaskId(task.id)} className="h-8 w-8 p-0">
                       <Pencil className="h-4 w-4" />
                     </Button>
-                    <Button variant="ghost" size="sm" onClick={() => handleDuplicateTask(task)} className="h-8 w-8 p-0">
+                    <Button aria-label="Duplicate task" title="Duplicate task" variant="ghost" size="sm" onClick={() => handleDuplicateTask(task)} className="h-8 w-8 p-0">
                       <Copy className="h-4 w-4" />
                     </Button>
-                    <Button variant="ghost" size="sm" onClick={() => handleArchiveTask(task.id)} className="h-8 w-8 p-0">
+                    <Button aria-label="Archive task" title="Archive task" variant="ghost" size="sm" onClick={() => handleArchiveTask(task.id)} className="h-8 w-8 p-0">
                       <Archive className="h-4 w-4" />
                     </Button>
-                    <Button variant="ghost" size="sm" onClick={() => handleDeleteTask(task.id)} className="h-8 w-8 p-0 text-destructive">
+                    <Button aria-label="Delete task" title="Delete task" variant="ghost" size="sm" onClick={() => handleDeleteTask(task.id)} className="h-8 w-8 p-0 text-destructive">
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
@@ -1340,7 +1382,7 @@ export function TodoPageClient({
       </div>
 
       {activeTask && (
-      <div className="fixed inset-0 z-50 flex flex-col bg-background lg:static lg:inset-auto lg:z-auto lg:w-[380px] lg:bg-transparent w-full shrink-0 min-w-0">
+      <div ref={detailsRef} role="region" aria-label="Task details" className="fixed inset-0 z-50 flex flex-col bg-background lg:static lg:inset-auto lg:z-auto lg:w-[380px] lg:bg-transparent w-full shrink-0 min-w-0">
           <Card className="sticky top-0 lg:top-6 flex flex-col min-h-0 max-h-[100dvh] lg:max-h-[calc(100vh-6rem)] overflow-hidden">
             <CardHeader className="shrink-0 flex flex-row items-center justify-between space-y-0">
               <CardTitle>Task Details</CardTitle>
@@ -1929,11 +1971,14 @@ function CreateListDialog({
   onCreate: (data: { name: string; color: string }) => void
 }) {
   const [name, setName] = useState('')
+  const [nameError, setNameError] = useState(false)
+  const nameRef = useRef<HTMLInputElement>(null)
   const [color, setColor] = useState(COLORS[0])
 
   useEffect(() => {
     if (!open) {
       setName('')
+      setNameError(false)
       setColor(COLORS[0])
     }
   }, [open])
@@ -1947,17 +1992,21 @@ function CreateListDialog({
         </DialogHeader>
         <div className="space-y-4">
           <div>
-            <label className="text-sm font-medium">List name</label>
-            <Input value={name} onChange={(event) => setName(event.target.value)} />
+            <label htmlFor="todo-list-name" className="text-sm font-medium">List name</label>
+            <Input id="todo-list-name" ref={nameRef} autoFocus value={name} aria-invalid={nameError} aria-describedby={nameError ? 'todo-list-name-error' : undefined} onChange={(event) => { setName(event.target.value); setNameError(false) }} />
+            {nameError && <p id="todo-list-name-error" role="alert" className="text-sm text-destructive">List name is required.</p>}
           </div>
           <div>
             <label className="text-sm font-medium">Accent color</label>
-            <div className="flex gap-2 mt-2">
+            <div className="flex flex-wrap gap-2 mt-2">
               {COLORS.map((option) => (
                 <button
                   key={option}
+                  aria-label={`${COLOR_NAMES[option]} accent color`}
+                  title={COLOR_NAMES[option]}
+                  aria-pressed={color === option}
                   type="button"
-                  className={`h-8 w-8 rounded-full border ${color === option ? 'border-primary' : 'border-transparent'}`}
+                  className={`h-11 w-11 shrink-0 rounded-full border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${color === option ? 'border-primary' : 'border-transparent'}`}
                   style={{ backgroundColor: option }}
                   onClick={() => setColor(option)}
                 />
@@ -1970,7 +2019,7 @@ function CreateListDialog({
             </Button>
             <Button
               onClick={() => {
-                if (!name.trim()) return
+                if (!name.trim()) { setNameError(true); nameRef.current?.focus(); return }
                 onCreate({ name: name.trim(), color })
               }}
             >
@@ -2131,13 +2180,16 @@ function ListSettingsDialog({
           </div>
           <div>
             <label className="text-sm font-medium">Color</label>
-            <div className="flex gap-2 mt-2">
+            <div className="flex flex-wrap gap-2 mt-2">
               {COLORS.map((option) => (
                 <button
                   key={option}
+                  aria-label={`${COLOR_NAMES[option]} accent color`}
+                  title={COLOR_NAMES[option]}
+                  aria-pressed={color === option}
                   type="button"
                   disabled={!isListOwner}
-                  className={`h-8 w-8 rounded-full border ${color === option ? 'border-primary' : 'border-transparent'} ${!isListOwner ? 'cursor-not-allowed opacity-70' : ''}`}
+                  className={`h-11 w-11 shrink-0 rounded-full border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${color === option ? 'border-primary' : 'border-transparent'} ${!isListOwner ? 'cursor-not-allowed opacity-70' : ''}`}
                   style={{ backgroundColor: option }}
                   onClick={() => isListOwner && setColor(option)}
                 />
